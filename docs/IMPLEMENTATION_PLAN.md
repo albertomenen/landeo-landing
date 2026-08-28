@@ -14,7 +14,7 @@ docs/                        Decisiones y plan de entrega
 public/                      Activos públicos, nunca CVs
 ```
 
-La primera versión usa datos de demostración para hacer ejecutable y evaluable el frontend sin credenciales. `lib/supabase/` define el punto de sustitución; antes de conectar datos reales se debe inspeccionar el esquema, las RLS, las Edge Functions y las migraciones del repositorio móvil.
+La versión actual usa el backend real de Landeo en Supabase. El catálogo, la autenticación, los perfiles, el bucket privado de CV, los swipes, las candidaturas y sus eventos respetan las RLS y Edge Functions compartidas con la app móvil.
 
 ## Mapa de rutas
 
@@ -49,11 +49,11 @@ La primera versión usa datos de demostración para hacer ejecutable y evaluable
 
 ## Pago web
 
-Se elige **RevenueCat Billing + Web SDK**. Mantiene el entitlement `pro` y el UUID de Supabase como App User ID compartido con móvil. Requiere:
+La web usa **Stripe Checkout + Customer Portal**. La app móvil conserva RevenueCat y ambos canales comparten el UUID de Supabase como identidad. La autoridad web se mantiene en una tabla de suscripciones escrita únicamente por el webhook verificado de Stripe:
 
-- Configuración web separada y clave pública web.
-- Conectar Stripe como gateway dentro de RevenueCat Billing.
-- Webhook idempotente y validación server-side del entitlement.
+- Checkout de suscripción creado exclusivamente por Edge Function.
+- Webhook Stripe idempotente y con firma HMAC verificada.
+- Validación server-side de una suscripción `active` o `trialing` vigente.
 - Adaptar `submit-application` para validar `platform: web` sin exponer secretos.
 - Portal de cliente para gestionar/cancelar suscripción.
 
@@ -61,9 +61,9 @@ No se aceptará un booleano de Pro enviado por el navegador como autoridad.
 
 ## Variables
 
-Públicas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_REVENUECAT_WEB_PUBLIC_KEY`.
+Públicas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 
-Solo servidor: `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `REVENUECAT_SERVER_SECRET`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `INFOJOBS_CLIENT_ID`, `INFOJOBS_CLIENT_SECRET`, `IMPORT_JOBS_SECRET`, `BROWSERLESS_TOKEN`.
+Solo servidor: `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `SITE_URL`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `INFOJOBS_CLIENT_ID`, `INFOJOBS_CLIENT_SECRET`, `IMPORT_JOBS_SECRET`, `BROWSERLESS_TOKEN`.
 
 ## Pruebas y aceptación
 
@@ -81,7 +81,7 @@ Solo servidor: `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SE
 
 ## Fases ejecutables
 
-1. Base pública y demo funcional (incluida en este proyecto).
-2. Conectar Supabase real después de inspeccionar el repositorio fuente.
-3. Activar RevenueCat Billing y `submit-application` web.
-4. E2E, revisión legal, observabilidad y despliegue gradual.
+1. Base pública y producto responsive.
+2. Supabase real, RLS, perfil universal, CV privado y feed activo.
+3. Stripe web y `submit-application` con autorización por plataforma.
+4. E2E con credenciales Stripe, revisión legal, observabilidad y despliegue gradual.
