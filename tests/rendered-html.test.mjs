@@ -28,7 +28,7 @@ test("renders the main product route",async()=>{
   const html=await response.text();
   assert.match(html,/Empleos para ti/);
   assert.match(html,/Postularme/);
-  assert.match(html,/Candidatura asistida/);
+  assert.match(html,/Consultando el catálogo de Supabase/);
 });
 
 test("removes the disposable starter and keeps integration contracts",async()=>{
@@ -36,8 +36,8 @@ test("removes the disposable starter and keeps integration contracts",async()=>{
   const contracts=await readFile(new URL("lib/supabase/contracts.ts",root),"utf8");
   assert.doesNotMatch(packageJson,/react-loading-skeleton/);
   assert.match(packageJson,/@supabase\/ssr/);
-  assert.match(packageJson,/@revenuecat\/purchases-js/);
-  assert.match(contracts,/platform:\"web\"/);
+  assert.doesNotMatch(packageJson,/@revenuecat\/purchases-js/);
+  assert.match(contracts,/platform:"web"/);
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx",root)));
   await access(new URL("public/og.png",root));
 });

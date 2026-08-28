@@ -5,6 +5,7 @@ export type Job = {
   salaryMin: number | null; salaryMax: number | null; salaryCurrency: string;
   contractType: string; seniority: string; industry: string;
   applyCapability: ApplyCapability; match: number; publishedAt: string; skills: string[];
+  source?: string; applyProvider?: string; applyMode?: string; metadata?: Record<string,unknown>;
 };
 
 export const jobs: Job[] = [
