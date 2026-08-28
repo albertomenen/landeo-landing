@@ -1,0 +1,27 @@
+"use client";
+import {useState} from "react";
+import Link from "next/link";
+import {Brand} from "./Brand";
+
+const steps=[
+  {key:"search",kicker:"EMPECEMOS",title:"¿Estás buscando un nuevo trabajo?",text:"Esto nos ayuda a adaptar el ritmo de las recomendaciones.",options:["Sí, activamente","Estoy abierto a oportunidades","Solo estoy explorando"]},
+  {key:"priorities",kicker:"TUS PRIORIDADES",title:"¿Qué es importante para ti?",text:"Elige hasta tres. Podrás cambiarlo después.",options:["Crecimiento","Compensación","Flexibilidad","Cultura","Impacto","Estabilidad"]},
+  {key:"apps",kicker:"TU EXPERIENCIA",title:"¿Has probado otras apps de empleo?",text:"Queremos entender cómo buscas oportunidades hoy.",options:["Sí, varias","Alguna vez","No todavía"]},
+  {key:"long-term",kicker:"A TU RITMO",title:"Las buenas oportunidades requieren constancia.",text:"Aprenderemos de tus decisiones para ordenar mejor el feed, sin prometer resultados.",options:["Continuar"]},
+  {key:"role",kicker:"TU PERFIL",title:"¿Cuál es tu área principal?",text:"Usaremos esto para ordenar mejor el feed.",options:["Software Engineering","Diseño","Data / AI","Producto","Marketing / Ventas","Operaciones"]},
+  {key:"experience",kicker:"EXPERIENCIA",title:"¿Cuál es tu nivel actual?",text:"No limita las ofertas que puedes explorar.",options:["Entry level","Junior · 1–2 años","Mid level · 3–5 años","Senior · 6–9 años","Expert · 10+ años"]},
+  {key:"contact",kicker:"CONTACTO",title:"¿Dónde buscas tu próximo trabajo?",text:"Podrás completar nombre, ciudad, mercado, email y teléfono de forma segura.",options:["España · Madrid","España · Barcelona","Remoto · Europa","Otro mercado"]},
+  {key:"salary",kicker:"EXPECTATIVAS",title:"¿Qué rango salarial buscas?",text:"Se mostrará con tu moneda y locale reales.",options:["35.000–45.000 €","45.000–60.000 €","60.000–80.000 €","Prefiero no indicarlo"]},
+  {key:"goal",kicker:"TU OBJETIVO",title:"¿Qué quieres conseguir?",text:"Ajustaremos las recomendaciones a tu objetivo.",options:["Conseguir empleo cuanto antes","Ganar más","Encontrar el trabajo ideal"]},
+  {key:"interviews",kicker:"MÁS OPORTUNIDADES",title:"Organiza mejor cada candidatura.",text:"Landeo busca reducir formularios repetidos; no garantiza entrevistas ni contrataciones.",options:["Continuar"]},
+  {key:"deadline",kicker:"TU HORIZONTE",title:"¿Cuándo necesitas un nuevo empleo?",text:"Esto nos ayuda a adaptar el ritmo.",options:["En 1 mes","En 3 meses","En 6 meses","En 12 meses"]},
+  {key:"feasibility",kicker:"PLAN REALISTA",title:"Vamos a construir un plan a tu medida.",text:"Combinaremos experiencia, mercado y salario para ordenar oportunidades relevantes.",options:["Continuar"]},
+  {key:"blocker",kicker:"EL BLOQUEO",title:"¿Qué te está frenando?",text:"Elige el obstáculo principal.",options:["Pocas candidaturas","Pocas entrevistas","Falta de preparación","Faltan buenas ofertas"]},
+  {key:"outcome",kicker:"EL RESULTADO",title:"¿Qué cambiaría con un buen trabajo?",text:"Tu motivación nos ayuda a entender el contexto, no a decidir por ti.",options:["Ganar más","Ayudar a mi familia","Sentirme motivado","Recuperar tiempo"]},
+  {key:"potential",kicker:"TU POTENCIAL",title:"Tu experiencia merece oportunidades claras.",text:"Tú mantienes el control de cada candidatura.",options:["Continuar"]},
+  {key:"source",kicker:"UNA ÚLTIMA PREGUNTA",title:"¿Cómo conociste Landeo?",text:"Nos ayuda a entender qué canales funcionan.",options:["Redes sociales","Un amigo","App Store / Google Play","Búsqueda web"]},
+  {key:"resume",kicker:"CASI ESTÁ",title:"Sube tu CV",text:"Se guardará de forma privada y solo se compartirá cuando autorices una candidatura.",options:["Seleccionar archivo PDF"]},
+  {key:"analysis",kicker:"PREPARANDO TU PERFIL",title:"Organizando tu información…",text:"Esta es una experiencia de carga. No afirmamos que una IA haya evaluado tu CV.",options:["Continuar"]},
+  {key:"result",kicker:"TODO LISTO",title:"Tu feed está preparado.",text:"Puedes explorar, guardar y descartar gratis. Postularse requiere Pro.",options:["Ver mis empleos"]},
+];
+export default function Onboarding(){const [step,setStep]=useState(0);const [answers,setAnswers]=useState<Record<string,string[]>>({});const current=steps[step];const selected=answers[current.key]||[];const toggle=(x:string)=>setAnswers(a=>({...a,[current.key]:selected.includes(x)?selected.filter(v=>v!==x):current.key==="priorities"?[...selected,x].slice(0,3):[x]}));return <main className="onboarding-page"><header><Brand/><span>Paso {step+1} de {steps.length}</span><button>Salir</button></header><progress value={step+1} max={steps.length}/><section><span className="onboarding-number">{String(step+1).padStart(2,"0")}</span><p className="overline">{current.kicker}</p><h1>{current.title}</h1><p>{current.text}</p><div className="option-grid">{current.options.map((option,i)=><button key={option} className={selected.includes(option)?"selected":""} onClick={()=>toggle(option)}><i>{selected.includes(option)?"✓":String.fromCharCode(65+i)}</i><span>{option}</span></button>)}</div><div className="onboarding-actions"><button disabled={step===0} onClick={()=>setStep(s=>s-1)}>← Atrás</button>{step<steps.length-1?<button className="button button-primary" disabled={!selected.length} onClick={()=>setStep(s=>s+1)}>Continuar →</button>:<Link className="button button-primary" href="/app/jobs">Encontrar empleo →</Link>}</div><small>Las respuestas se guardarán en Supabase al conectar el backend existente.</small></section></main>}
