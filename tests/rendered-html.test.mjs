@@ -4,11 +4,11 @@ import test from "node:test";
 
 const root=new URL("../",import.meta.url);
 
-async function render(path="/"){
+async function render(path="/",requestHeaders={}){
   const workerUrl=new URL("../dist/server/index.js",import.meta.url);
   workerUrl.searchParams.set("test",`${process.pid}-${Date.now()}-${path}`);
   const {default:worker}=await import(workerUrl.href);
-  return worker.fetch(new Request(`http://localhost${path}`,{headers:{accept:"text/html"}}),{ASSETS:{fetch:async()=>new Response("Not found",{status:404})}},{waitUntil(){},passThroughOnException(){}});
+  return worker.fetch(new Request(`http://localhost${path}`,{headers:{accept:"text/html",...requestHeaders}}),{ASSETS:{fetch:async()=>new Response("Not found",{status:404})}},{waitUntil(){},passThroughOnException(){}});
 }
 
 test("server-renders the Landeo landing page and social metadata",async()=>{
@@ -19,8 +19,18 @@ test("server-renders the Landeo landing page and social metadata",async()=>{
   assert.match(html,/<title>Landeo — Deja los formularios\. Empieza a recibir respuestas<\/title>/i);
   assert.match(html,/Deja de rellenar formularios/);
   assert.match(html,/Automatizar sin perder el control/i);
-  assert.match(html,/og-landing\.png/);
+  assert.match(html,/aria-label="Cambiar idioma"/i);
+  assert.match(html,/og-bilingual\.png/);
   assert.doesNotMatch(html,/codex-preview|Your site is taking shape|react-loading-skeleton/i);
+});
+
+test("server-renders the English landing page for an English locale",async()=>{
+  const response=await render("/",{"accept-language":"en-GB,en;q=0.9"});
+  assert.equal(response.status,200);
+  const html=await response.text();
+  assert.match(html,/Stop filling out forms/);
+  assert.match(html,/Automation without losing control/i);
+  assert.match(html,/aria-label="Change language"/i);
 });
 
 test("renders the main product route",async()=>{
@@ -42,4 +52,5 @@ test("removes the disposable starter and keeps integration contracts",async()=>{
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx",root)));
   await access(new URL("public/og.png",root));
   await access(new URL("public/og-landing.png",root));
+  await access(new URL("public/og-bilingual.png",root));
 });
