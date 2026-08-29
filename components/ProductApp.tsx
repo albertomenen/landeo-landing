@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect -- These effects hydrate authenticated Supabase state and subscribe to external auth/application updates. */
 
-import Link from "next/link";
+import Link from "./SafeLink";
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import type {User} from "@supabase/supabase-js";

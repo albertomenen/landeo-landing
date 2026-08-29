@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "./SafeLink";
 import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
 import {Brand} from "./Brand";
