@@ -16,9 +16,10 @@ test("server-renders the Landeo landing page and social metadata",async()=>{
   assert.equal(response.status,200);
   assert.match(response.headers.get("content-type")??"",/^text\/html\b/i);
   const html=await response.text();
-  assert.match(html,/<title>Landeo — Tu próximo trabajo empieza con un sí<\/title>/i);
-  assert.match(html,/Tu próximo trabajo empieza con un/);
-  assert.match(html,/og\.png/);
+  assert.match(html,/<title>Landeo — Deja los formularios\. Empieza a recibir respuestas<\/title>/i);
+  assert.match(html,/Deja de rellenar formularios/);
+  assert.match(html,/Automatizar sin perder el control/i);
+  assert.match(html,/og-landing\.png/);
   assert.doesNotMatch(html,/codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -40,4 +41,5 @@ test("removes the disposable starter and keeps integration contracts",async()=>{
   assert.match(contracts,/platform:"web"/);
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx",root)));
   await access(new URL("public/og.png",root));
+  await access(new URL("public/og-landing.png",root));
 });
