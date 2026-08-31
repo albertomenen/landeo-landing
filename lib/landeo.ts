@@ -92,6 +92,27 @@ export async function saveProfile(input:{firstName:string;lastName:string;email:
   const now=new Date().toISOString();const{error}=await client.from("profiles").upsert({id:user.id,full_name:`${input.firstName} ${input.lastName}`.trim(),email:input.email,phone:input.phone,role:input.role,location:input.city,cv_path:cvPath,universal_profile:universal,privacy_consent_at:input.privacyConsent?now:null,automatic_application_consent_at:input.automaticConsent?now:null,universal_profile_completed_at:input.privacyConsent&&input.automaticConsent?now:null,updated_at:now},{onConflict:"id"});if(error)throw error;
 }
 
+export type WebOnboardingAnswers={
+  search:string;priorities:string[];apps:string;category:string;categoryLabel:string;specialties:string[];specialtyLabels:string[];
+  experience:string;city:string;currency:string;salaryMin:number;salaryMax:number;goal:string;interviews:number;deadline:string;
+  blocker:string;outcome:string;source:string;promoCode:string;
+};
+
+export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en"}){
+  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
+  if(input.resume.size>10*1024*1024)throw new Error(input.locale==="es"?"El CV no puede superar 10 MB.":"Your résumé must be 10 MB or smaller.");
+  const lower=input.resume.name.toLowerCase();const extension=lower.endsWith(".docx")?"docx":lower.endsWith(".doc")?"doc":"pdf";
+  const allowed=["pdf","doc","docx"];if(!allowed.includes(extension))throw new Error(input.locale==="es"?"El CV debe ser PDF, DOC o DOCX.":"Your résumé must be a PDF, DOC or DOCX file.");
+  const cvPath=`${user.id}/cv.${extension}`;const{error:uploadError}=await client.storage.from("cvs").upload(cvPath,input.resume,{contentType:input.resume.type||"application/pdf",upsert:true});if(uploadError)throw uploadError;
+  const{data:existing,error:profileError}=await client.from("profiles").select("full_name,email,phone,universal_profile,privacy_consent_at,automatic_application_consent_at").eq("id",user.id).maybeSingle();if(profileError)throw profileError;
+  const metadataName=String(user.user_metadata?.full_name??user.user_metadata?.name??"");const fullName=existing?.full_name||metadataName;
+  const experienceYears:Record<string,number>={internship:0,entry:0,junior:2,mid:4,senior:7,expert:10};
+  const previous=(existing?.universal_profile as UniversalProfile|null)??defaultUniversal(user);
+  const universal:UniversalProfile={...previous,city:input.answers.city,country:previous.country||(input.locale==="es"?"España":""),salaryCurrency:input.answers.currency,yearsExperience:experienceYears[input.answers.experience]??0,version:1};
+  const now=new Date().toISOString();const onboardingAnswers={...input.answers,promoCode:input.answers.promoCode.trim().toUpperCase(),locale:input.locale,completedFrom:"web",completedAt:now};
+  const{error}=await client.from("profiles").upsert({id:user.id,full_name:fullName,email:existing?.email||user.email||null,phone:existing?.phone||null,role:input.answers.specialtyLabels.join(", ")||input.answers.categoryLabel,location:input.answers.city,skills:input.answers.specialtyLabels,work_modes:input.answers.priorities.includes("remote")?["Remoto","Híbrido"]:[],min_salary:input.answers.salaryMin,max_salary:input.answers.salaryMax,cv_path:cvPath,universal_profile:universal,onboarding_answers:onboardingAnswers,onboarding_completed_at:now,updated_at:now},{onConflict:"id"});if(error)throw error;
+}
+
 export function profileReadiness(profile:CandidateProfile|null){const u=profile?.universal;const checks=[Boolean(u?.firstName),Boolean(u?.lastName),Boolean(profile?.email),Boolean(profile?.phone),Boolean(u?.city),Boolean(u?.country),Boolean(profile?.cvPath),Boolean(u?.workAuthorizationCountries?.length),Boolean(u?.privacyConsent),Boolean(u?.automaticApplicationConsent)];return{ready:checks.every(Boolean),percentage:Math.round(checks.filter(Boolean).length/checks.length*100),missing:["nombre","apellidos","email","teléfono","ciudad","país","CV","permiso de trabajo","consentimiento de privacidad","autorización de candidatura"].filter((_,i)=>!checks[i])}}
 
 export async function loadApplications():Promise<LiveApplication[]>{
@@ -107,6 +128,6 @@ export async function loadApplications():Promise<LiveApplication[]>{
 
 export async function loadSavedJobs(){const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];const{data}=await client.from("swipes").select("job_id").eq("user_id",user.id).eq("direction","save").order("created_at",{ascending:false});if(!data?.length)return[];const{data:rows,error}=await client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",data.map((row:{job_id:string})=>row.job_id));if(error)throw error;return((rows??[])as JobRow[]).map(mapJob)}
 
-export async function startStripe(action:"checkout"|"portal"="checkout"){const client=createSupabaseBrowserClient();const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");window.location.assign(data.url)}
+export async function startStripe(action:"checkout"|"portal"="checkout"){const client=createSupabaseBrowserClient();let promotionCode="";if(action==="checkout"){const user=await currentUser();if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}}const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");window.location.assign(data.url)}
 
 export async function hasWebPro(){const user=await currentUser();if(!user)return false;const{data}=await createSupabaseBrowserClient().from("stripe_subscriptions").select("status,current_period_end").eq("user_id",user.id).in("status",["active","trialing"]).maybeSingle();return Boolean(data&&(!data.current_period_end||new Date(data.current_period_end).getTime()>Date.now()))}
