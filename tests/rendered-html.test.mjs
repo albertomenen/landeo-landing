@@ -39,6 +39,7 @@ test("renders the main product route",async()=>{
   const html=await response.text();
   assert.match(html,/Empleos para ti/);
   assert.match(html,/Postularme/);
+  assert.match(html,/Navegación móvil/);
   assert.match(html,/Consultando el catálogo de Supabase/);
 });
 
