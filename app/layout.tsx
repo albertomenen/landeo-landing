@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import {detectLandingLocale} from "../lib/locale";
+import GoogleAnalytics from "../components/GoogleAnalytics";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
@@ -20,5 +21,6 @@ export async function generateMetadata():Promise<Metadata>{
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale=detectLandingLocale(await headers());
-  return <html lang={locale}><body className={geist.variable}>{children}</body></html>;
+  const analyticsId=process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID;
+  return <html lang={locale}><body className={geist.variable}>{children}<GoogleAnalytics measurementId={analyticsId} locale={locale}/></body></html>;
 }
