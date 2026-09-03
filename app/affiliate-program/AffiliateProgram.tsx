@@ -145,7 +145,7 @@ const copy = {
   },
 } as const;
 
-const applicationEmail = "mailto:affiliates@getlandeo.com?subject=Landeo%20Affiliate%20Program";
+const applicationEmail = "mailto:alberto@haired.app?subject=Landeo%20Affiliate%20Program";
 
 export default function AffiliateProgram({ initialLocale }: { initialLocale: LandingLocale }) {
   const [locale, setLocale] = useState<LandingLocale>(initialLocale);
