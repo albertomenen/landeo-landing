@@ -65,7 +65,7 @@ const copy={
       ],
     },
     final:{kicker:"TU PRÓXIMA OPORTUNIDAD NO NECESITA OTRO FORMULARIO",title:"Haz sitio para las entrevistas.",accent:"Landeo se ocupa del camino.",cta:"Empezar gratis",note:"Crear el perfil no cuesta nada · Tú decides cuándo avanzar"},
-    footer:{tagline:"Buscar trabajo, sin repetir tu historia.",privacy:"Privacidad",terms:"Términos"},
+    footer:{tagline:"Buscar trabajo, sin repetir tu historia.",privacy:"Privacidad",terms:"Términos",affiliate:"Afiliados"},
     language:"Cambiar idioma",
   },
   en:{
@@ -128,7 +128,7 @@ const copy={
       ],
     },
     final:{kicker:"YOUR NEXT OPPORTUNITY DOES NOT NEED ANOTHER FORM",title:"Make room for interviews.",accent:"Landeo handles the road there.",cta:"Start free",note:"Creating your profile is free · You decide when to move forward"},
-    footer:{tagline:"Job hunting, without repeating your story.",privacy:"Privacy",terms:"Terms"},
+    footer:{tagline:"Job hunting, without repeating your story.",privacy:"Privacy",terms:"Terms",affiliate:"Affiliates"},
     language:"Change language",
   },
 } as const;
@@ -287,7 +287,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
 
       <footer className="site-footer">
         <div><Link className="brand" href="/"><span className="brand-mark">L</span><span>Landeo</span></Link><p>{t.footer.tagline}</p></div>
-        <nav aria-label={t.nav.label}><Link href="/pricing">{t.nav.pricing}</Link><Link href="/privacy">{t.footer.privacy}</Link><Link href="/terms">{t.footer.terms}</Link><Link href="/login">{t.nav.login}</Link></nav>
+        <nav aria-label={t.nav.label}><Link href="/pricing">{t.nav.pricing}</Link><Link href="/affiliate-program">{t.footer.affiliate}</Link><Link href="/privacy">{t.footer.privacy}</Link><Link href="/terms">{t.footer.terms}</Link><Link href="/login">{t.nav.login}</Link></nav>
         <small>© 2026 Landeo</small>
       </footer>
     </main>
