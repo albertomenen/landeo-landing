@@ -44,7 +44,7 @@ export default function LegalPage({ kind }: { kind: keyof typeof copy }) {
         <h2>{kind === "privacy" ? "6" : "5"}. Derechos y contacto</h2>
         <p>El usuario puede revisar, corregir, descargar o solicitar la eliminación de sus datos desde su cuenta, sin perjuicio de las obligaciones legales de conservación.</p>
       </article>
-      <footer><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><Link href="/application-authorization">Autorización</Link></footer>
+      <footer><Link href="/support">Ayuda</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><Link href="/application-authorization">Autorización</Link></footer>
     </main>
   );
 }
