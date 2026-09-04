@@ -1,4 +1,16 @@
-import Link from "../../components/SafeLink";
-import {Brand} from "../../components/Brand";
-import {PricingActions} from "../../components/PricingActions";
-export default function Pricing(){return <main className="public-page pricing-page"><header><Brand/><nav><Link href="/">Cómo funciona</Link><Link href="/login">Entrar</Link></nav></header><section className="pricing-hero"><span className="eyebrow"><i/> Simple y transparente</span><h1>Explora gratis.<br/><em>Actúa con Pro.</em></h1><p>Solo necesitas Pro cuando decides postularte. Sin cargos por guardar, comparar o descartar empleos.</p></section><section className="pricing-grid"><article><span className="plan-name">GRATIS</span><h2>Descubre a tu ritmo</h2><p className="price">0 €<small>/ para siempre</small></p><ul><li>✓ Feed personalizado</li><li>✓ Guardados ilimitados</li><li>✓ Perfil universal</li><li>✓ Filtros y coincidencia</li></ul><Link className="button button-ghost" href="/signup">Crear perfil gratis</Link></article><article className="pro-plan"><span className="popular">MÁS ELEGIDO</span><span className="plan-name">✦ LANDEO PRO</span><h2>Convierte intención en acción</h2><p className="price">9,99 €<small>/ mes · impuestos según país</small></p><ul><li>✓ Todo lo incluido en Gratis</li><li>✓ Swipe derecho con intención auditable</li><li>✓ Envío automático cuando el canal lo permite</li><li>✓ Seguimiento y cronología verificable</li><li>✓ Gestiona y cancela cuando quieras</li></ul><PricingActions/></article></section><section className="billing-note"><b>Pago seguro con Stripe</b><p>Stripe gestiona el cobro y el portal de suscripción. Landeo solo activa Pro cuando el webhook confirma una suscripción vigente; el servidor vuelve a verificarla antes de cada candidatura.</p></section></main>}
+import type {Metadata} from "next";
+import {headers} from "next/headers";
+import {detectLandingLocale} from "../../lib/locale";
+import PricingPage from "./PricingPage";
+
+export async function generateMetadata():Promise<Metadata>{
+  const locale=detectLandingLocale(await headers());
+  const title=locale==="es"?"Precios de Landeo":"Landeo pricing";
+  const description=locale==="es"?"Planes sencillos de candidaturas automáticas, con todas las funciones incluidas.":"Simple application plans with every Landeo feature included.";
+  return {title,description,openGraph:{title,description,images:[]},twitter:{title,description,images:[]}};
+}
+
+export default async function Pricing(){
+  const locale=detectLandingLocale(await headers());
+  return <PricingPage initialLocale={locale}/>;
+}
