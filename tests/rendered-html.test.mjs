@@ -21,6 +21,7 @@ test("server-renders the Landeo landing page and social metadata",async()=>{
   assert.match(html,/Automatizar sin perder el control/i);
   assert.match(html,/aria-label="Cambiar idioma"/i);
   assert.match(html,/og-bilingual\.png/);
+  assert.match(html,/<meta name="msvalidate\.01" content="8817032EE0ED5D0365743F3506BDC91B"\s*\/>/i);
   assert.doesNotMatch(html,/codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
