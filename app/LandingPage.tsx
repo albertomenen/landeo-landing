@@ -23,6 +23,29 @@ const copy={
       apply:"Sí, me interesa",hint:"Izquierda para pasar · Derecha para avanzar",reused:"Perfil reutilizado. Formulario evitado.",
       save:"Guardar oferta",pass:"Pasar oferta",
     },
+    dashboard:{
+      kicker:"TODO TU PROCESO, EN UNA SOLA VISTA",title:"De candidatura a entrevista.",accent:"Sin perder el hilo.",
+      text:"Landeo organiza cada oportunidad y te enseña qué está pasando, qué viene después y cuándo necesitas actuar.",
+      aria:"Vista de ejemplo del panel de candidaturas de Landeo",example:"VISTA DE PRODUCTO",heading:"Mis candidaturas",
+      nav:["Empleos","Candidaturas","Perfil"],settings:"Ajustes",help:"Ayuda",
+      columns:[
+        {title:"Enviadas",count:"2",jobs:[
+          {role:"Product Designer",company:"Notion",location:"Remoto",activity:"Candidatura enviada hoy",status:"En revisión",logo:"/company-logos/notion.webp"},
+          {role:"Strategy Associate",company:"McKinsey",location:"Madrid",activity:"Enviada hace 4 días",status:"Esperando respuesta",logo:"/company-logos/mckinsey.png"},
+        ]},
+        {title:"Entrevistas",count:"1",jobs:[
+          {role:"Customer Success Lead",company:"HubSpot",location:"Remoto",activity:"Entrevista en 3 días",status:"Entrevista",logo:"/company-logos/hubspot.png"},
+        ]},
+        {title:"Resultados",count:"1",jobs:[
+          {role:"AI Product Manager",company:"Anthropic",location:"Londres",activity:"Respuesta recibida hoy",status:"Oferta",logo:"/company-logos/anthropic.webp"},
+        ]},
+      ],
+    },
+    social:{
+      title:"Candidatos de Landeo han conseguido puestos en empresas líderes",
+      subtitle:"Desde recién graduados hasta profesionales con experiencia.",
+      note:"Los logotipos identifican empleadores mencionados por usuarios y no implican colaboración o respaldo de estas empresas.",
+    },
     outcomes:["Menos formularios","Más oportunidades relevantes","Una búsqueda que sí puedes seguir"],
     pain:{
       kicker:"ESTO NO DEBERÍA SEGUIR PASANDO",title:"Buscar trabajo ya es un trabajo.",accent:"Landeo cambia esa parte.",
@@ -86,6 +109,29 @@ const copy={
       apply:"Yes, I'm interested",hint:"Left to pass · Right to move forward",reused:"Profile reused. Form avoided.",
       save:"Save role",pass:"Pass on role",
     },
+    dashboard:{
+      kicker:"YOUR WHOLE SEARCH, IN ONE VIEW",title:"From application to interview.",accent:"Never lose the thread.",
+      text:"Landeo organizes every opportunity and shows you what is happening, what comes next and when you need to act.",
+      aria:"Example view of the Landeo applications dashboard",example:"PRODUCT PREVIEW",heading:"My applications",
+      nav:["Jobs","Applications","Profile"],settings:"Settings",help:"Help",
+      columns:[
+        {title:"Applied",count:"2",jobs:[
+          {role:"Product Designer",company:"Notion",location:"Remote",activity:"Applied today",status:"Under review",logo:"/company-logos/notion.webp"},
+          {role:"Strategy Associate",company:"McKinsey",location:"Madrid",activity:"Applied 4 days ago",status:"Awaiting response",logo:"/company-logos/mckinsey.png"},
+        ]},
+        {title:"Interviews",count:"1",jobs:[
+          {role:"Customer Success Lead",company:"HubSpot",location:"Remote",activity:"Interview in 3 days",status:"Interview",logo:"/company-logos/hubspot.png"},
+        ]},
+        {title:"Results",count:"1",jobs:[
+          {role:"AI Product Manager",company:"Anthropic",location:"London",activity:"Reply received today",status:"Offer",logo:"/company-logos/anthropic.webp"},
+        ]},
+      ],
+    },
+    social:{
+      title:"Landeo candidates have landed roles at leading companies",
+      subtitle:"From new graduates to experienced professionals.",
+      note:"Logos identify employers referenced by users and do not imply a partnership or endorsement by these companies.",
+    },
     outcomes:["Fewer forms","More relevant opportunities","A job search you can actually track"],
     pain:{
       kicker:"THIS SHOULD NOT STILL BE HAPPENING",title:"Job hunting is already a job.",accent:"Landeo changes that part.",
@@ -132,6 +178,19 @@ const copy={
     language:"Change language",
   },
 } as const;
+
+const companyLogos=[
+  {name:"Tesla",src:"/company-logos/tesla.png"},
+  {name:"SpaceX",src:"/company-logos/spacex.png"},
+  {name:"Google",src:"/company-logos/google.webp"},
+  {name:"Apple",src:"/company-logos/apple.svg"},
+  {name:"Notion",src:"/company-logos/notion.webp"},
+  {name:"HubSpot",src:"/company-logos/hubspot.png"},
+  {name:"McKinsey & Company",src:"/company-logos/mckinsey.png"},
+  {name:"Spotify",src:"/company-logos/spotify.png"},
+  {name:"OpenAI",src:"/company-logos/openai.png"},
+  {name:"Anthropic",src:"/company-logos/anthropic.webp"},
+] as const;
 
 export default function LandingPage({initialLocale}:{initialLocale:LandingLocale}){
   const [locale,setLocale]=useState<LandingLocale>(initialLocale);
@@ -205,6 +264,50 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
           </div>
           <span className="floating-note note-bottom"><i>✓</i> {t.product.reused}</span>
         </div>
+      </section>
+
+      <section className="dashboard-showcase">
+        <div className="dashboard-showcase-copy">
+          <span className="section-kicker">{t.dashboard.kicker}</span>
+          <h2>{t.dashboard.title} <em>{t.dashboard.accent}</em></h2>
+          <p>{t.dashboard.text}</p>
+        </div>
+        <div className="dashboard-stage">
+          <div className="landing-dashboard" aria-label={t.dashboard.aria}>
+            <aside className="landing-dashboard-sidebar">
+              <Link className="landing-dashboard-brand" href="/"><span>L</span><strong>Landeo</strong></Link>
+              <nav>
+                {t.dashboard.nav.map((item,index)=><span className={index===1?"active":""} key={item}><i>{["⌕","☷","▢"][index]}</i>{item}</span>)}
+              </nav>
+              <div><span><i>⚙</i>{t.dashboard.settings}</span><span><i>?</i>{t.dashboard.help}</span></div>
+            </aside>
+            <div className="landing-dashboard-main">
+              <header><div><small>{t.dashboard.example}</small><h3>{t.dashboard.heading}</h3></div><span>AM</span></header>
+              <div className="landing-dashboard-columns">
+                {t.dashboard.columns.map((column,columnIndex)=><section key={column.title}>
+                  <div className="landing-dashboard-column-title"><strong>{column.title}</strong><span>{column.count}</span></div>
+                  {column.jobs.map(job=><article key={job.role}>
+                    <div className="landing-dashboard-job-head"><span><img src={job.logo} alt="" /></span><div><strong>{job.role}</strong><small>{job.company}</small></div></div>
+                    <p>⌖ {job.location}</p>
+                    <p>↗ {job.activity}</p>
+                    <footer><span>{job.status}</span><b>{columnIndex===0?"✓":columnIndex===1?"◎":"★"}</b></footer>
+                  </article>)}
+                </section>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="company-proof" aria-labelledby="company-proof-title">
+        <div className="company-proof-heading">
+          <h2 id="company-proof-title">{t.social.title}</h2>
+          <p>{t.social.subtitle}</p>
+        </div>
+        <div className="company-logo-grid">
+          {companyLogos.map(company=><div key={company.name}><img src={company.src} alt={company.name} loading="lazy" /></div>)}
+        </div>
+        <small>{t.social.note}</small>
       </section>
 
       <section className="outcome-strip">

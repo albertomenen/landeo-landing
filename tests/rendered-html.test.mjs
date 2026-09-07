@@ -19,6 +19,9 @@ test("server-renders the Landeo landing page and social metadata",async()=>{
   assert.match(html,/<title>Landeo — Deja los formularios\. Empieza a recibir respuestas<\/title>/i);
   assert.match(html,/Deja de rellenar formularios/);
   assert.match(html,/Automatizar sin perder el control/i);
+  assert.match(html,/Candidatos de Landeo han conseguido puestos en empresas líderes/i);
+  assert.match(html,/TODO TU PROCESO, EN UNA SOLA VISTA/i);
+  assert.match(html,/company-logos\/google\.webp/i);
   assert.match(html,/aria-label="Cambiar idioma"/i);
   assert.match(html,/og-bilingual\.png/);
   assert.match(html,/<meta name="msvalidate\.01" content="8817032EE0ED5D0365743F3506BDC91B"\s*\/>/i);
@@ -31,6 +34,8 @@ test("server-renders the English landing page for an English locale",async()=>{
   const html=await response.text();
   assert.match(html,/Stop filling out forms/);
   assert.match(html,/Automation without losing control/i);
+  assert.match(html,/Landeo candidates have landed roles at leading companies/i);
+  assert.match(html,/YOUR WHOLE SEARCH, IN ONE VIEW/i);
   assert.match(html,/aria-label="Change language"/i);
 });
 
