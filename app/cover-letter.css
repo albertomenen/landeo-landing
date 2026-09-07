@@ -1,0 +1,18 @@
+@media(max-width:800px){
+  .cover-letter-layout{grid-template-columns:1fr;padding:0 20px 40px}
+  .cover-letter-explainer{position:static}
+}
+
+@media(max-width:560px){
+  .cover-letter-head{flex-direction:column;height:auto;gap:18px}
+  .cover-letter-score{align-self:flex-start;width:100%;max-width:230px}
+  .cover-letter-layout{padding:0 14px 30px}
+  .cover-letter-form,.cover-letter-explainer{padding:20px 16px}
+  .tone-picker{grid-template-columns:1fr}
+  .tone-picker button{min-height:58px}
+  .cover-letter-actions{align-items:stretch;flex-direction:column}
+  .cover-letter-actions .button{width:100%}
+  .cover-letter-shortcut{grid-template-columns:40px 1fr;padding:15px}
+  .cover-letter-shortcut>span{width:40px;height:40px}
+  .cover-letter-shortcut>b{display:none}
+}

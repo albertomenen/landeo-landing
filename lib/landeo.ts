@@ -5,6 +5,10 @@ import type {ApplyCapability,Job} from "./fixtures";
 export type SwipeDirection="left"|"right"|"save";
 export type ApplicationStatus="queued"|"processing"|"sent"|"action_required"|"viewed"|"interview"|"rejected"|"failed";
 export type ApplyOutcome={status:"queued"|"sent"|"action_required"|"failed";message:string;actionUrl?:string;externalReference?:string};
+export type CoverLetterProfile={
+  enabled:boolean;motivation:string;valueProposition:string;achievement:string;companyPreferences:string;
+  doNotMention:string;tone:"professional"|"warm"|"direct";updatedAt:string;
+};
 export type UniversalProfile={
   version:1;firstName:string;lastName:string;addressLine:string;city:string;country:string;postalCode:string;
   githubUrl:string;websiteUrl:string;salaryCurrency:string;availability:string;noticePeriod:string;
@@ -12,6 +16,7 @@ export type UniversalProfile={
   languages:Array<{language:string;level:string}>;lastCompany:string;lastTitle:string;yearsExperience:number;
   generalMotivation:string;openToInternship:boolean;universityAgreement:string;
   privacyConsent:boolean;automaticApplicationConsent:boolean;
+  coverLetter?:CoverLetterProfile;
 };
 export type CandidateProfile={
   id:string;fullName:string;email:string;phone:string;role:string;location:string;skills:string[];workModes:string[];
@@ -20,7 +25,8 @@ export type CandidateProfile={
 };
 export type LiveApplication={
   id:string;jobId:string;status:ApplicationStatus;appliedAt:string;updatedAt:string;actionUrl:string|null;
-  errorMessage:string|null;requiredFields:string[];deliveryStatus:string|null;job:Job;events:ApplicationEvent[];
+  errorMessage:string|null;requiredFields:string[];deliveryStatus:string|null;coverLetter:string|null;
+  coverLetterGeneratedAt:string|null;job:Job;events:ApplicationEvent[];
 };
 export type ApplicationEvent={id:string;applicationId:string;type:string;message:string;createdAt:string;readAt:string|null};
 
@@ -92,6 +98,20 @@ export async function saveProfile(input:{firstName:string;lastName:string;email:
   const now=new Date().toISOString();const{error}=await client.from("profiles").upsert({id:user.id,full_name:`${input.firstName} ${input.lastName}`.trim(),email:input.email,phone:input.phone,role:input.role,location:input.city,cv_path:cvPath,universal_profile:universal,privacy_consent_at:input.privacyConsent?now:null,automatic_application_consent_at:input.automaticConsent?now:null,universal_profile_completed_at:input.privacyConsent&&input.automaticConsent?now:null,updated_at:now},{onConflict:"id"});if(error)throw error;
 }
 
+export function coverLetterReadiness(profile:CandidateProfile|null){
+  const cover=profile?.universal?.coverLetter;const checks=[Boolean(cover?.motivation?.trim()),Boolean(cover?.valueProposition?.trim()),Boolean(cover?.achievement?.trim()),Boolean(cover?.companyPreferences?.trim()),Boolean(cover?.enabled)];
+  return{ready:checks.every(Boolean),percentage:Math.round(checks.filter(Boolean).length/checks.length*100),missing:["motivación","valor profesional","logro real","empresa ideal","autorización para generar"].filter((_,index)=>!checks[index])};
+}
+
+export async function saveCoverLetterProfile(input:Omit<CoverLetterProfile,"updatedAt">){
+  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para guardar tu carta.");
+  const current=await loadProfile();const clean=(value:string,max:number)=>value.replace(/\s+/g," ").trim().slice(0,max);
+  const coverLetter:CoverLetterProfile={enabled:input.enabled,motivation:clean(input.motivation,1500),valueProposition:clean(input.valueProposition,1500),achievement:clean(input.achievement,1500),companyPreferences:clean(input.companyPreferences,1000),doNotMention:clean(input.doNotMention,700),tone:input.tone,updatedAt:new Date().toISOString()};
+  if(!coverLetter.motivation||!coverLetter.valueProposition||!coverLetter.achievement||!coverLetter.companyPreferences)throw new Error("Responde las cuatro preguntas principales antes de guardar.");
+  const universal:UniversalProfile={...(current?.universal??defaultUniversal(user)),coverLetter,version:1};
+  const{error}=await client.from("profiles").upsert({id:user.id,email:current?.email||user.email||null,universal_profile:universal,updated_at:new Date().toISOString()},{onConflict:"id"});if(error)throw error;
+}
+
 export type WebOnboardingAnswers={
   search:string;priorities:string[];apps:string;category:string;categoryLabel:string;specialties:string[];specialtyLabels:string[];
   experience:string;city:string;currency:string;salaryMin:number;salaryMax:number;goal:string;interviews:number;deadline:string;
@@ -117,13 +137,13 @@ export function profileReadiness(profile:CandidateProfile|null){const u=profile?
 
 export async function loadApplications():Promise<LiveApplication[]>{
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];
-  const{data:rows,error}=await client.from("applications").select("id,job_id,status,applied_at,updated_at,action_url,error_message,required_fields,delivery_status").eq("user_id",user.id).order("updated_at",{ascending:false});if(error)throw error;if(!rows?.length)return[];
-  const typedRows=rows as Array<{id:string;job_id:string;status:string;applied_at:string;updated_at:string;action_url:string|null;error_message:string|null;required_fields:unknown;delivery_status:string|null}>;
+  const{data:rows,error}=await client.from("applications").select("id,job_id,status,applied_at,updated_at,action_url,error_message,required_fields,delivery_status,answers").eq("user_id",user.id).order("updated_at",{ascending:false});if(error)throw error;if(!rows?.length)return[];
+  const typedRows=rows as Array<{id:string;job_id:string;status:string;applied_at:string;updated_at:string;action_url:string|null;error_message:string|null;required_fields:unknown;delivery_status:string|null;answers:Record<string,unknown>|null}>;
   const jobIds=[...new Set(typedRows.map(row=>row.job_id))];const appIds=typedRows.map(row=>row.id);
   const[{data:jobRows},{data:eventRows}]=await Promise.all([client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",jobIds),client.from("application_events").select("id,application_id,event_type,message,created_at,read_at").in("application_id",appIds).order("created_at",{ascending:true})]);
   const byJob=new Map(((jobRows??[])as JobRow[]).map(row=>[row.id,mapJob(row)]));
   const events=((eventRows??[]) as Array<{id:string;application_id:string;event_type:string;message:string;created_at:string;read_at:string|null}>).map(row=>({id:row.id,applicationId:row.application_id,type:row.event_type,message:row.message,createdAt:row.created_at,readAt:row.read_at}));
-  return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
+  return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);const letter=typeof row.answers?.generatedCoverLetter==="string"?row.answers.generatedCoverLetter:null;const generatedAt=typeof row.answers?.coverLetterGeneratedAt==="string"?row.answers.coverLetterGeneratedAt:null;return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,coverLetter:letter,coverLetterGeneratedAt:generatedAt,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
 }
 
 export async function loadSavedJobs(){const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];const{data}=await client.from("swipes").select("job_id").eq("user_id",user.id).eq("direction","save").order("created_at",{ascending:false});if(!data?.length)return[];const{data:rows,error}=await client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",data.map((row:{job_id:string})=>row.job_id));if(error)throw error;return((rows??[])as JobRow[]).map(mapJob)}

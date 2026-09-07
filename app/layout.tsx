@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import {detectLandingLocale} from "../lib/locale";
 import GoogleAnalytics from "../components/GoogleAnalytics";
 import "./globals.css";
+import "./cover-letter.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
 
