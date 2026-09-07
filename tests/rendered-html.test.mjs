@@ -44,6 +44,22 @@ test("renders the main product route",async()=>{
   assert.match(html,/Consultando el catálogo de Supabase/);
 });
 
+test("renders localized legal documents and the Apple addendum",async()=>{
+  const englishPrivacy=await render("/privacy?lang=en",{"accept-language":"es-ES"});
+  assert.equal(englishPrivacy.status,200);
+  const privacyHtml=await englishPrivacy.text();
+  assert.match(privacyHtml,/Privacy Policy/);
+  assert.match(privacyHtml,/permanently delete your account/);
+  assert.match(privacyHtml,/alberto@haired\.app/);
+
+  const spanishTerms=await render("/terms?lang=es",{"accept-language":"en-GB"});
+  assert.equal(spanishTerms.status,200);
+  const termsHtml=await spanishTerms.text();
+  assert.match(termsHtml,/Términos de servicio/);
+  assert.match(termsHtml,/Anexo de Apple App Store/);
+  assert.match(termsHtml,/Apple Standard EULA/);
+});
+
 test("removes the disposable starter and keeps integration contracts",async()=>{
   const packageJson=await readFile(new URL("package.json",root),"utf8");
   const contracts=await readFile(new URL("lib/supabase/contracts.ts",root),"utf8");
