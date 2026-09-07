@@ -26,6 +26,7 @@ const copy={
     dashboard:{
       kicker:"TODO TU PROCESO, EN UNA SOLA VISTA",title:"De candidatura a entrevista.",accent:"Sin perder el hilo.",
       text:"Landeo organiza cada oportunidad y te enseña qué está pasando, qué viene después y cuándo necesitas actuar.",
+      mobileHint:"Desliza para ver entrevistas y resultados",
       aria:"Vista de ejemplo del panel de candidaturas de Landeo",example:"VISTA DE PRODUCTO",heading:"Mis candidaturas",
       nav:["Empleos","Candidaturas","Perfil"],settings:"Ajustes",help:"Ayuda",
       columns:[
@@ -112,6 +113,7 @@ const copy={
     dashboard:{
       kicker:"YOUR WHOLE SEARCH, IN ONE VIEW",title:"From application to interview.",accent:"Never lose the thread.",
       text:"Landeo organizes every opportunity and shows you what is happening, what comes next and when you need to act.",
+      mobileHint:"Swipe to see interviews and results",
       aria:"Example view of the Landeo applications dashboard",example:"PRODUCT PREVIEW",heading:"My applications",
       nav:["Jobs","Applications","Profile"],settings:"Settings",help:"Help",
       columns:[
@@ -272,6 +274,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
           <h2>{t.dashboard.title} <em>{t.dashboard.accent}</em></h2>
           <p>{t.dashboard.text}</p>
         </div>
+        <p className="dashboard-mobile-hint"><span aria-hidden="true">↔</span>{t.dashboard.mobileHint}</p>
         <div className="dashboard-stage">
           <div className="landing-dashboard" aria-label={t.dashboard.aria}>
             <aside className="landing-dashboard-sidebar">
@@ -282,7 +285,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
               <div><span><i>⚙</i>{t.dashboard.settings}</span><span><i>?</i>{t.dashboard.help}</span></div>
             </aside>
             <div className="landing-dashboard-main">
-              <header><div><small>{t.dashboard.example}</small><h3>{t.dashboard.heading}</h3></div><span>AM</span></header>
+              <header><div><small>{t.dashboard.example}</small><h3>{t.dashboard.heading}</h3></div><span aria-hidden="true">✓</span></header>
               <div className="landing-dashboard-columns">
                 {t.dashboard.columns.map((column,columnIndex)=><section key={column.title}>
                   <div className="landing-dashboard-column-title"><strong>{column.title}</strong><span>{column.count}</span></div>
