@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {access,readFile} from "node:fs/promises";
 import test from "node:test";
+import {prioritizeJobsByLocation} from "../lib/job-location.ts";
 
 const root=new URL("../",import.meta.url);
 
@@ -55,6 +56,12 @@ test("renders the main product route",async()=>{
   assert.match(html,/Consultando el catálogo de Supabase/);
 });
 
+test("prioritizes Madrid and compatible remote jobs without leaking Lisbon roles",()=>{
+  const job=(id,location,workMode,market)=>({id,company:"Test",title:"Role",summary:"",description:"",location,market,workMode,salaryMin:null,salaryMax:null,salaryCurrency:"EUR",contractType:"",seniority:"",industry:"",applyCapability:"external",match:80,publishedAt:"2026-09-08",skills:[],source:"test",applyProvider:"external",applyMode:"external",metadata:{}});
+  const jobs=[job("lisbon","Lisboa, Portugal","onsite","PT"),job("madrid","Madrid, España","onsite","ES"),job("emea","Remote-EMEA","remote","REMOTE"),job("germany","Remote-Germany","remote","REMOTE"),job("spain","Remote-Spain","remote","ES")];
+  assert.deepEqual(prioritizeJobsByLocation(jobs,"Madrid, España","España").map(item=>item.id),["madrid","spain","emea"]);
+});
+
 test("renders localized legal documents and the Apple addendum",async()=>{
   const englishPrivacy=await render("/privacy?lang=en",{"accept-language":"es-ES"});
   assert.equal(englishPrivacy.status,200);
@@ -75,6 +82,8 @@ test("removes the disposable starter and keeps integration contracts",async()=>{
   const packageJson=await readFile(new URL("package.json",root),"utf8");
   const contracts=await readFile(new URL("lib/supabase/contracts.ts",root),"utf8");
   const productApp=await readFile(new URL("components/ProductApp.tsx",root),"utf8");
+  const landeo=await readFile(new URL("lib/landeo.ts",root),"utf8");
+  const jobLocation=await readFile(new URL("lib/job-location.ts",root),"utf8");
   const styles=await readFile(new URL("app/globals.css",root),"utf8");
   assert.doesNotMatch(packageJson,/react-loading-skeleton/);
   assert.match(packageJson,/@supabase\/ssr/);
@@ -82,6 +91,9 @@ test("removes the disposable starter and keeps integration contracts",async()=>{
   assert.match(contracts,/platform:"web"/);
   assert.match(productApp,/triggerConfetti/);
   assert.match(productApp,/result\.status!=="failed"/);
+  assert.match(landeo,/prioritizeJobsByLocation/);
+  assert.match(landeo,/profile\?\.universal_profile/);
+  assert.match(jobLocation,/global\|worldwide\|anywhere\|europe\|europa\|emea/);
   assert.match(styles,/@keyframes landeo-confetti/);
   assert.match(styles,/prefers-reduced-motion:reduce\)\{\.confetti-burst\{display:none/);
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx",root)));
