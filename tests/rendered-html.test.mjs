@@ -74,10 +74,16 @@ test("renders localized legal documents and the Apple addendum",async()=>{
 test("removes the disposable starter and keeps integration contracts",async()=>{
   const packageJson=await readFile(new URL("package.json",root),"utf8");
   const contracts=await readFile(new URL("lib/supabase/contracts.ts",root),"utf8");
+  const productApp=await readFile(new URL("components/ProductApp.tsx",root),"utf8");
+  const styles=await readFile(new URL("app/globals.css",root),"utf8");
   assert.doesNotMatch(packageJson,/react-loading-skeleton/);
   assert.match(packageJson,/@supabase\/ssr/);
   assert.doesNotMatch(packageJson,/@revenuecat\/purchases-js/);
   assert.match(contracts,/platform:"web"/);
+  assert.match(productApp,/triggerConfetti/);
+  assert.match(productApp,/result\.status!=="failed"/);
+  assert.match(styles,/@keyframes landeo-confetti/);
+  assert.match(styles,/prefers-reduced-motion:reduce\)\{\.confetti-burst\{display:none/);
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx",root)));
   await access(new URL("public/og.png",root));
   await access(new URL("public/og-landing.png",root));
