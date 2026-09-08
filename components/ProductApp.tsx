@@ -132,6 +132,20 @@ function adzunaUrl(job: Job) {
   return adzunaDomains[market] ?? "https://www.adzuna.com";
 }
 
+function sourceAttribution(job: Job) {
+  if (job.source?.toLowerCase() === "adzuna")
+    return { label: "Jobs by Adzuna", href: adzunaUrl(job) };
+  if (job.source?.toLowerCase() === "remotive")
+    return {
+      label: "Remotive",
+      href:
+        typeof job.metadata?.source_url === "string"
+          ? job.metadata.source_url
+          : "https://remotive.com/remote-jobs",
+    };
+  return null;
+}
+
 const confettiPieces = Array.from({ length: 34 }, (_, index) => {
   const x = -46 + ((index * 29) % 93);
   const spin = 240 + ((index * 83) % 520);
@@ -421,6 +435,7 @@ function JobsView({
     [jobs, mode, workMode, query],
   );
   const job = filtered[index % Math.max(filtered.length, 1)];
+  const attribution = job ? sourceAttribution(job) : null;
   const removeCurrent = useCallback(() => {
     if (!job) return;
     setJobs((current) => current.filter((item) => item.id !== job.id));
@@ -562,7 +577,7 @@ function JobsView({
               <option>{t.jobs.uk}</option>
             </select>
           </label>
-          <fieldset>
+          <fieldset className="work-mode-filter">
             <legend>{t.jobs.workMode}</legend>
             {[
               ["all", t.jobs.all],
@@ -668,7 +683,18 @@ function JobsView({
                   ♡
                 </button>
               </div>
-              <span className="fresh-badge">{job.source ?? t.jobs.offer}</span>
+              <div className="feed-badges">
+                <span className="fresh-badge">
+                  {job.source ?? t.jobs.offer}
+                </span>
+                <span className={`mode-badge ${job.workMode}`}>
+                  {job.workMode === "remote"
+                    ? t.jobs.remote
+                    : job.workMode === "hybrid"
+                      ? t.jobs.hybrid
+                      : t.jobs.onsite}
+                </span>
+              </div>
               <h2>{job.title}</h2>
               <p>{job.summary}</p>
               <div className="job-meta">
@@ -797,9 +823,9 @@ function JobsView({
               <Link href={`/app/jobs/${job.id}`}>{t.jobs.fullDetails} →</Link>
               <small>
                 {t.jobs.source}:{" "}
-                {job.source?.toLowerCase() === "adzuna" ? (
-                  <a href={adzunaUrl(job)} target="_blank" rel="noreferrer">
-                    Jobs by Adzuna
+                {attribution ? (
+                  <a href={attribution.href} target="_blank" rel="noreferrer">
+                    {attribution.label}
                   </a>
                 ) : (
                   job.source

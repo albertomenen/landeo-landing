@@ -92,6 +92,8 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(productApp, /landeo-locale/);
   assert.match(productApp, /aria-pressed/);
   assert.match(productApp, /Jobs by Adzuna/);
+  assert.match(productApp, /Remotive/);
+  assert.match(productApp, /mode-badge/);
   assert.match(styles, /\.deck-actions button:focus-visible/);
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
 });
@@ -179,6 +181,8 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(productApp, /triggerConfetti/);
   assert.match(productApp, /result\.status\s*!==\s*"failed"/);
   assert.match(landeo, /prioritizeJobsByLocation/);
+  assert.match(landeo, /metadata->>market_country/);
+  assert.match(landeo, /work_mode","Remoto"/);
   assert.match(landeo, /profile\?\.universal_profile/);
   assert.match(
     jobLocation,

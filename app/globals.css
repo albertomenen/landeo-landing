@@ -3877,6 +3877,73 @@ h1 em:after {
     padding-bottom: 5px;
   }
 }
+
+/* Remote and hybrid discovery */
+.feed-badges {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 19px;
+}
+.feed-badges .fresh-badge {
+  margin-top: 0;
+}
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.45px;
+}
+.mode-badge.remote {
+  background: #dff0d8;
+  color: #245c40;
+}
+.mode-badge.hybrid {
+  background: #fff1c9;
+  color: #745718;
+}
+.mode-badge.onsite {
+  background: #eef0f7;
+  color: #596b9d;
+}
+@media (max-width: 800px) {
+  .filters-panel .work-mode-filter {
+    display: flex !important;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+  }
+  .filters-panel .work-mode-filter legend {
+    display: none;
+  }
+  .filters-panel .work-mode-filter .radio-row {
+    width: auto;
+    height: 37px;
+    margin: 0;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: white;
+    color: var(--muted);
+    white-space: nowrap;
+    font-size: 9px;
+    font-weight: 800;
+  }
+  .filters-panel .work-mode-filter input {
+    width: 12px;
+    height: 12px;
+  }
+  .filters-panel .work-mode-filter .radio-row:has(input:checked) {
+    border-color: var(--green);
+    background: #e8f0e4;
+    color: var(--green);
+  }
+}
 .modal-scrim {
   position: absolute;
   inset: 0;

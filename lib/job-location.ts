@@ -48,6 +48,10 @@ function countryCode(country: string, location: string) {
   return "";
 }
 
+export function resolveCountryCode(country: string, location: string) {
+  return countryCode(country, location);
+}
+
 function locationRelevance(job: Job, city: string, country: string) {
   const place = normalizeLocation(job.location);
   const cityName = normalizeLocation(city.split(",")[0] ?? "");

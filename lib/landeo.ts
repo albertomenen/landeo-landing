@@ -1,7 +1,7 @@
 import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
-import {prioritizeJobsByLocation} from "./job-location";
+import {prioritizeJobsByLocation,resolveCountryCode} from "./job-location";
 
 export type SwipeDirection="left"|"right"|"save";
 export type ApplicationStatus="queued"|"processing"|"sent"|"action_required"|"viewed"|"interview"|"rejected"|"failed";
@@ -52,11 +52,7 @@ export async function currentUser(){const {data,error}=await createSupabaseBrows
 
 export async function loadJobs(limit=120){
   const client=createSupabaseBrowserClient();
-  const [{data:rows,error},{data:session}]=await Promise.all([
-    client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").eq("status","active").order("published_at",{ascending:false}).limit(limit),
-    client.auth.getSession(),
-  ]);
-  if(error)throw error;
+  const {data:session}=await client.auth.getSession();
   let hidden=new Set<string>();let candidateCity="",candidateCountry="";
   if(session.session?.user){
     const[{data:swipes},{data:applications},{data:profile}]=await Promise.all([
@@ -67,8 +63,23 @@ export async function loadJobs(limit=120){
     hidden=new Set([...(swipes??[]).map((row:{job_id:string})=>row.job_id),...(applications??[]).map((row:{job_id:string})=>row.job_id)]);
     const universal=profile?.universal_profile as Partial<UniversalProfile>|null;candidateCity=universal?.city||profile?.location||"";candidateCountry=universal?.country||"";
   }
+  const select="id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider";
+  const recent=client.from("jobs").select(select).eq("status","active").order("published_at",{ascending:false}).limit(limit);
+  const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
+  const focused=candidateMarket?[
+    client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(120),
+    client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country","REMOTE").order("published_at",{ascending:false}).limit(120),
+    client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(80),
+  ]:[
+    client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").order("published_at",{ascending:false}).limit(180),
+    client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").order("published_at",{ascending:false}).limit(100),
+  ];
+  const results=await Promise.all([recent,...focused]);
+  const failed=results.find(result=>result.error);
+  if(failed?.error)throw failed.error;
+  const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
-  const available=((rows??[])as JobRow[]).map(mapJob).filter(job=>!hidden.has(job.id)).sort((a,b)=>rank[a.applyCapability]-rank[b.applyCapability]||Number(b.metadata?.feed_priority??0)-Number(a.metadata?.feed_priority??0)||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
+  const available=rows.map(mapJob).filter(job=>!hidden.has(job.id)).sort((a,b)=>rank[a.applyCapability]-rank[b.applyCapability]||Number(b.metadata?.feed_priority??0)-Number(a.metadata?.feed_priority??0)||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
   return candidateCity?prioritizeJobsByLocation(available,candidateCity,candidateCountry):available;
 }
 
