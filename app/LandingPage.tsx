@@ -104,9 +104,9 @@ const copy={
     },
     product:{
       found:"High-match role found",discover:"DISCOVER",one:"One role at a time",match:"94% match",
-      aria:"Example view of the job feed",companyMeta:"Technology · London · Hybrid",sample:"EXAMPLE VIEW",
+      aria:"Example view of the job feed",companyMeta:"Technology · San Francisco · Hybrid",sample:"EXAMPLE VIEW",
       description:"Turn complex problems into simple experiences for thousands of people.",
-      tags:["Product","£50k–£65k","3+ years"],ready:"Ready to review",readyText:"Your profile covers the required information.",
+      tags:["Product","$150k–$190k","3+ years"],ready:"Ready to review",readyText:"Your profile covers the required information.",
       apply:"Yes, I'm interested",hint:"Left to pass · Right to move forward",reused:"Profile reused. Form avoided.",
       save:"Save role",pass:"Pass on role",
     },
@@ -119,7 +119,7 @@ const copy={
       columns:[
         {title:"Applied",count:"2",jobs:[
           {role:"Product Designer",company:"Notion",location:"Remote",activity:"Applied today",status:"Under review",logo:"/company-logos/notion.webp"},
-          {role:"Strategy Associate",company:"McKinsey",location:"Madrid",activity:"Applied 4 days ago",status:"Awaiting response",logo:"/company-logos/mckinsey.png"},
+          {role:"Strategy Associate",company:"McKinsey",location:"New York",activity:"Applied 4 days ago",status:"Awaiting response",logo:"/company-logos/mckinsey.png"},
         ]},
         {title:"Interviews",count:"1",jobs:[
           {role:"Customer Success Lead",company:"HubSpot",location:"Remote",activity:"Interview in 3 days",status:"Interview",logo:"/company-logos/hubspot.png"},
@@ -254,7 +254,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
               <span className="match-chip">{t.product.match}</span>
             </div>
             <article className="job-card">
-              <div className="job-company"><span className="company-logo">N</span><div><strong>Northstar</strong><span>{t.product.companyMeta}</span></div><button aria-label={t.product.save}>♡</button></div>
+              <div className="job-company"><span className="company-logo"><img src="/company-logos/google.webp" alt="Google" /></span><div><strong>Google</strong><span>{t.product.companyMeta}</span></div><button aria-label={t.product.save}>♡</button></div>
               <span className="sample-label">{t.product.sample}</span>
               <h2>Product Designer</h2>
               <p>{t.product.description}</p>

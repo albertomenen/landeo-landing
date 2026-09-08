@@ -23,6 +23,8 @@ test("server-renders the Landeo landing page and social metadata",async()=>{
   assert.match(html,/TODO TU PROCESO, EN UNA SOLA VISTA/i);
   assert.match(html,/Desliza para ver entrevistas y resultados/i);
   assert.match(html,/company-logos\/google\.webp/i);
+  assert.match(html,/>Google</);
+  assert.doesNotMatch(html,/Northstar/);
   assert.match(html,/aria-label="Cambiar idioma"/i);
   assert.match(html,/og-bilingual\.png/);
   assert.match(html,/<meta name="msvalidate\.01" content="8817032EE0ED5D0365743F3506BDC91B"\s*\/>/i);
@@ -38,6 +40,8 @@ test("server-renders the English landing page for an English locale",async()=>{
   assert.match(html,/Landeo candidates have landed roles at leading companies/i);
   assert.match(html,/YOUR WHOLE SEARCH, IN ONE VIEW/i);
   assert.match(html,/Swipe to see interviews and results/i);
+  assert.match(html,/Technology · San Francisco · Hybrid/);
+  assert.match(html,/New York/);
   assert.match(html,/aria-label="Change language"/i);
 });
 
