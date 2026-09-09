@@ -406,6 +406,7 @@ function JobsView({
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
   const [outcome, setOutcome] = useState<ApplyOutcome | null>(null);
   const [confettiBurst, setConfettiBurst] = useState(0);
   const dragStart = useRef<number | null>(null);
@@ -467,6 +468,7 @@ function JobsView({
     }
     try {
       await recordSwipe(job.id, "save");
+      setSavedJobIds((current) => new Set(current).add(job.id));
       setNotice(t.notices.saved);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.saveError);
@@ -763,11 +765,12 @@ function JobsView({
               </span>
             </button>
             <button
-              className="action-save"
+              className={`action-save ${job && savedJobIds.has(job.id) ? "is-saved" : ""}`}
               onClick={save}
               disabled={!job || applying}
+              aria-pressed={Boolean(job && savedJobIds.has(job.id))}
             >
-              <b>♡</b>
+              <b>{job && savedJobIds.has(job.id) ? "♥" : "♡"}</b>
               <span>
                 {t.jobs.save}
                 <small>S</small>

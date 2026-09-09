@@ -94,7 +94,10 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(productApp, /Jobs by Adzuna/);
   assert.match(productApp, /Remotive/);
   assert.match(productApp, /mode-badge/);
+  assert.match(productApp, /savedJobIds/);
+  assert.match(productApp, /aria-pressed/);
   assert.match(styles, /\.deck-actions button:focus-visible/);
+  assert.match(styles, /\.action-apply:hover:not\(:disabled\)::after/);
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
 });
 

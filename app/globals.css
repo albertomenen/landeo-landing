@@ -8648,6 +8648,9 @@ h1 em:after {
   gap: 10px;
 }
 .deck-actions button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   min-height: 58px;
   height: auto;
   padding: 8px 11px;
@@ -8661,6 +8664,17 @@ h1 em:after {
     box-shadow 0.18s,
     border-color 0.18s,
     background 0.18s;
+}
+.deck-actions button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.22s ease,
+    transform 0.35s ease;
 }
 .deck-actions button:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -8678,6 +8692,8 @@ h1 em:after {
   opacity: 0.46;
 }
 .deck-actions b {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   flex: 0 0 35px;
@@ -8685,8 +8701,14 @@ h1 em:after {
   height: 35px;
   border-radius: 11px;
   font-size: 17px;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 0.18s,
+    background 0.18s;
 }
 .deck-actions span {
+  position: relative;
+  z-index: 1;
   align-items: flex-start;
   gap: 3px;
   font-size: 10px;
@@ -8703,6 +8725,7 @@ h1 em:after {
 }
 .deck-actions .action-pass {
   border-color: #ead9d6;
+  background: linear-gradient(180deg, #fff 0%, #fffafa 100%);
 }
 .deck-actions .action-pass b {
   background: #faecea;
@@ -8710,15 +8733,53 @@ h1 em:after {
 }
 .deck-actions .action-save {
   border-color: #d8e5d5;
+  background: linear-gradient(180deg, #fff 0%, #fbfdf9 100%);
 }
 .deck-actions .action-save b {
   background: #e9f3e5;
   color: var(--green);
 }
+.deck-actions .action-save.is-saved {
+  border-color: #9fc89a;
+  background: #edf7e9;
+  color: var(--green);
+}
+.deck-actions .action-save.is-saved b {
+  background: var(--green);
+  color: #fff;
+  transform: scale(1.04);
+}
 .deck-actions .action-apply {
   border: 0;
   background: linear-gradient(135deg, #3b7f5a, #2f6f4c);
   box-shadow: 0 9px 22px rgba(59, 127, 90, 0.24);
+}
+.deck-actions .action-pass::after,
+.deck-actions .action-save::after {
+  background: radial-gradient(
+    circle at 20% 50%,
+    rgba(59, 127, 90, 0.1),
+    transparent 68%
+  );
+  transform: scale(0.7);
+}
+.deck-actions .action-pass::after {
+  background: radial-gradient(
+    circle at 20% 50%,
+    rgba(201, 95, 89, 0.11),
+    transparent 68%
+  );
+}
+.deck-actions .action-apply::after {
+  width: 45%;
+  inset: -30% auto -30% -65%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.28),
+    transparent
+  );
+  transform: skewX(-18deg);
 }
 .deck-actions .action-apply:hover:not(:disabled) {
   background: linear-gradient(135deg, #34764f, #245c40);
@@ -8731,6 +8792,30 @@ h1 em:after {
 .deck-actions .action-apply small {
   background: rgba(255, 255, 255, 0.14);
   color: #eaf3ed;
+}
+@media (hover: hover) {
+  .deck-actions .action-pass:hover:not(:disabled)::after,
+  .deck-actions .action-save:hover:not(:disabled)::after {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .deck-actions .action-pass:hover:not(:disabled) b {
+    transform: rotate(90deg) scale(1.08);
+    background: #c95f59;
+    color: #fff;
+  }
+  .deck-actions .action-save:hover:not(:disabled) b {
+    transform: translateY(-1px) scale(1.1);
+    background: var(--green);
+    color: #fff;
+  }
+  .deck-actions .action-apply:hover:not(:disabled)::after {
+    opacity: 1;
+    transform: translateX(430%) skewX(-18deg);
+  }
+  .deck-actions .action-apply:hover:not(:disabled) b {
+    transform: translateX(3px);
+  }
 }
 @media (max-width: 560px) {
   .deck-actions {
