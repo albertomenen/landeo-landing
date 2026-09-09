@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
+import { marketingDemoJobs } from "../lib/marketing-demo.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -99,6 +100,23 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(styles, /\.deck-actions button:focus-visible/);
   assert.match(styles, /\.action-apply:hover:not\(:disabled\)::after/);
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
+});
+
+test("keeps the marketing demo isolated from real applications", async () => {
+  assert.equal(marketingDemoJobs.length, 20);
+  assert.equal(new Set(marketingDemoJobs.map((job) => job.id)).size, 20);
+  assert.ok(marketingDemoJobs.every((job) => job.metadata?.demo === true));
+  assert.ok(
+    marketingDemoJobs.every(
+      (job) => typeof job.metadata?.company_logo === "string",
+    ),
+  );
+  const response = await render("/demo/marketing");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Marketing Demo/);
+  assert.match(html, /Datos ficticios/);
+  assert.match(html, /noindex/);
 });
 
 test("prioritizes Madrid and compatible remote jobs without leaking Lisbon roles", () => {

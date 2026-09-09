@@ -3878,6 +3878,60 @@ h1 em:after {
   }
 }
 
+/* Isolated marketing demo */
+.marketing-demo-banner {
+  min-height: 38px;
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: #17372a;
+  color: #fff;
+  font-size: 9px;
+  letter-spacing: 0.2px;
+}
+.marketing-demo-banner b {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--text);
+  font-size: 7px;
+  letter-spacing: 1px;
+}
+.marketing-demo .jobs-layout {
+  height: calc(100vh - 180px);
+}
+.company-initials.has-logo {
+  padding: 7px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: transparent;
+}
+.company-initials.has-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.marketing-demo .fresh-badge {
+  background: #17372a;
+  color: var(--lime);
+}
+@media (max-width: 800px) {
+  .marketing-demo-banner {
+    position: sticky;
+    top: 60px;
+    z-index: 31;
+  }
+  .marketing-demo .filters-panel {
+    top: 98px;
+  }
+  .marketing-demo .jobs-layout {
+    height: auto;
+  }
+}
+
 /* Remote and hybrid discovery */
 .feed-badges {
   display: flex;

@@ -35,6 +35,7 @@ import {
 } from "../lib/landeo";
 import { Brand } from "./Brand";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
+import { marketingDemoJobs } from "../lib/marketing-demo";
 
 export type ProductView =
   | "jobs"
@@ -183,7 +184,13 @@ function ConfettiBurst() {
   );
 }
 
-export default function ProductApp({ view }: { view: ProductView }) {
+export default function ProductApp({
+  view,
+  demo = false,
+}: {
+  view: ProductView;
+  demo?: boolean;
+}) {
   const [locale, setLocale] = useState<DashboardLocale>("es");
   const [mobileNav, setMobileNav] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -191,6 +198,10 @@ export default function ProductApp({ view }: { view: ProductView }) {
   const [pro, setPro] = useState(false);
   const [identityLoading, setIdentityLoading] = useState(true);
   const refreshIdentity = useCallback(async () => {
+    if (demo) {
+      setIdentityLoading(false);
+      return;
+    }
     const nextUser = await currentUser();
     setUser(nextUser);
     if (nextUser) {
@@ -205,9 +216,10 @@ export default function ProductApp({ view }: { view: ProductView }) {
       setPro(false);
     }
     setIdentityLoading(false);
-  }, []);
+  }, [demo]);
   useEffect(() => {
     refreshIdentity();
+    if (demo) return;
     const { data } = createSupabaseBrowserClient().auth.onAuthStateChange(() =>
       refreshIdentity(),
     );
@@ -230,11 +242,15 @@ export default function ProductApp({ view }: { view: ProductView }) {
     document.documentElement.lang = nextLocale;
   };
   const t = dashboardCopy[locale];
-  const readiness = profileReadiness(profile);
-  const name = displayName(user, profile, locale);
+  const readiness = demo
+    ? { ready: true, percentage: 100, missing: [] }
+    : profileReadiness(profile);
+  const name = demo
+    ? localized(locale, "Demo de marketing", "Marketing demo")
+    : displayName(user, profile, locale);
   const initialsValue = initials(name) || "L";
   return (
-    <div className="app-frame">
+    <div className={`app-frame ${demo ? "marketing-demo" : ""}`}>
       <aside className={`app-sidebar ${mobileNav ? "open" : ""}`}>
         <div className="sidebar-brand">
           <Brand />
@@ -250,18 +266,18 @@ export default function ProductApp({ view }: { view: ProductView }) {
           <div>
             <strong>{identityLoading ? t.chrome.connecting : name}</strong>
             <small>
-              {user
+              {user || demo
                 ? `${t.chrome.profileAt} ${readiness.percentage}%`
                 : t.chrome.profileRequired}
             </small>
           </div>
-          {pro && <b>Pro</b>}
+          {(pro || demo) && <b>Pro</b>}
         </div>
         <nav aria-label={t.chrome.navigation}>
           {nav.map((item) => (
             <Link
               key={item.id}
-              href={item.href}
+              href={demo ? "/demo/marketing" : item.href}
               className={view === item.id ? "active" : ""}
             >
               <i>{item.icon}</i>
@@ -282,7 +298,7 @@ export default function ProductApp({ view }: { view: ProductView }) {
               ? t.chrome.ready
               : `${readiness.missing.length} ${t.chrome.completeRequirements}`}
           </p>
-          <Link href="/app/profile/universal">
+          <Link href={demo ? "/demo/marketing" : "/app/profile/universal"}>
             {readiness.ready
               ? t.chrome.reviewProfile
               : t.chrome.completeProfile}{" "}
@@ -327,7 +343,13 @@ export default function ProductApp({ view }: { view: ProductView }) {
           <span className="avatar">{initialsValue}</span>
         </header>
         {view === "jobs" ? (
-          <JobsView user={user} profile={profile} pro={pro} locale={locale} />
+          <JobsView
+            user={user}
+            profile={profile}
+            pro={pro || demo}
+            locale={locale}
+            demo={demo}
+          />
         ) : view === "applications" ? (
           <ApplicationsView user={user} locale={locale} />
         ) : view === "cover-letter" ? (
@@ -361,7 +383,7 @@ export default function ProductApp({ view }: { view: ProductView }) {
         {mobileNavItems.map((item) => (
           <Link
             key={item.id}
-            href={item.href}
+            href={demo ? "/demo/marketing" : item.href}
             className={
               view === item.id ||
               (view === "universal" && item.id === "profile")
@@ -389,11 +411,13 @@ function JobsView({
   profile,
   pro,
   locale,
+  demo,
 }: {
   user: User | null;
   profile: CandidateProfile | null;
   pro: boolean;
   locale: DashboardLocale;
+  demo: boolean;
 }) {
   const t = dashboardCopy[locale];
   const router = useRouter();
@@ -411,6 +435,12 @@ function JobsView({
   const pendingApplications = useRef(new Set<string>());
   const refresh = useCallback(async () => {
     setLoading(true);
+    if (demo) {
+      setJobs([...marketingDemoJobs]);
+      setIndex(0);
+      setLoading(false);
+      return;
+    }
     try {
       setJobs(await loadJobs());
     } catch (error) {
@@ -418,7 +448,7 @@ function JobsView({
     } finally {
       setLoading(false);
     }
-  }, [t.notices.loadError]);
+  }, [demo, t.notices.loadError]);
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -447,6 +477,10 @@ function JobsView({
   }, []);
   const pass = useCallback(async () => {
     if (!job) return;
+    if (demo) {
+      removeCurrent();
+      return;
+    }
     if (!user) {
       router.push("/login");
       return;
@@ -458,9 +492,13 @@ function JobsView({
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.swipeError);
     }
-  }, [job, user, router, removeCurrent, t.notices]);
+  }, [job, demo, user, router, removeCurrent, t.notices]);
   const save = useCallback(async () => {
     if (!job) return;
+    if (demo) {
+      setSavedJobIds((current) => new Set(current).add(job.id));
+      return;
+    }
     if (!user) {
       router.push("/login");
       return;
@@ -472,9 +510,14 @@ function JobsView({
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.saveError);
     }
-  }, [job, user, router, t.notices]);
+  }, [job, demo, user, router, t.notices]);
   const apply = useCallback(() => {
     if (!job) return;
+    if (demo) {
+      triggerConfetti();
+      removeCurrent();
+      return;
+    }
     if (!user) {
       router.push(`/login?next=/app/jobs`);
       return;
@@ -516,6 +559,7 @@ function JobsView({
       .finally(() => pendingApplications.current.delete(jobId));
   }, [
     job,
+    demo,
     user,
     pro,
     profile,
@@ -540,6 +584,18 @@ function JobsView({
   }, [pass, apply, save]);
   return (
     <>
+      {demo && (
+        <div className="marketing-demo-banner" role="status">
+          <b>DEMO</b>
+          <span>
+            {localized(
+              locale,
+              "Datos ficticios · ninguna candidatura se enviará",
+              "Fictional data · no applications will be sent",
+            )}
+          </span>
+        </div>
+      )}
       <header className="view-header">
         <div>
           <span className="overline">{t.jobs.eyebrow}</span>
@@ -551,7 +607,7 @@ function JobsView({
             ↻
           </button>
           <span className="avatar">
-            {initials(displayName(user, profile, locale))}
+            {demo ? "LD" : initials(displayName(user, profile, locale))}
           </span>
         </div>
       </header>
@@ -675,8 +731,14 @@ function JobsView({
               }}
             >
               <div className="feed-top">
-                <span className="company-initials">
-                  {initials(job.company)}
+                <span
+                  className={`company-initials ${typeof job.metadata?.company_logo === "string" ? "has-logo" : ""}`}
+                >
+                  {typeof job.metadata?.company_logo === "string" ? (
+                    <img src={job.metadata.company_logo} alt="" />
+                  ) : (
+                    initials(job.company)
+                  )}
                 </span>
                 <div>
                   <strong>{job.company}</strong>
@@ -684,12 +746,14 @@ function JobsView({
                 </div>
                 <button
                   aria-label={t.jobs.saveOffer}
+                  className={savedJobIds.has(job.id) ? "is-saved" : ""}
+                  aria-pressed={savedJobIds.has(job.id)}
                   onClick={(event) => {
                     event.stopPropagation();
                     save();
                   }}
                 >
-                  ♡
+                  {savedJobIds.has(job.id) ? "♥" : "♡"}
                 </button>
               </div>
               <div className="feed-badges">
