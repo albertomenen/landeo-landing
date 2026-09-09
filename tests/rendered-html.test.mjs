@@ -182,7 +182,12 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.doesNotMatch(packageJson, /@revenuecat\/purchases-js/);
   assert.match(contracts, /platform:"web"/);
   assert.match(productApp, /triggerConfetti/);
-  assert.match(productApp, /result\.status\s*!==\s*"failed"/);
+  assert.match(
+    productApp,
+    /triggerConfetti\(\);[\s\S]*removeCurrent\(\);[\s\S]*submitApplication\(jobId\)/,
+  );
+  assert.match(productApp, /pendingApplications/);
+  assert.doesNotMatch(productApp, /\{outcome &&/);
   assert.match(landeo, /prioritizeJobsByLocation/);
   assert.match(landeo, /metadata->>market_country/);
   assert.match(landeo, /work_mode","Remoto"/);

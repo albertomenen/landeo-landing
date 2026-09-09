@@ -405,11 +405,10 @@ function JobsView({
   const [workMode, setWorkMode] = useState("all");
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
-  const [applying, setApplying] = useState(false);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
-  const [outcome, setOutcome] = useState<ApplyOutcome | null>(null);
   const [confettiBurst, setConfettiBurst] = useState(0);
   const dragStart = useRef<number | null>(null);
+  const pendingApplications = useRef(new Set<string>());
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -474,7 +473,7 @@ function JobsView({
       setNotice(error instanceof Error ? error.message : t.notices.saveError);
     }
   }, [job, user, router, t.notices]);
-  const apply = useCallback(async () => {
+  const apply = useCallback(() => {
     if (!job) return;
     if (!user) {
       router.push(`/login?next=/app/jobs`);
@@ -492,23 +491,29 @@ function JobsView({
       router.push("/app/profile/universal");
       return;
     }
-    setApplying(true);
+    const jobId = job.id;
+    if (pendingApplications.current.has(jobId)) return;
+    pendingApplications.current.add(jobId);
     setNotice("");
-    try {
-      const result = await submitApplication(job.id);
-      setOutcome(result);
-      if (result.status !== "failed") {
-        triggerConfetti();
-        removeCurrent();
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t.notices.applyError;
-      if (/Pro|suscripci|pago/i.test(message)) setPaywall(true);
-      else setOutcome({ status: "failed", message });
-    } finally {
-      setApplying(false);
-    }
+    triggerConfetti();
+    removeCurrent();
+    void submitApplication(jobId)
+      .then((result) => {
+        if (result.status === "failed") {
+          setNotice(result.message || t.notices.applyError);
+          refresh();
+        } else if (result.status === "action_required") {
+          setNotice(result.message);
+        }
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error ? error.message : t.notices.applyError;
+        if (/Pro|suscripci|pago/i.test(message)) setPaywall(true);
+        else setNotice(message);
+        refresh();
+      })
+      .finally(() => pendingApplications.current.delete(jobId));
   }, [
     job,
     user,
@@ -517,6 +522,7 @@ function JobsView({
     router,
     removeCurrent,
     triggerConfetti,
+    refresh,
     t.notices,
   ]);
   useEffect(() => {
@@ -649,6 +655,7 @@ function JobsView({
             </div>
           ) : job ? (
             <div
+              key={job.id}
               className="feed-card"
               role="button"
               tabIndex={0}
@@ -753,11 +760,7 @@ function JobsView({
             </div>
           )}
           <div className="deck-actions">
-            <button
-              className="action-pass"
-              onClick={pass}
-              disabled={!job || applying}
-            >
+            <button className="action-pass" onClick={pass} disabled={!job}>
               <b>×</b>
               <span>
                 {t.jobs.pass}
@@ -767,7 +770,7 @@ function JobsView({
             <button
               className={`action-save ${job && savedJobIds.has(job.id) ? "is-saved" : ""}`}
               onClick={save}
-              disabled={!job || applying}
+              disabled={!job}
               aria-pressed={Boolean(job && savedJobIds.has(job.id))}
             >
               <b>{job && savedJobIds.has(job.id) ? "♥" : "♡"}</b>
@@ -776,14 +779,10 @@ function JobsView({
                 <small>S</small>
               </span>
             </button>
-            <button
-              className="action-apply"
-              onClick={apply}
-              disabled={!job || applying}
-            >
-              <b>{applying ? "…" : "→"}</b>
+            <button className="action-apply" onClick={apply} disabled={!job}>
+              <b>→</b>
               <span>
-                {applying ? t.jobs.applying : t.jobs.apply}
+                {t.jobs.apply}
                 <small>ENTER</small>
               </span>
             </button>
@@ -839,14 +838,9 @@ function JobsView({
         )}
       </div>
       {confettiBurst > 0 && <ConfettiBurst key={confettiBurst} />}{" "}
-      {paywall && <Paywall locale={locale} onClose={() => setPaywall(false)} />}{" "}
-      {outcome && (
-        <OutcomeModal
-          locale={locale}
-          outcome={outcome}
-          onClose={() => setOutcome(null)}
-        />
-      )}
+      {paywall && (
+        <Paywall locale={locale} onClose={() => setPaywall(false)} />
+      )}{" "}
     </>
   );
 }
