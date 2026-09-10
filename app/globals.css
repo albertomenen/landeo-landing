@@ -5020,6 +5020,21 @@ h1 em:after {
 .onboarding-v2 > progress::-moz-progress-bar {
   background: linear-gradient(90deg, var(--green), #77c4a7);
 }
+.onboarding-motion-progress {
+  width: 100%;
+  height: 6px;
+  background: #dfe8dc;
+  overflow: hidden;
+}
+.onboarding-motion-progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  border-radius: 0 99px 99px 0;
+  background: linear-gradient(90deg, var(--green), #77c4a7);
+  box-shadow: 0 0 18px rgba(59, 127, 90, 0.22);
+}
 .onboarding-v2 > .onboarding-panel {
   width: min(880px, calc(100% - 36px));
   max-width: 880px;
@@ -5045,6 +5060,41 @@ h1 em:after {
   right: -90px;
   top: -90px;
   pointer-events: none;
+}
+.onboarding-step-content {
+  position: relative;
+  z-index: 1;
+  will-change: transform, opacity;
+}
+.onboarding-report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+.onboarding-report-link:hover {
+  color: var(--green);
+  background: rgba(59, 127, 90, 0.08);
+}
+.onboarding-report-link > i {
+  width: 19px;
+  height: 19px;
+  border: 1px solid #b9c7bc;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 900;
+}
+.onboarding-report-link > b {
+  font-size: 9px;
+  font-weight: 750;
 }
 .onboarding-eyebrow {
   margin: 0 0 13px !important;
@@ -5694,6 +5744,11 @@ h1 em:after {
   color: #a83e38 !important;
   font-size: 9px !important;
 }
+.onboarding-error a {
+  color: inherit;
+  font-weight: 850;
+  text-decoration: underline;
+}
 .onboarding-v2 .onboarding-actions {
   margin-top: auto;
   padding-top: 30px;
@@ -5730,6 +5785,13 @@ h1 em:after {
   }
   .onboarding-header-meta > span {
     display: none;
+  }
+  .onboarding-report-link > b {
+    display: none;
+  }
+  .onboarding-header-meta > .onboarding-report-link {
+    display: inline-flex;
+    padding: 5px;
   }
   .onboarding-header-meta .language-switcher {
     height: 31px;
@@ -5873,6 +5935,9 @@ h1 em:after {
   .onboarding-header-meta > a {
     display: none;
   }
+  .onboarding-header-meta > .onboarding-report-link {
+    display: inline-flex;
+  }
   .onboarding-choice-grid button {
     grid-template-columns: 34px 1fr 13px;
   }
@@ -5916,7 +5981,6 @@ h1 em:after {
   place-items: center;
   font-size: 13px;
   font-weight: 900;
-  animation: specialtyCue 1s ease-in-out infinite alternate;
 }
 .specialty-panel:focus {
   outline: 0;
@@ -6072,7 +6136,6 @@ h1 em:after {
   font-style: normal;
   font-weight: 900;
   letter-spacing: 0.5px;
-  animation: impactPulse 1.5s ease-in-out infinite;
 }
 .welcome-animation {
   width: 116px;
@@ -6083,7 +6146,6 @@ h1 em:after {
   position: relative;
   display: grid;
   place-items: center;
-  animation: welcomeGlow 2s ease-in-out infinite;
 }
 .welcome-animation > span {
   width: 68px;
@@ -6096,7 +6158,6 @@ h1 em:after {
   font-size: 31px;
   font-weight: 900;
   box-shadow: 0 14px 30px rgba(59, 127, 90, 0.3);
-  animation: welcomeCheck 0.65s cubic-bezier(0.2, 1.65, 0.5, 1) both;
 }
 .welcome-animation > i {
   position: absolute;
@@ -6109,14 +6170,12 @@ h1 em:after {
 .welcome-animation > i:nth-of-type(1) {
   left: 0;
   top: 53px;
-  animation: orbitOne 3s linear infinite;
 }
 .welcome-animation > i:nth-of-type(2) {
   right: 8px;
   top: 16px;
   width: 7px;
   height: 7px;
-  animation: floatDot 1.4s ease-in-out infinite alternate;
 }
 .welcome-animation > i:nth-of-type(3) {
   right: 12px;
@@ -6124,7 +6183,6 @@ h1 em:after {
   width: 13px;
   height: 13px;
   background: #75c6ad;
-  animation: floatDot 1.1s 0.2s ease-in-out infinite alternate;
 }
 .welcome-benefits.completion-list {
   width: min(620px, 100%);
@@ -6143,9 +6201,6 @@ h1 em:after {
   grid-template-columns: 35px 1fr;
   align-items: center;
   gap: 10px;
-  opacity: 0;
-  transform: translateY(9px);
-  animation: benefitReveal 0.45s ease forwards;
 }
 .completion-list li:last-child {
   border-bottom: 0;
@@ -6167,7 +6222,7 @@ h1 em:after {
   line-height: 1.4;
 }
 .step-welcome .onboarding-actions .button {
-  animation: benefitReveal 0.45s 0.95s ease both;
+  box-shadow: 0 10px 24px rgba(59, 127, 90, 0.2);
 }
 @keyframes specialtyCue {
   to {

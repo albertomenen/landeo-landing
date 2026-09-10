@@ -119,6 +119,20 @@ test("keeps the marketing demo isolated from real applications", async () => {
   assert.match(html, /noindex/);
 });
 
+test("animates onboarding interactions and exposes issue reporting", async () => {
+  const packageJson = await readFile(new URL("package.json", root), "utf8");
+  const onboarding = await readFile(
+    new URL("components/Onboarding.tsx", root),
+    "utf8",
+  );
+  assert.match(packageJson, /"motion"/);
+  assert.match(onboarding, /AnimatePresence/);
+  assert.match(onboarding, /LazyMotion/);
+  assert.match(onboarding, /reducedMotion="user"/);
+  assert.match(onboarding, /careers@haired\.app/);
+  assert.match(onboarding, /onboarding-report-link/);
+});
+
 test("prioritizes Madrid and compatible remote jobs without leaking Lisbon roles", () => {
   const job = (id, location, workMode, market) => ({
     id,
