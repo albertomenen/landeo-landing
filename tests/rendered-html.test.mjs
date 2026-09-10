@@ -97,7 +97,13 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(productApp, /mode-badge/);
   assert.match(productApp, /savedJobIds/);
   assert.match(productApp, /aria-pressed/);
+  assert.match(productApp, /LazyMotion/);
+  assert.match(productApp, /dashboardViewMotion/);
+  assert.match(productApp, /jobCardMotion/);
+  assert.match(productApp, /reducedMotion="user"/);
   assert.match(styles, /\.deck-actions button:focus-visible/);
+  assert.match(styles, /\.dashboard-view-motion/);
+  assert.match(styles, /\.dashboard-profile-progress/);
   assert.match(styles, /\.action-apply:hover:not\(:disabled\)::after/);
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
 });
@@ -216,7 +222,7 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(productApp, /triggerConfetti/);
   assert.match(
     productApp,
-    /triggerConfetti\(\);[\s\S]*removeCurrent\(\);[\s\S]*submitApplication\(jobId\)/,
+    /triggerConfetti\(\);[\s\S]*removeCurrent\(1\);[\s\S]*submitApplication\(jobId\)/,
   );
   assert.match(productApp, /pendingApplications/);
   assert.doesNotMatch(productApp, /\{outcome &&/);

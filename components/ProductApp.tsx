@@ -12,6 +12,13 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import {
+  AnimatePresence,
+  LazyMotion,
+  MotionConfig,
+  domAnimation,
+  m,
+} from "motion/react";
 import { statusCopy, type Job } from "../lib/fixtures";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
 import {
@@ -70,6 +77,21 @@ const nav = [
 ] as const;
 const mobileNavItems = nav.filter((item) => item.id !== "notifications");
 const capabilityIcon = { automatic: "✓", assisted: "↗", external: "↗" };
+const dashboardViewMotion = {
+  hidden: { opacity: 0, y: 12, scale: 0.992 },
+  visible: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: -8, scale: 0.995 },
+};
+const jobCardMotion = {
+  enter: { opacity: 0, y: 18, scale: 0.985 },
+  center: { opacity: 1, x: 0, y: 0, scale: 1, rotate: 0 },
+  exit: (direction: number) => ({
+    opacity: 0,
+    x: direction < 0 ? -150 : 150,
+    scale: 0.96,
+    rotate: direction < 0 ? -2.5 : 2.5,
+  }),
+};
 const localized = (locale: DashboardLocale, es: string, en: string) =>
   locale === "es" ? es : en;
 const adzunaDomains: Record<string, string> = {
@@ -249,160 +271,226 @@ export default function ProductApp({
     ? localized(locale, "Demo de marketing", "Marketing demo")
     : displayName(user, profile, locale);
   const initialsValue = initials(name) || "L";
+  const currentView =
+    view === "jobs" ? (
+      <JobsView
+        user={user}
+        profile={profile}
+        pro={pro || demo}
+        locale={locale}
+        demo={demo}
+      />
+    ) : view === "applications" ? (
+      <ApplicationsView user={user} locale={locale} />
+    ) : view === "cover-letter" ? (
+      <CoverLetterView
+        user={user}
+        profile={profile}
+        locale={locale}
+        onSaved={refreshIdentity}
+      />
+    ) : view === "saved" ? (
+      <SavedView user={user} locale={locale} />
+    ) : view === "notifications" ? (
+      <NotificationsView user={user} locale={locale} />
+    ) : view === "universal" ? (
+      <UniversalProfile
+        user={user}
+        profile={profile}
+        locale={locale}
+        onSaved={refreshIdentity}
+      />
+    ) : (
+      <ProfileView user={user} profile={profile} pro={pro} locale={locale} />
+    );
   return (
-    <div className={`app-frame ${demo ? "marketing-demo" : ""}`}>
-      <aside className={`app-sidebar ${mobileNav ? "open" : ""}`}>
-        <div className="sidebar-brand">
-          <Brand />
-          <button
-            aria-label={t.chrome.closeMenu}
-            onClick={() => setMobileNav(false)}
+    <LazyMotion features={domAnimation}>
+      <MotionConfig reducedMotion="user">
+        <div className={`app-frame ${demo ? "marketing-demo" : ""}`}>
+          <m.aside
+            className={`app-sidebar ${mobileNav ? "open" : ""}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           >
-            ×
-          </button>
-        </div>
-        <div className="profile-mini">
-          <span>{initialsValue}</span>
-          <div>
-            <strong>{identityLoading ? t.chrome.connecting : name}</strong>
-            <small>
-              {user || demo
-                ? `${t.chrome.profileAt} ${readiness.percentage}%`
-                : t.chrome.profileRequired}
-            </small>
-          </div>
-          {(pro || demo) && <b>Pro</b>}
-        </div>
-        <nav aria-label={t.chrome.navigation}>
-          {nav.map((item) => (
-            <Link
-              key={item.id}
-              href={demo ? "/demo/marketing" : item.href}
-              className={view === item.id ? "active" : ""}
+            <div className="sidebar-brand">
+              <Brand />
+              <button
+                aria-label={t.chrome.closeMenu}
+                onClick={() => setMobileNav(false)}
+              >
+                ×
+              </button>
+            </div>
+            <m.div
+              className="profile-mini"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 }}
             >
-              <i>{item.icon}</i>
-              {t.nav[item.labelKey]}
-            </Link>
-          ))}
-        </nav>
-        <div className="profile-progress">
-          <div>
-            <strong>{t.chrome.universalProfile}</strong>
-            <span>{readiness.percentage}%</span>
-          </div>
-          <progress value={readiness.percentage} max="100">
-            {readiness.percentage}%
-          </progress>
-          <p>
-            {readiness.ready
-              ? t.chrome.ready
-              : `${readiness.missing.length} ${t.chrome.completeRequirements}`}
-          </p>
-          <Link href={demo ? "/demo/marketing" : "/app/profile/universal"}>
-            {readiness.ready
-              ? t.chrome.reviewProfile
-              : t.chrome.completeProfile}{" "}
-            →
-          </Link>
-        </div>
-        <div className="sidebar-foot">
-          <div
-            className="lang-toggle"
-            role="group"
-            aria-label={t.chrome.language}
-          >
-            <button
-              type="button"
-              className={locale === "es" ? "active" : ""}
-              onClick={() => changeLocale("es")}
-              aria-pressed={locale === "es"}
+              <m.span whileHover={{ scale: 1.06 }}>{initialsValue}</m.span>
+              <div>
+                <strong>{identityLoading ? t.chrome.connecting : name}</strong>
+                <small>
+                  {user || demo
+                    ? `${t.chrome.profileAt} ${readiness.percentage}%`
+                    : t.chrome.profileRequired}
+                </small>
+              </div>
+              {(pro || demo) && <b>Pro</b>}
+            </m.div>
+            <nav aria-label={t.chrome.navigation}>
+              {nav.map((item, position) => (
+                <Link
+                  key={item.id}
+                  href={demo ? "/demo/marketing" : item.href}
+                  className={view === item.id ? "active" : ""}
+                >
+                  {view === item.id && (
+                    <m.span
+                      className="sidebar-active-glow"
+                      initial={{ opacity: 0, scaleX: 0.7 }}
+                      animate={{ opacity: 1, scaleX: 1 }}
+                      transition={{ delay: position * 0.015 }}
+                    />
+                  )}
+                  <i>{item.icon}</i>
+                  <span>{t.nav[item.labelKey]}</span>
+                </Link>
+              ))}
+            </nav>
+            <m.div
+              className="profile-progress"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.16 }}
             >
-              ES
-            </button>
-            <button
-              type="button"
-              className={locale === "en" ? "active" : ""}
-              onClick={() => changeLocale("en")}
-              aria-pressed={locale === "en"}
-            >
-              EN
-            </button>
+              <div>
+                <strong>{t.chrome.universalProfile}</strong>
+                <span>{readiness.percentage}%</span>
+              </div>
+              <div
+                className="dashboard-profile-progress"
+                role="progressbar"
+                aria-label={t.chrome.universalProfile}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={readiness.percentage}
+              >
+                <m.i
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: readiness.percentage / 100 }}
+                  transition={{ type: "spring", stiffness: 150, damping: 24 }}
+                />
+              </div>
+              <p>
+                {readiness.ready
+                  ? t.chrome.ready
+                  : `${readiness.missing.length} ${t.chrome.completeRequirements}`}
+              </p>
+              <Link href={demo ? "/demo/marketing" : "/app/profile/universal"}>
+                {readiness.ready
+                  ? t.chrome.reviewProfile
+                  : t.chrome.completeProfile}{" "}
+                →
+              </Link>
+            </m.div>
+            <div className="sidebar-foot">
+              <div
+                className="lang-toggle"
+                role="group"
+                aria-label={t.chrome.language}
+              >
+                <button
+                  type="button"
+                  className={locale === "es" ? "active" : ""}
+                  onClick={() => changeLocale("es")}
+                  aria-pressed={locale === "es"}
+                >
+                  ES
+                </button>
+                <button
+                  type="button"
+                  className={locale === "en" ? "active" : ""}
+                  onClick={() => changeLocale("en")}
+                  aria-pressed={locale === "en"}
+                >
+                  EN
+                </button>
+              </div>
+              <span className="secure-note">{t.chrome.secure}</span>
+            </div>
+          </m.aside>
+          <div className="app-main">
+            <header className="app-mobile-header">
+              <m.button
+                aria-label={t.chrome.openMenu}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setMobileNav(true)}
+              >
+                ☰
+              </m.button>
+              <Brand compact />
+              <m.span
+                className="avatar"
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+              >
+                {initialsValue}
+              </m.span>
+            </header>
+            <AnimatePresence mode="wait" initial={false}>
+              <m.div
+                key={view}
+                className="dashboard-view-motion"
+                variants={dashboardViewMotion}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {currentView}
+              </m.div>
+            </AnimatePresence>
           </div>
-          <span className="secure-note">{t.chrome.secure}</span>
+          <nav
+            className="mobile-bottom-nav"
+            aria-label={t.chrome.mobileNavigation}
+          >
+            {mobileNavItems.map((item) => (
+              <Link
+                key={item.id}
+                href={demo ? "/demo/marketing" : item.href}
+                className={
+                  view === item.id ||
+                  (view === "universal" && item.id === "profile")
+                    ? "active"
+                    : ""
+                }
+              >
+                <m.i
+                  animate={
+                    view === item.id ||
+                    (view === "universal" && item.id === "profile")
+                      ? { y: -2, scale: 1.1 }
+                      : { y: 0, scale: 1 }
+                  }
+                >
+                  {item.icon}
+                </m.i>
+                <span>
+                  {item.id === "applications"
+                    ? t.nav.processes
+                    : item.id === "cover-letter"
+                      ? t.nav.coverLetter
+                      : t.nav[item.labelKey]}
+                </span>
+              </Link>
+            ))}
+          </nav>
         </div>
-      </aside>
-      <div className="app-main">
-        <header className="app-mobile-header">
-          <button
-            aria-label={t.chrome.openMenu}
-            onClick={() => setMobileNav(true)}
-          >
-            ☰
-          </button>
-          <Brand compact />
-          <span className="avatar">{initialsValue}</span>
-        </header>
-        {view === "jobs" ? (
-          <JobsView
-            user={user}
-            profile={profile}
-            pro={pro || demo}
-            locale={locale}
-            demo={demo}
-          />
-        ) : view === "applications" ? (
-          <ApplicationsView user={user} locale={locale} />
-        ) : view === "cover-letter" ? (
-          <CoverLetterView
-            user={user}
-            profile={profile}
-            locale={locale}
-            onSaved={refreshIdentity}
-          />
-        ) : view === "saved" ? (
-          <SavedView user={user} locale={locale} />
-        ) : view === "notifications" ? (
-          <NotificationsView user={user} locale={locale} />
-        ) : view === "universal" ? (
-          <UniversalProfile
-            user={user}
-            profile={profile}
-            locale={locale}
-            onSaved={refreshIdentity}
-          />
-        ) : (
-          <ProfileView
-            user={user}
-            profile={profile}
-            pro={pro}
-            locale={locale}
-          />
-        )}
-      </div>
-      <nav className="mobile-bottom-nav" aria-label={t.chrome.mobileNavigation}>
-        {mobileNavItems.map((item) => (
-          <Link
-            key={item.id}
-            href={demo ? "/demo/marketing" : item.href}
-            className={
-              view === item.id ||
-              (view === "universal" && item.id === "profile")
-                ? "active"
-                : ""
-            }
-          >
-            <i>{item.icon}</i>
-            <span>
-              {item.id === "applications"
-                ? t.nav.processes
-                : item.id === "cover-letter"
-                  ? t.nav.coverLetter
-                  : t.nav[item.labelKey]}
-            </span>
-          </Link>
-        ))}
-      </nav>
-    </div>
+      </MotionConfig>
+    </LazyMotion>
   );
 }
 
@@ -431,6 +519,7 @@ function JobsView({
   const [paywall, setPaywall] = useState(false);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
   const [confettiBurst, setConfettiBurst] = useState(0);
+  const [cardDirection, setCardDirection] = useState(1);
   const dragStart = useRef<number | null>(null);
   const pendingApplications = useRef(new Set<string>());
   const refresh = useCallback(async () => {
@@ -466,11 +555,15 @@ function JobsView({
   );
   const job = filtered[index % Math.max(filtered.length, 1)];
   const attribution = job ? sourceAttribution(job) : null;
-  const removeCurrent = useCallback(() => {
-    if (!job) return;
-    setJobs((current) => current.filter((item) => item.id !== job.id));
-    setIndex(0);
-  }, [job]);
+  const removeCurrent = useCallback(
+    (direction: -1 | 1) => {
+      if (!job) return;
+      setCardDirection(direction);
+      setJobs((current) => current.filter((item) => item.id !== job.id));
+      setIndex(0);
+    },
+    [job],
+  );
   const triggerConfetti = useCallback(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     setConfettiBurst((value) => value + 1);
@@ -478,7 +571,7 @@ function JobsView({
   const pass = useCallback(async () => {
     if (!job) return;
     if (demo) {
-      removeCurrent();
+      removeCurrent(-1);
       return;
     }
     if (!user) {
@@ -487,7 +580,7 @@ function JobsView({
     }
     try {
       await recordSwipe(job.id, "left");
-      removeCurrent();
+      removeCurrent(-1);
       setNotice(t.notices.discarded);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.swipeError);
@@ -515,7 +608,7 @@ function JobsView({
     if (!job) return;
     if (demo) {
       triggerConfetti();
-      removeCurrent();
+      removeCurrent(1);
       return;
     }
     if (!user) {
@@ -539,7 +632,7 @@ function JobsView({
     pendingApplications.current.add(jobId);
     setNotice("");
     triggerConfetti();
-    removeCurrent();
+    removeCurrent(1);
     void submitApplication(jobId)
       .then((result) => {
         if (result.status === "failed") {
@@ -603,16 +696,26 @@ function JobsView({
           <p>{t.jobs.subtitle}</p>
         </div>
         <div className="header-actions">
-          <button aria-label={t.jobs.refresh} onClick={refresh}>
+          <m.button
+            aria-label={t.jobs.refresh}
+            whileHover={{ rotate: 18, scale: 1.04 }}
+            whileTap={{ rotate: 180, scale: 0.92 }}
+            onClick={refresh}
+          >
             ↻
-          </button>
+          </m.button>
           <span className="avatar">
             {demo ? "LD" : initials(displayName(user, profile, locale))}
           </span>
         </div>
       </header>
       <div className="jobs-layout">
-        <aside className="filters-panel">
+        <m.aside
+          className="filters-panel"
+          initial={{ opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.28 }}
+        >
           <div className="filter-title">
             <strong>{t.jobs.filters}</strong>
             <button
@@ -649,14 +752,19 @@ function JobsView({
               ["hybrid", t.jobs.hybrid],
               ["onsite", t.jobs.onsite],
             ].map(([value, label]) => (
-              <label key={value} className="radio-row">
+              <m.label
+                key={value}
+                className="radio-row"
+                whileHover={{ x: 2 }}
+                whileTap={{ scale: 0.985 }}
+              >
                 <input
                   type="radio"
                   checked={workMode === value}
                   onChange={() => setWorkMode(value)}
                 />
                 <span>{label}</span>
-              </label>
+              </m.label>
             ))}
           </fieldset>
           <fieldset>
@@ -667,14 +775,19 @@ function JobsView({
               ["assisted", t.jobs.assisted],
               ["external", t.jobs.external],
             ].map(([value, label]) => (
-              <label key={value} className="radio-row">
+              <m.label
+                key={value}
+                className="radio-row"
+                whileHover={{ x: 2 }}
+                whileTap={{ scale: 0.985 }}
+              >
                 <input
                   type="radio"
                   checked={mode === value}
                   onChange={() => setMode(value)}
                 />
                 <span>{label}</span>
-              </label>
+              </m.label>
             ))}
           </fieldset>
           <div className="filter-note">
@@ -684,7 +797,7 @@ function JobsView({
               {t.jobs.responsibleDetail}
             </p>
           </div>
-        </aside>
+        </m.aside>
         <section className="deck-panel">
           <div className="deck-count">
             <span>
@@ -696,143 +809,197 @@ function JobsView({
             </span>
             <div>
               {filtered.slice(0, 8).map((_, itemIndex) => (
-                <i
+                <m.i
                   key={itemIndex}
                   className={itemIndex === index ? "active" : ""}
+                  animate={{
+                    scale: itemIndex === index ? 1.35 : 1,
+                    opacity: itemIndex === index ? 1 : 0.48,
+                  }}
                 />
               ))}
             </div>
           </div>
-          {loading ? (
-            <div className="empty-state">
-              <span>↻</span>
-              <h2>{t.jobs.loadingTitle}</h2>
-              <p>{t.jobs.loadingDetail}</p>
-            </div>
-          ) : job ? (
-            <div
-              key={job.id}
-              className="feed-card"
-              role="button"
-              tabIndex={0}
-              aria-label={`${job.title} · ${job.company}`}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowLeft") pass();
-                if (event.key === "ArrowRight" || event.key === "Enter")
-                  apply();
-              }}
-              onPointerDown={(event) => (dragStart.current = event.clientX)}
-              onPointerUp={(event) => {
-                if (dragStart.current === null) return;
-                const distance = event.clientX - dragStart.current;
-                if (distance > 80) apply();
-                if (distance < -80) pass();
-                dragStart.current = null;
-              }}
-            >
-              <div className="feed-top">
-                <span
-                  className={`company-initials ${typeof job.metadata?.company_logo === "string" ? "has-logo" : ""}`}
-                >
-                  {typeof job.metadata?.company_logo === "string" ? (
-                    <img src={job.metadata.company_logo} alt="" />
+          <AnimatePresence
+            mode="popLayout"
+            initial={false}
+            custom={cardDirection}
+          >
+            {loading ? (
+              <m.div
+                key="loading"
+                className="empty-state"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <span>↻</span>
+                <h2>{t.jobs.loadingTitle}</h2>
+                <p>{t.jobs.loadingDetail}</p>
+              </m.div>
+            ) : job ? (
+              <m.div
+                key={job.id}
+                className="feed-card"
+                custom={cardDirection}
+                variants={jobCardMotion}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -3, scale: 1.003 }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${job.title} · ${job.company}`}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowLeft") pass();
+                  if (event.key === "ArrowRight" || event.key === "Enter")
+                    apply();
+                }}
+                onPointerDown={(event) => (dragStart.current = event.clientX)}
+                onPointerUp={(event) => {
+                  if (dragStart.current === null) return;
+                  const distance = event.clientX - dragStart.current;
+                  if (distance > 80) apply();
+                  if (distance < -80) pass();
+                  dragStart.current = null;
+                }}
+              >
+                <div className="feed-top">
+                  <span
+                    className={`company-initials ${typeof job.metadata?.company_logo === "string" ? "has-logo" : ""}`}
+                  >
+                    {typeof job.metadata?.company_logo === "string" ? (
+                      <img src={job.metadata.company_logo} alt="" />
+                    ) : (
+                      initials(job.company)
+                    )}
+                  </span>
+                  <div>
+                    <strong>{job.company}</strong>
+                    <small>{job.industry}</small>
+                  </div>
+                  <button
+                    aria-label={t.jobs.saveOffer}
+                    className={savedJobIds.has(job.id) ? "is-saved" : ""}
+                    aria-pressed={savedJobIds.has(job.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      save();
+                    }}
+                  >
+                    {savedJobIds.has(job.id) ? "♥" : "♡"}
+                  </button>
+                </div>
+                <div className="feed-badges">
+                  <span className="fresh-badge">
+                    {job.source ?? t.jobs.offer}
+                  </span>
+                  <span className={`mode-badge ${job.workMode}`}>
+                    {job.workMode === "remote"
+                      ? t.jobs.remote
+                      : job.workMode === "hybrid"
+                        ? t.jobs.hybrid
+                        : t.jobs.onsite}
+                  </span>
+                </div>
+                <h2>{job.title}</h2>
+                <p>{job.summary}</p>
+                <div className="job-meta">
+                  <span>⌖ {job.location}</span>
+                  <span>
+                    ◫{" "}
+                    {job.workMode === "remote"
+                      ? t.jobs.remote
+                      : job.workMode === "hybrid"
+                        ? t.jobs.hybrid
+                        : t.jobs.onsite}
+                  </span>
+                  <span>
+                    ◷{" "}
+                    {new Intl.DateTimeFormat(locale, {
+                      day: "numeric",
+                      month: "short",
+                    }).format(new Date(job.publishedAt))}
+                  </span>
+                </div>
+                <div className="salary-block">
+                  <span>€</span>
+                  <div>
+                    <small>{t.jobs.salary}</small>
+                    <strong>{money(job, locale)}</strong>
+                  </div>
+                </div>
+                <div className="skill-row">
+                  {job.skills.length ? (
+                    job.skills.map((skill) => <span key={skill}>{skill}</span>)
                   ) : (
-                    initials(job.company)
+                    <span>{job.seniority}</span>
                   )}
-                </span>
-                <div>
-                  <strong>{job.company}</strong>
-                  <small>{job.industry}</small>
                 </div>
-                <button
-                  aria-label={t.jobs.saveOffer}
-                  className={savedJobIds.has(job.id) ? "is-saved" : ""}
-                  aria-pressed={savedJobIds.has(job.id)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    save();
-                  }}
+                <div className={`capability ${job.applyCapability}`}>
+                  <b>{capabilityIcon[job.applyCapability]}</b>
+                  <div>
+                    <strong>{t.capability[job.applyCapability].label}</strong>
+                    <small>{t.capability[job.applyCapability].detail}</small>
+                  </div>
+                </div>
+              </m.div>
+            ) : (
+              <m.div
+                key="empty"
+                className="empty-state"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <m.span
+                  initial={{ scale: 0.4, rotate: -18 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 220, damping: 15 }}
                 >
-                  {savedJobIds.has(job.id) ? "♥" : "♡"}
-                </button>
-              </div>
-              <div className="feed-badges">
-                <span className="fresh-badge">
-                  {job.source ?? t.jobs.offer}
-                </span>
-                <span className={`mode-badge ${job.workMode}`}>
-                  {job.workMode === "remote"
-                    ? t.jobs.remote
-                    : job.workMode === "hybrid"
-                      ? t.jobs.hybrid
-                      : t.jobs.onsite}
-                </span>
-              </div>
-              <h2>{job.title}</h2>
-              <p>{job.summary}</p>
-              <div className="job-meta">
-                <span>⌖ {job.location}</span>
-                <span>
-                  ◫{" "}
-                  {job.workMode === "remote"
-                    ? t.jobs.remote
-                    : job.workMode === "hybrid"
-                      ? t.jobs.hybrid
-                      : t.jobs.onsite}
-                </span>
-                <span>
-                  ◷{" "}
-                  {new Intl.DateTimeFormat(locale, {
-                    day: "numeric",
-                    month: "short",
-                  }).format(new Date(job.publishedAt))}
-                </span>
-              </div>
-              <div className="salary-block">
-                <span>€</span>
-                <div>
-                  <small>{t.jobs.salary}</small>
-                  <strong>{money(job, locale)}</strong>
-                </div>
-              </div>
-              <div className="skill-row">
-                {job.skills.length ? (
-                  job.skills.map((skill) => <span key={skill}>{skill}</span>)
-                ) : (
-                  <span>{job.seniority}</span>
-                )}
-              </div>
-              <div className={`capability ${job.applyCapability}`}>
-                <b>{capabilityIcon[job.applyCapability]}</b>
-                <div>
-                  <strong>{t.capability[job.applyCapability].label}</strong>
-                  <small>{t.capability[job.applyCapability].detail}</small>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state">
-              <span>✓</span>
-              <h2>{t.jobs.upToDate}</h2>
-              <p>{t.jobs.upToDateDetail}</p>
-            </div>
-          )}
-          {notice && (
-            <div className="toast" role="status">
-              {notice}
-              <button onClick={() => setNotice("")}>×</button>
-            </div>
-          )}
+                  ✓
+                </m.span>
+                <h2>{t.jobs.upToDate}</h2>
+                <p>{t.jobs.upToDateDetail}</p>
+              </m.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {notice && (
+              <m.div
+                className="toast"
+                role="status"
+                initial={{ opacity: 0, y: 12, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              >
+                {notice}
+                <button onClick={() => setNotice("")}>×</button>
+              </m.div>
+            )}
+          </AnimatePresence>
           <div className="deck-actions">
-            <button className="action-pass" onClick={pass} disabled={!job}>
+            <m.button
+              className="action-pass"
+              whileHover={job ? { y: -3 } : {}}
+              whileTap={job ? { scale: 0.96, rotate: -1 } : {}}
+              onClick={pass}
+              disabled={!job}
+            >
               <b>×</b>
               <span>
                 {t.jobs.pass}
                 <small>←</small>
               </span>
-            </button>
-            <button
+            </m.button>
+            <m.button
               className={`action-save ${job && savedJobIds.has(job.id) ? "is-saved" : ""}`}
+              animate={{
+                scale: job && savedJobIds.has(job.id) ? [1, 0.94, 1.04, 1] : 1,
+              }}
+              whileHover={job ? { y: -3 } : {}}
+              whileTap={job ? { scale: 0.95 } : {}}
               onClick={save}
               disabled={!job}
               aria-pressed={Boolean(job && savedJobIds.has(job.id))}
@@ -842,69 +1009,86 @@ function JobsView({
                 {t.jobs.save}
                 <small>S</small>
               </span>
-            </button>
-            <button className="action-apply" onClick={apply} disabled={!job}>
+            </m.button>
+            <m.button
+              className="action-apply"
+              whileHover={job ? { y: -3, scale: 1.01 } : {}}
+              whileTap={job ? { scale: 0.96 } : {}}
+              onClick={apply}
+              disabled={!job}
+            >
               <b>→</b>
               <span>
                 {t.jobs.apply}
                 <small>ENTER</small>
               </span>
-            </button>
+            </m.button>
           </div>
         </section>
-        {job && (
-          <aside className="detail-panel">
-            <div className="detail-match">
-              <div>
-                <strong>{job.match}%</strong>
-                <span>{t.jobs.match}</span>
+        <AnimatePresence mode="popLayout" initial={false}>
+          {job && (
+            <m.aside
+              key={job.id}
+              className="detail-panel"
+              initial={{ opacity: 0, x: 14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.23 }}
+            >
+              <div className="detail-match">
+                <div>
+                  <strong>{job.match}%</strong>
+                  <span>{t.jobs.match}</span>
+                </div>
+                <small>{t.jobs.relevance}</small>
               </div>
-              <small>{t.jobs.relevance}</small>
-            </div>
-            <div className="match-reasons">
-              <strong>{t.jobs.channel}</strong>
-              <p>
-                <i>✓</i>
-                {t.capability[job.applyCapability].label}
-              </p>
-              <p>
-                <i>✓</i>
-                {t.jobs.updated}
-              </p>
-              <p>
-                <i>✓</i>
-                {t.jobs.privateDestination}
-              </p>
-            </div>
-            <hr />
-            <h3>{t.jobs.about}</h3>
-            <p>{job.description}</p>
-            <h3>{t.jobs.information}</h3>
-            <ul>
-              <li>{job.contractType}</li>
-              <li>{job.seniority}</li>
-              <li>{job.applyProvider}</li>
-            </ul>
-            <div className="detail-bottom">
-              <Link href={`/app/jobs/${job.id}`}>{t.jobs.fullDetails} →</Link>
-              <small>
-                {t.jobs.source}:{" "}
-                {attribution ? (
-                  <a href={attribution.href} target="_blank" rel="noreferrer">
-                    {attribution.label}
-                  </a>
-                ) : (
-                  job.source
-                )}
-              </small>
-            </div>
-          </aside>
-        )}
+              <div className="match-reasons">
+                <strong>{t.jobs.channel}</strong>
+                <p>
+                  <i>✓</i>
+                  {t.capability[job.applyCapability].label}
+                </p>
+                <p>
+                  <i>✓</i>
+                  {t.jobs.updated}
+                </p>
+                <p>
+                  <i>✓</i>
+                  {t.jobs.privateDestination}
+                </p>
+              </div>
+              <hr />
+              <h3>{t.jobs.about}</h3>
+              <p>{job.description}</p>
+              <h3>{t.jobs.information}</h3>
+              <ul>
+                <li>{job.contractType}</li>
+                <li>{job.seniority}</li>
+                <li>{job.applyProvider}</li>
+              </ul>
+              <div className="detail-bottom">
+                <Link href={`/app/jobs/${job.id}`}>{t.jobs.fullDetails} →</Link>
+                <small>
+                  {t.jobs.source}:{" "}
+                  {attribution ? (
+                    <a href={attribution.href} target="_blank" rel="noreferrer">
+                      {attribution.label}
+                    </a>
+                  ) : (
+                    job.source
+                  )}
+                </small>
+              </div>
+            </m.aside>
+          )}
+        </AnimatePresence>
       </div>
       {confettiBurst > 0 && <ConfettiBurst key={confettiBurst} />}{" "}
-      {paywall && (
-        <Paywall locale={locale} onClose={() => setPaywall(false)} />
-      )}{" "}
+      <AnimatePresence>
+        {paywall && (
+          <Paywall locale={locale} onClose={() => setPaywall(false)} />
+        )}
+      </AnimatePresence>{" "}
     </>
   );
 }
@@ -930,9 +1114,22 @@ function Paywall({
     }
   }
   return (
-    <div className="modal-backdrop">
+    <m.div
+      className="modal-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <button className="modal-scrim" aria-label={t.close} onClick={onClose} />
-      <section className="paywall-modal" role="dialog" aria-modal="true">
+      <m.section
+        className="paywall-modal"
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0, y: 22, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 14, scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 230, damping: 24 }}
+      >
         <button className="modal-close" onClick={onClose} aria-label={t.close}>
           ×
         </button>
@@ -960,8 +1157,8 @@ function Paywall({
         <button className="text-button" onClick={onClose}>
           {t.free}
         </button>
-      </section>
-    </div>
+      </m.section>
+    </m.div>
   );
 }
 function OutcomeModal({
@@ -987,16 +1184,25 @@ function OutcomeModal({
           description: outcome.message,
         };
   return (
-    <div className="modal-backdrop">
+    <m.div
+      className="modal-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       <button
         className="modal-scrim"
         aria-label={t.paywall.close}
         onClick={onClose}
       />
-      <section
+      <m.section
         className="paywall-modal outcome-modal"
         role="dialog"
         aria-modal="true"
+        initial={{ opacity: 0, y: 22, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 14, scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 230, damping: 24 }}
       >
         <button
           className="modal-close"
@@ -1028,8 +1234,8 @@ function OutcomeModal({
         <Link className="text-button" href="/app/applications">
           {t.paywall.applications}
         </Link>
-      </section>
-    </div>
+      </m.section>
+    </m.div>
   );
 }
 
@@ -1105,9 +1311,14 @@ function ApplicationsView({
             )}
           </p>
         </div>
-        <button className="text-button" onClick={refresh}>
+        <m.button
+          className="text-button"
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={refresh}
+        >
           {localized(locale, "Actualizar ahora", "Refresh now")}
-        </button>
+        </m.button>
       </header>
       <div className="applications-layout">
         <section className="applications-list">
@@ -1159,10 +1370,15 @@ function ApplicationsView({
               </p>
             </div>
           )}
-          {items.map((application) => (
-            <button
+          {items.map((application, position) => (
+            <m.button
               key={application.id}
               className={`application-row ${selected?.id === application.id ? "selected" : ""}`}
+              initial={{ opacity: 0, y: 9 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(position, 8) * 0.035 }}
+              whileHover={{ x: 3 }}
+              whileTap={{ scale: 0.99 }}
               onClick={() => {
                 setSelected(application);
                 setCopied(false);
@@ -1186,155 +1402,171 @@ function ApplicationsView({
                 {t.status[application.status as keyof typeof t.status] ??
                   application.status}
               </span>
-            </button>
+            </m.button>
           ))}
         </section>
         <aside className="application-detail">
-          {selected ? (
-            <>
-              <span className={`status-badge ${selected.status}`}>
-                {t.status[selected.status as keyof typeof t.status] ??
-                  selected.status}
-              </span>
-              <h2>{selected.job.title}</h2>
-              <p>
-                {selected.job.company} · {selected.job.location}
-              </p>
-              <div className="status-explain">
-                <strong>
+          <AnimatePresence mode="wait" initial={false}>
+            {selected ? (
+              <m.div
+                key={selected.id}
+                className="application-detail-content"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <span className={`status-badge ${selected.status}`}>
                   {t.status[selected.status as keyof typeof t.status] ??
                     selected.status}
-                </strong>
-                <span>
-                  {selected.errorMessage || selected.requiredFields.length
-                    ? `${localized(locale, "Necesitamos", "Required")}: ${selected.requiredFields.join(", ")}`
-                    : selected.deliveryStatus
-                      ? `${localized(locale, "Entrega", "Delivery")}: ${selected.deliveryStatus}`
-                      : localized(
-                          locale,
-                          "Consulta la cronología para ver el último cambio.",
-                          "Check the timeline for the latest update.",
-                        )}
                 </span>
-              </div>
-              {selected.coverLetter && (
-                <details className="application-cover-letter">
-                  <summary>
-                    <span>
-                      <b>
-                        ✦{" "}
-                        {localized(
-                          locale,
-                          "Carta personalizada",
-                          "Personalized cover letter",
-                        )}
-                      </b>
-                      <small>
-                        {selected.coverLetterGeneratedAt
-                          ? `${localized(locale, "Generada", "Generated")} ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(selected.coverLetterGeneratedAt))}`
-                          : localized(
-                              locale,
-                              "Lista para esta oferta",
-                              "Ready for this job",
-                            )}
-                      </small>
-                    </span>
-                    <i>⌄</i>
-                  </summary>
-                  <div>
-                    <p>{selected.coverLetter}</p>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(
-                          selected.coverLetter ?? "",
-                        );
-                        setCopied(true);
-                      }}
-                    >
-                      {copied
-                        ? localized(locale, "✓ Copiada", "✓ Copied")
-                        : localized(locale, "Copiar carta", "Copy letter")}
-                    </button>
-                  </div>
-                </details>
-              )}
-              <h3>{localized(locale, "Cronología", "Timeline")}</h3>
-              <ol className="timeline">
-                {selected.events.length ? (
-                  selected.events.map((event, eventIndex) => (
-                    <li
-                      key={event.id}
-                      className={
-                        eventIndex === selected.events.length - 1
-                          ? "current"
-                          : "done"
-                      }
-                    >
+                <h2>{selected.job.title}</h2>
+                <p>
+                  {selected.job.company} · {selected.job.location}
+                </p>
+                <div className="status-explain">
+                  <strong>
+                    {t.status[selected.status as keyof typeof t.status] ??
+                      selected.status}
+                  </strong>
+                  <span>
+                    {selected.errorMessage || selected.requiredFields.length
+                      ? `${localized(locale, "Necesitamos", "Required")}: ${selected.requiredFields.join(", ")}`
+                      : selected.deliveryStatus
+                        ? `${localized(locale, "Entrega", "Delivery")}: ${selected.deliveryStatus}`
+                        : localized(
+                            locale,
+                            "Consulta la cronología para ver el último cambio.",
+                            "Check the timeline for the latest update.",
+                          )}
+                  </span>
+                </div>
+                {selected.coverLetter && (
+                  <details className="application-cover-letter">
+                    <summary>
+                      <span>
+                        <b>
+                          ✦{" "}
+                          {localized(
+                            locale,
+                            "Carta personalizada",
+                            "Personalized cover letter",
+                          )}
+                        </b>
+                        <small>
+                          {selected.coverLetterGeneratedAt
+                            ? `${localized(locale, "Generada", "Generated")} ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(selected.coverLetterGeneratedAt))}`
+                            : localized(
+                                locale,
+                                "Lista para esta oferta",
+                                "Ready for this job",
+                              )}
+                        </small>
+                      </span>
+                      <i>⌄</i>
+                    </summary>
+                    <div>
+                      <p>{selected.coverLetter}</p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(
+                            selected.coverLetter ?? "",
+                          );
+                          setCopied(true);
+                        }}
+                      >
+                        {copied
+                          ? localized(locale, "✓ Copiada", "✓ Copied")
+                          : localized(locale, "Copiar carta", "Copy letter")}
+                      </button>
+                    </div>
+                  </details>
+                )}
+                <h3>{localized(locale, "Cronología", "Timeline")}</h3>
+                <ol className="timeline">
+                  {selected.events.length ? (
+                    selected.events.map((event, eventIndex) => (
+                      <li
+                        key={event.id}
+                        className={
+                          eventIndex === selected.events.length - 1
+                            ? "current"
+                            : "done"
+                        }
+                      >
+                        <i />
+                        <div>
+                          <strong>{event.message}</strong>
+                          <small>
+                            {new Intl.DateTimeFormat(locale, {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            }).format(new Date(event.createdAt))}
+                          </small>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="current">
                       <i />
                       <div>
-                        <strong>{event.message}</strong>
+                        <strong>
+                          {localized(
+                            locale,
+                            "Candidatura registrada",
+                            "Application recorded",
+                          )}
+                        </strong>
                         <small>
                           {new Intl.DateTimeFormat(locale, {
                             dateStyle: "medium",
-                            timeStyle: "short",
-                          }).format(new Date(event.createdAt))}
+                          }).format(new Date(selected.appliedAt))}
                         </small>
                       </div>
                     </li>
-                  ))
-                ) : (
-                  <li className="current">
-                    <i />
-                    <div>
-                      <strong>
-                        {localized(
-                          locale,
-                          "Candidatura registrada",
-                          "Application recorded",
-                        )}
-                      </strong>
-                      <small>
-                        {new Intl.DateTimeFormat(locale, {
-                          dateStyle: "medium",
-                        }).format(new Date(selected.appliedAt))}
-                      </small>
-                    </div>
-                  </li>
-                )}
-              </ol>
-              {selected.status === "action_required" && selected.actionUrl && (
-                <a
-                  className="button button-primary"
-                  href={selected.actionUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t.paywall.official}
-                </a>
-              )}
-              <div className="application-trust">
-                <b>i</b>
+                  )}
+                </ol>
+                {selected.status === "action_required" &&
+                  selected.actionUrl && (
+                    <a
+                      className="button button-primary"
+                      href={selected.actionUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t.paywall.official}
+                    </a>
+                  )}
+                <div className="application-trust">
+                  <b>i</b>
+                  <p>
+                    {localized(
+                      locale,
+                      "Landeo solo muestra “Enviada” cuando el backend ha confirmado el canal.",
+                      "Landeo only shows “Sent” after the backend has confirmed the channel.",
+                    )}
+                  </p>
+                </div>
+              </m.div>
+            ) : (
+              <m.div
+                key="empty"
+                className="empty-state compact"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
                 <p>
                   {localized(
                     locale,
-                    "Landeo solo muestra “Enviada” cuando el backend ha confirmado el canal.",
-                    "Landeo only shows “Sent” after the backend has confirmed the channel.",
+                    "Selecciona una candidatura para ver su estado.",
+                    "Select an application to view its status.",
                   )}
                 </p>
-              </div>
-            </>
-          ) : (
-            <div className="empty-state compact">
-              <p>
-                {localized(
-                  locale,
-                  "Selecciona una candidatura para ver su estado.",
-                  "Select an application to view its status.",
-                )}
-              </p>
-            </div>
-          )}
+              </m.div>
+            )}
+          </AnimatePresence>
         </aside>
       </div>
     </>
@@ -1408,53 +1640,73 @@ function SavedView({
         )}
         {error && <p className="form-error">{error}</p>}
         <div className="saved-grid">
-          {items.map((job) => (
-            <article className="saved-card" key={job.id}>
-              <div>
-                <span className="company-initials">
-                  {initials(job.company)}
-                </span>
-                <button
-                  onClick={async () => {
-                    await recordSwipe(job.id, "left");
-                    setItems((current) =>
-                      current.filter((item) => item.id !== job.id),
-                    );
-                  }}
-                  aria-label={localized(
-                    locale,
-                    "Quitar de guardados",
-                    "Remove from saved",
-                  )}
-                >
-                  ♥
-                </button>
-              </div>
-              <small>{job.company}</small>
-              <h2>{job.title}</h2>
-              <p>
-                ⌖ {job.location} ·{" "}
-                {job.workMode === "remote"
-                  ? t.jobs.remote
-                  : job.workMode === "hybrid"
-                    ? t.jobs.hybrid
-                    : t.jobs.onsite}
-              </p>
-              <div>
-                <span className={`mini-cap ${job.applyCapability}`}>
-                  {t.capability[job.applyCapability].label}
-                </span>
-                <strong>{job.match}%</strong>
-              </div>
-              <Link href={`/app/jobs/${job.id}`}>
-                {localized(locale, "Ver oferta", "View job")} →
-              </Link>
-            </article>
-          ))}
+          <AnimatePresence>
+            {items.map((job, position) => (
+              <m.article
+                className="saved-card"
+                key={job.id}
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                transition={{ delay: Math.min(position, 8) * 0.035 }}
+                whileHover={{ y: -4 }}
+              >
+                <div>
+                  <span className="company-initials">
+                    {initials(job.company)}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      await recordSwipe(job.id, "left");
+                      setItems((current) =>
+                        current.filter((item) => item.id !== job.id),
+                      );
+                    }}
+                    aria-label={localized(
+                      locale,
+                      "Quitar de guardados",
+                      "Remove from saved",
+                    )}
+                  >
+                    ♥
+                  </button>
+                </div>
+                <small>{job.company}</small>
+                <h2>{job.title}</h2>
+                <p>
+                  ⌖ {job.location} ·{" "}
+                  {job.workMode === "remote"
+                    ? t.jobs.remote
+                    : job.workMode === "hybrid"
+                      ? t.jobs.hybrid
+                      : t.jobs.onsite}
+                </p>
+                <div>
+                  <span className={`mini-cap ${job.applyCapability}`}>
+                    {t.capability[job.applyCapability].label}
+                  </span>
+                  <strong>{job.match}%</strong>
+                </div>
+                <Link href={`/app/jobs/${job.id}`}>
+                  {localized(locale, "Ver oferta", "View job")} →
+                </Link>
+              </m.article>
+            ))}
+          </AnimatePresence>
         </div>
         {!loading && !items.length && (
-          <div className="empty-state">
-            <span>♡</span>
+          <m.div
+            className="empty-state"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <m.span
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 220, damping: 15 }}
+            >
+              ♡
+            </m.span>
             <h2>{localized(locale, "No tienes guardados", "No saved jobs")}</h2>
             <p>
               {localized(
@@ -1463,7 +1715,7 @@ function SavedView({
                 "Tap Save in the feed to add a job.",
               )}
             </p>
-          </div>
+          </m.div>
         )}
       </div>
     </>
@@ -1532,8 +1784,14 @@ function NotificationsView({
               {localized(locale, "Cargando eventos…", "Loading updates…")}
             </p>
           )}
-          {events.map((event) => (
-            <article key={event.id}>
+          {events.map((event, position) => (
+            <m.article
+              key={event.id}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: Math.min(position, 10) * 0.035 }}
+              whileHover={{ x: 3 }}
+            >
               <span
                 className={
                   event.type.includes("failed")
@@ -1564,7 +1822,7 @@ function NotificationsView({
                 </small>
               </div>
               {!event.readAt && <i />}
-            </article>
+            </m.article>
           ))}
           {!loading && !events.length && (
             <div className="empty-state compact">

@@ -1450,6 +1450,9 @@ h1 em:after {
   gap: 4px;
 }
 .app-sidebar nav a {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   height: 44px;
   border-radius: 12px;
   display: flex;
@@ -1460,6 +1463,19 @@ h1 em:after {
   font-size: 13px;
   font-weight: 650;
 }
+.app-sidebar nav a > i,
+.app-sidebar nav a > span:not(.sidebar-active-glow) {
+  position: relative;
+  z-index: 1;
+}
+.sidebar-active-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #e2eedf, #edf4e9);
+}
 .app-sidebar nav a i {
   width: 24px;
   font-style: normal;
@@ -1467,7 +1483,7 @@ h1 em:after {
   font-size: 17px;
 }
 .app-sidebar nav a.active {
-  background: #e8f0e4;
+  background: transparent;
   color: var(--dark);
   font-weight: 800;
 }
@@ -1513,6 +1529,22 @@ h1 em:after {
 .universal-progress progress::-webkit-progress-value {
   background: var(--green);
 }
+.dashboard-profile-progress {
+  width: 100%;
+  height: 6px;
+  margin: 9px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #dce5d8;
+}
+.dashboard-profile-progress > i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), #75c6ad);
+  transform-origin: left center;
+}
 .profile-progress p {
   font-size: 10px;
   line-height: 1.45;
@@ -1550,6 +1582,12 @@ h1 em:after {
 }
 .app-main {
   min-width: 0;
+}
+.dashboard-view-motion {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  will-change: transform, opacity;
 }
 .app-mobile-header {
   display: none;
@@ -1743,6 +1781,7 @@ h1 em:after {
   background: var(--green);
 }
 .feed-card {
+  will-change: transform, opacity;
   background: white;
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -1750,6 +1789,9 @@ h1 em:after {
   box-shadow: 0 18px 48px rgba(36, 92, 64, 0.1);
   touch-action: pan-y;
   user-select: none;
+}
+.application-detail-content {
+  min-height: 100%;
 }
 .feed-top {
   display: flex;
