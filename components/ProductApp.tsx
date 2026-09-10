@@ -515,6 +515,7 @@ function JobsView({
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("all");
   const [workMode, setWorkMode] = useState("all");
+  const [market, setMarket] = useState("all");
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
@@ -547,11 +548,30 @@ function JobsView({
         (job) =>
           (mode === "all" || job.applyCapability === mode) &&
           (workMode === "all" || job.workMode === workMode) &&
+          (market === "all" ||
+            String(
+              job.market || job.metadata?.market_country || "",
+            ).toUpperCase() === market) &&
           `${job.title} ${job.company}`
             .toLowerCase()
             .includes(query.toLowerCase()),
       ),
-    [jobs, mode, workMode, query],
+    [jobs, mode, workMode, market, query],
+  );
+  const markets = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          jobs
+            .map((item) =>
+              String(
+                item.market || item.metadata?.market_country || "",
+              ).toUpperCase(),
+            )
+            .filter(Boolean),
+        ),
+      ).sort(),
+    [jobs],
   );
   const job = filtered[index % Math.max(filtered.length, 1)];
   const attribution = job ? sourceAttribution(job) : null;
@@ -722,6 +742,7 @@ function JobsView({
               onClick={() => {
                 setMode("all");
                 setWorkMode("all");
+                setMarket("all");
                 setQuery("");
               }}
             >
@@ -738,10 +759,27 @@ function JobsView({
           </label>
           <label>
             {t.jobs.market}
-            <select defaultValue="ES">
-              <option>{t.jobs.spain}</option>
-              <option>{t.jobs.us}</option>
-              <option>{t.jobs.uk}</option>
+            <select
+              value={market}
+              onChange={(event) => {
+                setMarket(event.target.value);
+                setIndex(0);
+              }}
+            >
+              <option value="all">
+                {localized(locale, "Todos los mercados", "All markets")}
+              </option>
+              {markets.map((value) => (
+                <option key={value} value={value}>
+                  {value === "ES"
+                    ? t.jobs.spain
+                    : value === "US"
+                      ? t.jobs.us
+                      : value === "GB"
+                        ? t.jobs.uk
+                        : value}
+                </option>
+              ))}
             </select>
           </label>
           <fieldset className="work-mode-filter">
@@ -1249,6 +1287,9 @@ function ApplicationsView({
   const t = dashboardCopy[locale];
   const [items, setItems] = useState<LiveApplication[]>([]);
   const [selected, setSelected] = useState<LiveApplication | null>(null);
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "progress" | "sent"
+  >("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -1284,6 +1325,22 @@ function ApplicationsView({
     const timer = setInterval(refresh, 15000);
     return () => clearInterval(timer);
   }, [refresh]);
+  const filteredItems = useMemo(
+    () =>
+      items.filter((item) => {
+        if (statusFilter === "all") return true;
+        if (statusFilter === "sent") return item.status === "sent";
+        return ["queued", "processing", "action_required"].includes(
+          item.status,
+        );
+      }),
+    [items, statusFilter],
+  );
+  useEffect(() => {
+    if (!filteredItems.some((item) => item.id === selected?.id)) {
+      setSelected(filteredItems[0] ?? null);
+    }
+  }, [filteredItems, selected?.id]);
   if (!user)
     return (
       <SignInState
@@ -1323,10 +1380,20 @@ function ApplicationsView({
       <div className="applications-layout">
         <section className="applications-list">
           <div className="status-tabs">
-            <button className="active">
+            <button
+              type="button"
+              className={statusFilter === "all" ? "active" : ""}
+              aria-pressed={statusFilter === "all"}
+              onClick={() => setStatusFilter("all")}
+            >
               {localized(locale, "Todas", "All")} <b>{items.length}</b>
             </button>
-            <button>
+            <button
+              type="button"
+              className={statusFilter === "progress" ? "active" : ""}
+              aria-pressed={statusFilter === "progress"}
+              onClick={() => setStatusFilter("progress")}
+            >
               {localized(locale, "En curso", "In progress")}{" "}
               <b>
                 {
@@ -1336,7 +1403,12 @@ function ApplicationsView({
                 }
               </b>
             </button>
-            <button>
+            <button
+              type="button"
+              className={statusFilter === "sent" ? "active" : ""}
+              aria-pressed={statusFilter === "sent"}
+              onClick={() => setStatusFilter("sent")}
+            >
               {localized(locale, "Enviadas", "Sent")}{" "}
               <b>{items.filter((item) => item.status === "sent").length}</b>
             </button>
@@ -1351,15 +1423,21 @@ function ApplicationsView({
             </p>
           )}
           {error && <p className="form-error">{error}</p>}
-          {!loading && !items.length && (
+          {!loading && !filteredItems.length && (
             <div className="empty-state compact">
               <span>↗</span>
               <h2>
-                {localized(
-                  locale,
-                  "Aún no hay candidaturas",
-                  "No applications yet",
-                )}
+                {items.length
+                  ? localized(
+                      locale,
+                      "No hay candidaturas con este estado",
+                      "No applications match this status",
+                    )
+                  : localized(
+                      locale,
+                      "Aún no hay candidaturas",
+                      "No applications yet",
+                    )}
               </h2>
               <p>
                 {localized(
@@ -1370,7 +1448,7 @@ function ApplicationsView({
               </p>
             </div>
           )}
-          {items.map((application, position) => (
+          {filteredItems.map((application, position) => (
             <m.button
               key={application.id}
               className={`application-row ${selected?.id === application.id ? "selected" : ""}`}
@@ -2023,7 +2101,7 @@ function ProfileView({
           </section>
           <section className="settings-card">
             <h3>{localized(locale, "Privacidad", "Privacy")}</h3>
-            <button>
+            <Link href="/app/profile/universal#consents">
               <span>
                 {localized(
                   locale,
@@ -2032,11 +2110,11 @@ function ProfileView({
                 )}
               </span>
               <b>{profile?.automaticConsentAt ? "✓" : "›"}</b>
-            </button>
-            <button>
+            </Link>
+            <Link href="/app/profile/universal#resume">
               <span>{localized(locale, "CV privado", "Private résumé")}</span>
               <b>{profile?.cvPath ? "✓" : "›"}</b>
-            </button>
+            </Link>
           </section>
         </div>
       </div>
@@ -2697,7 +2775,22 @@ function UniversalProfile({
                 "Consents",
               ]
           ).map((label, index) => (
-            <button key={label} className={index === 0 ? "done" : ""}>
+            <button
+              key={label}
+              type="button"
+              className={index === 0 ? "done" : ""}
+              onClick={() => {
+                const targets = [
+                  "identity",
+                  "resume",
+                  "authorization",
+                  "consents",
+                ];
+                document
+                  .getElementById(targets[index])
+                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            >
               <i>{index + 1}</i>
               <span>{label}</span>
             </button>
@@ -2726,7 +2819,7 @@ function UniversalProfile({
             )}
           </p>
           <div className="form-grid">
-            <label>
+            <label id="identity">
               {localized(locale, "Nombre", "First name")}
               <input
                 required
@@ -2783,7 +2876,7 @@ function UniversalProfile({
                 onChange={(event) => setRole(event.target.value)}
               />
             </label>
-            <label>
+            <label id="authorization">
               {localized(locale, "Autorización laboral", "Work authorization")}
               <input
                 required
@@ -2791,7 +2884,7 @@ function UniversalProfile({
                 onChange={(event) => setAuthorization(event.target.value)}
               />
             </label>
-            <label className="full">
+            <label className="full" id="resume">
               {localized(
                 locale,
                 "CV privado · PDF, DOC o DOCX · máximo 8 MB",
@@ -2813,7 +2906,7 @@ function UniversalProfile({
               </small>
             </label>
           </div>
-          <div className="consent-box">
+          <div className="consent-box" id="consents">
             <label
               aria-label={localized(
                 locale,
