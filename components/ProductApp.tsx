@@ -155,7 +155,7 @@ function adzunaUrl(job: Job) {
   return adzunaDomains[market] ?? "https://www.adzuna.com";
 }
 
-function sourceAttribution(job: Job) {
+function sourceAttribution(job: Job, locale: DashboardLocale) {
   if (job.source?.toLowerCase() === "adzuna")
     return { label: "Jobs by Adzuna", href: adzunaUrl(job) };
   if (job.source?.toLowerCase() === "remotive")
@@ -166,6 +166,23 @@ function sourceAttribution(job: Job) {
           ? job.metadata.source_url
           : "https://remotive.com/remote-jobs",
     };
+  if (job.metadata?.top_company === true) {
+    const href =
+      typeof job.metadata?.canonical_apply_url === "string"
+        ? job.metadata.canonical_apply_url
+        : typeof job.metadata?.source_url === "string"
+          ? job.metadata.source_url
+          : "";
+    if (href)
+      return {
+        label: localized(
+          locale,
+          `Oferta oficial · ${job.company}`,
+          `Official listing · ${job.company}`,
+        ),
+        href,
+      };
+  }
   return null;
 }
 
@@ -574,7 +591,7 @@ function JobsView({
     [jobs],
   );
   const job = filtered[index % Math.max(filtered.length, 1)];
-  const attribution = job ? sourceAttribution(job) : null;
+  const attribution = job ? sourceAttribution(job, locale) : null;
   const removeCurrent = useCallback(
     (direction: -1 | 1) => {
       if (!job) return;

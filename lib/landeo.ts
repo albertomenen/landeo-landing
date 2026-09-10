@@ -65,6 +65,7 @@ export async function loadJobs(limit=120){
   }
   const select="id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider";
   const recent=client.from("jobs").select(select).eq("status","active").order("published_at",{ascending:false}).limit(limit);
+  const topCompanies=client.from("jobs").select(select).eq("status","active").eq("metadata->>top_company","true").order("published_at",{ascending:false}).limit(240);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const focused=candidateMarket?[
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(120),
@@ -74,7 +75,7 @@ export async function loadJobs(limit=120){
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").order("published_at",{ascending:false}).limit(180),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").order("published_at",{ascending:false}).limit(100),
   ];
-  const results=await Promise.all([recent,...focused]);
+  const results=await Promise.all([recent,topCompanies,...focused]);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
