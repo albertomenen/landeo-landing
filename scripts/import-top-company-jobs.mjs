@@ -29,11 +29,26 @@ const greenhouseBoards = [
   ["twilio", "Twilio"],
   ["lyft", "Lyft"],
   ["elastic", "Elastic"],
+  ["monzo", "Monzo", ["GB"]],
+  ["canonical", "Canonical", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
+  ["wise", "Wise", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
+  ["cabify", "Cabify", ["ES", "MX", "CO"]],
+  ["celonis", "Celonis", ["ES", "MX", "CO", "US", "GB"]],
+  ["aircallioinc", "Aircall", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
+  ["neoris", "NEORIS", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
+  ["workato", "Workato", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
 ];
 
 const leverBoards = [
   ["spotify", "Spotify"],
   ["palantir", "Palantir"],
+  ["bluelightconsulting", "Bluelight Consulting", ["MX", "CO", "US"]],
+  ["Flex", "Flex", ["CO", "US"]],
+  ["ciandt", "CI&T", ["MX", "CO", "US", "GB"]],
+  ["caseware", "Caseware", ["CO", "US", "GB"]],
+  ["coupa", "Coupa", ["CO", "MX", "US", "GB"]],
+  ["tryjeeves", "Jeeves", ["CO", "MX", "US", "GB"]],
+  ["kavak", "Kavak", ["MX"]],
 ];
 
 const countryCodes = new Map([
@@ -297,14 +312,20 @@ for (const [board, company] of ashbyBoards) {
   boardRuns.push({ source: "Ashby", board, externalIds: new Set(rows.map((row) => row.external_id)) });
   console.log(`${company}: ${rows.length}`);
 }
-for (const [board, company] of greenhouseBoards) {
-  const rows = await importGreenhouse(board, company);
+for (const [board, company, allowedMarkets] of greenhouseBoards) {
+  const importedRows = await importGreenhouse(board, company);
+  const rows = allowedMarkets
+    ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
+    : importedRows;
   results.push(...rows);
   boardRuns.push({ source: "Greenhouse", board, externalIds: new Set(rows.map((row) => row.external_id)) });
   console.log(`${company}: ${rows.length}`);
 }
-for (const [board, company] of leverBoards) {
-  const rows = await importLever(board, company);
+for (const [board, company, allowedMarkets] of leverBoards) {
+  const importedRows = await importLever(board, company);
+  const rows = allowedMarkets
+    ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
+    : importedRows;
   results.push(...rows);
   boardRuns.push({ source: "Lever", board, externalIds: new Set(rows.map((row) => row.external_id)) });
   console.log(`${company}: ${rows.length}`);
