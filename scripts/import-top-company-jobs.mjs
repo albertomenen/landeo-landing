@@ -7,6 +7,12 @@ const ashbyBoards = [
   ["ramp", "Ramp"],
   ["linear", "Linear"],
   ["perplexity", "Perplexity"],
+  ["elevenlabs", "ElevenLabs"],
+  ["cursor", "Cursor"],
+  ["plaid", "Plaid"],
+  ["replit", "Replit"],
+  ["zapier", "Zapier"],
+  ["docker", "Docker"],
 ];
 
 const greenhouseBoards = [
@@ -16,18 +22,32 @@ const greenhouseBoards = [
   ["discord", "Discord"],
   ["reddit", "Reddit"],
   ["gitlab", "GitLab"],
+  ["coinbase", "Coinbase"],
+  ["pinterest", "Pinterest"],
+  ["mongodb", "MongoDB"],
+  ["asana", "Asana"],
+  ["twilio", "Twilio"],
+  ["lyft", "Lyft"],
+  ["elastic", "Elastic"],
+];
+
+const leverBoards = [
+  ["spotify", "Spotify"],
+  ["palantir", "Palantir"],
 ];
 
 const countryCodes = new Map([
   ["australia", "AU"], ["austria", "AT"], ["belgium", "BE"],
   ["brazil", "BR"], ["canada", "CA"], ["denmark", "DK"],
-  ["france", "FR"], ["germany", "DE"], ["india", "IN"],
+  ["czech republic", "CZ"], ["estonia", "EE"], ["finland", "FI"],
+  ["france", "FR"], ["germany", "DE"], ["hong kong", "HK"], ["india", "IN"],
   ["ireland", "IE"], ["italy", "IT"], ["japan", "JP"],
   ["mexico", "MX"], ["netherlands", "NL"], ["new zealand", "NZ"],
-  ["poland", "PL"], ["portugal", "PT"], ["singapore", "SG"],
+  ["norway", "NO"], ["poland", "PL"], ["portugal", "PT"], ["romania", "RO"],
+  ["singapore", "SG"],
   ["south africa", "ZA"], ["south korea", "KR"], ["spain", "ES"],
-  ["sweden", "SE"], ["switzerland", "CH"], ["united kingdom", "GB"],
-  ["united states", "US"],
+  ["sweden", "SE"], ["switzerland", "CH"], ["taiwan", "TW"],
+  ["united arab emirates", "AE"], ["united kingdom", "GB"], ["united states", "US"],
 ]);
 
 async function loadEnv() {
@@ -95,6 +115,7 @@ function logoFor(company) {
   const logos = {
     OpenAI: "/company-logos/openai.png",
     Notion: "/company-logos/notion.webp",
+    Spotify: "/company-logos/spotify.png",
   };
   return logos[company] ?? null;
 }
@@ -185,6 +206,34 @@ async function importGreenhouse(board, company) {
     });
 }
 
+async function importLever(board, company) {
+  const payload = await fetchJson(`https://api.lever.co/v0/postings/${board}?mode=json`);
+  return (Array.isArray(payload) ? payload : [])
+    .filter((job) => job.id && job.text)
+    .map((job) => {
+      const locations = job.categories?.allLocations;
+      const location = Array.isArray(locations) && locations.length
+        ? locations.join(" · ")
+        : job.categories?.location ?? "";
+      const description = [
+        job.descriptionPlain,
+        ...(job.lists ?? []).map((item) => `${item.text}: ${decodeHtml(item.content)}`),
+        job.additionalPlain,
+      ].filter(Boolean).join(" ");
+      const mode = workMode(job.workplaceType, false, location);
+      const market = String(job.country ?? "").toUpperCase()
+        || countryCode("", location)
+        || (mode === "Remoto" ? "REMOTE" : "");
+      return rowBase({
+        source: "Lever", board, externalId: job.id, company, title: job.text,
+        description, location, mode, market,
+        publishedAt: job.createdAt ? new Date(job.createdAt).toISOString() : null,
+        applyUrl: job.applyUrl || job.hostedUrl,
+        industry: job.categories?.department || job.categories?.team,
+      });
+    });
+}
+
 async function upsertRows(rows) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -204,18 +253,63 @@ async function upsertRows(rows) {
   }
 }
 
+async function deactivateMissing(boardRuns) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const headers = { apikey: key, authorization: `Bearer ${key}` };
+  let deactivated = 0;
+  for (const run of boardRuns) {
+    const query = new URLSearchParams({
+      select: "id,external_id",
+      source: `eq.${run.source}`,
+      external_id: `like.${run.board}:*`,
+    });
+    const response = await fetch(`${url}/rest/v1/jobs?${query}`, { headers });
+    if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
+    const existing = await response.json();
+    const staleIds = existing
+      .filter((row) => !run.externalIds.has(row.external_id))
+      .map((row) => row.id);
+    for (let index = 0; index < staleIds.length; index += 100) {
+      const ids = staleIds.slice(index, index + 100).join(",");
+      const update = await fetch(`${url}/rest/v1/jobs?id=in.(${ids})`, {
+        method: "PATCH",
+        headers: {
+          ...headers,
+          "content-type": "application/json",
+          prefer: "return=minimal",
+        },
+        body: JSON.stringify({ status: "closed" }),
+      });
+      if (!update.ok) throw new Error(`${update.status}: ${await update.text()}`);
+      deactivated += Math.min(100, staleIds.length - index);
+    }
+  }
+  return deactivated;
+}
+
 await loadEnv();
 const results = [];
+const boardRuns = [];
 for (const [board, company] of ashbyBoards) {
   const rows = await importAshby(board, company);
   results.push(...rows);
+  boardRuns.push({ source: "Ashby", board, externalIds: new Set(rows.map((row) => row.external_id)) });
   console.log(`${company}: ${rows.length}`);
 }
 for (const [board, company] of greenhouseBoards) {
   const rows = await importGreenhouse(board, company);
   results.push(...rows);
+  boardRuns.push({ source: "Greenhouse", board, externalIds: new Set(rows.map((row) => row.external_id)) });
+  console.log(`${company}: ${rows.length}`);
+}
+for (const [board, company] of leverBoards) {
+  const rows = await importLever(board, company);
+  results.push(...rows);
+  boardRuns.push({ source: "Lever", board, externalIds: new Set(rows.map((row) => row.external_id)) });
   console.log(`${company}: ${rows.length}`);
 }
 
 await upsertRows(results);
-console.log(`Imported ${results.length} current jobs from official company boards.`);
+const deactivated = await deactivateMissing(boardRuns);
+console.log(`Imported ${results.length} current jobs and deactivated ${deactivated} expired listings.`);
