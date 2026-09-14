@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type AnalyticsConsent = "granted" | "denied";
+type ClarityFunction = ((...args: unknown[]) => void) & { q?: unknown[][] };
 
 declare global {
   interface Window {
     dataLayer?: unknown[][];
     gtag?: (...args: unknown[]) => void;
+    clarity?: ClarityFunction;
     [key: `ga-disable-${string}`]: boolean | undefined;
   }
 }
@@ -51,11 +53,52 @@ function stopAnalytics(measurementId: string) {
   });
 }
 
+function startClarity(projectId: string) {
+  if (!window.clarity) {
+    window.clarity = (...args: unknown[]) => {
+      if (!window.clarity) return;
+      window.clarity.q = window.clarity.q ?? [];
+      window.clarity.q.push(args);
+    };
+  }
+
+  window.clarity("consentv2", {
+    ad_Storage: "denied",
+    analytics_Storage: "granted",
+  });
+
+  if (!document.querySelector(`script[data-landeo-clarity="${projectId}"]`)) {
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://www.clarity.ms/tag/${encodeURIComponent(projectId)}`;
+    script.dataset.landeoClarity = projectId;
+    document.head.appendChild(script);
+  }
+}
+
+function stopClarity() {
+  window.clarity?.("consentv2", {
+    ad_Storage: "denied",
+    analytics_Storage: "denied",
+  });
+  window.clarity?.("consent", false);
+}
+
+function pageArea(pathname: string) {
+  if (pathname.startsWith("/app")) return "dashboard";
+  if (pathname === "/onboarding") return "onboarding";
+  if (pathname === "/login" || pathname === "/signup") return "authentication";
+  if (pathname === "/pricing") return "pricing";
+  return "landing";
+}
+
 export default function GoogleAnalytics({
   measurementId,
+  clarityId,
   locale,
 }: {
   measurementId?: string;
+  clarityId?: string;
   locale: "es" | "en";
 }) {
   const pathname = usePathname();
@@ -68,22 +111,36 @@ export default function GoogleAnalytics({
   }, []);
 
   useEffect(() => {
-    if (!measurementId || consent !== "granted") return;
-    startAnalytics(measurementId);
-    window.gtag?.("event", "page_view", {
-      page_path: pathname,
-      page_location: window.location.href,
-      page_title: document.title,
-    });
-  }, [consent, measurementId, pathname]);
+    const shouldMask = pathname.startsWith("/app") || ["/onboarding", "/login", "/signup"].includes(pathname);
+    if (shouldMask) document.body.setAttribute("data-clarity-mask", "true");
+    else document.body.removeAttribute("data-clarity-mask");
+    return () => document.body.removeAttribute("data-clarity-mask");
+  }, [pathname]);
 
-  if (!measurementId) return null;
-  const activeMeasurementId = measurementId;
+  useEffect(() => {
+    if (consent !== "granted") return;
+    if (measurementId) {
+      startAnalytics(measurementId);
+      window.gtag?.("event", "page_view", {
+        page_path: pathname,
+        page_location: window.location.href,
+        page_title: document.title,
+      });
+    }
+    if (clarityId) {
+      startClarity(clarityId);
+      window.clarity?.("set", "page_area", pageArea(pathname));
+      window.clarity?.("set", "language", locale);
+      window.clarity?.("event", "page_view");
+    }
+  }, [clarityId, consent, locale, measurementId, pathname]);
+
+  if (!measurementId && !clarityId) return null;
 
   const copy = locale === "es"
     ? {
         title: "Tu privacidad, bajo tu control",
-        body: "Usamos Google Analytics para entender qué partes de Landeo resultan útiles. No cargaremos Analytics hasta que lo aceptes.",
+        body: "Usamos Google Analytics y Microsoft Clarity para entender qué partes de Landeo resultan útiles mediante estadísticas y grabaciones protegidas. No cargaremos estas herramientas hasta que lo aceptes.",
         accept: "Aceptar analítica",
         reject: "Rechazar",
         privacy: "Política de privacidad",
@@ -91,7 +148,7 @@ export default function GoogleAnalytics({
       }
     : {
         title: "Your privacy, under your control",
-        body: "We use Google Analytics to understand which parts of Landeo are useful. Analytics will not load until you accept.",
+        body: "We use Google Analytics and Microsoft Clarity to understand which parts of Landeo are useful through statistics and privacy-masked recordings. These tools will not load until you accept.",
         accept: "Accept analytics",
         reject: "Reject",
         privacy: "Privacy policy",
@@ -102,7 +159,10 @@ export default function GoogleAnalytics({
     window.localStorage.setItem(CONSENT_KEY, nextConsent);
     setConsent(nextConsent);
     setPreferencesOpen(false);
-    if (nextConsent === "denied") stopAnalytics(activeMeasurementId);
+    if (nextConsent === "denied") {
+      if (measurementId) stopAnalytics(measurementId);
+      if (clarityId) stopClarity();
+    }
   }
 
   const showBanner = consent === null || preferencesOpen;

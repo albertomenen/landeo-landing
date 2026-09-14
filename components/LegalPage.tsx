@@ -13,7 +13,7 @@ const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> = {
     privacy: {
       title: "Privacy Policy",
       intro: "This policy explains what information Landeo uses, why it is needed, who may process it and the choices available to you.",
-      updated: "Effective and last updated: 7 September 2026",
+      updated: "Effective and last updated: 14 September 2026",
       notice: "Landeo is designed to keep your information private. We do not sell personal data. Access is restricted and information is encrypted in transit; no online service can promise absolute security.",
       sections: [
         { title: "1. Who is responsible", paragraphs: [
@@ -27,7 +27,7 @@ const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> = {
           "Application activity, such as jobs viewed, saved or rejected, your express decision to apply, delivery status and any generated cover letter.",
           "Technical and security information needed to operate the service, including timestamps, device or browser information, IP-derived security data and error logs.",
           "Subscription or entitlement status supplied by the relevant marketplace or service provider. Landeo does not receive your complete payment-card details from Apple.",
-          "Optional website analytics only after you accept analytics cookies. We do not use this consent to enable personalized advertising.",
+          "Optional website analytics and privacy-masked interaction data, such as pages, clicks and scrolling, only after you accept analytics cookies. We do not use this consent to enable personalized advertising.",
         ] },
         { title: "3. Why we use information", bullets: [
           "Create and secure your account and synchronize your profile across devices.",
@@ -49,7 +49,7 @@ const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> = {
           "If an external sign-in, question, consent screen or CAPTCHA requires your attention, Landeo returns control to you. Once information reaches an employer or job platform, that recipient processes it under its own privacy notice and applicable law.",
         ] },
         { title: "7. Service providers and international processing", paragraphs: [
-          "We use carefully selected providers only where needed to operate Landeo. These may include Supabase for authentication, database and private file storage; OpenAI for user-enabled AI drafting; Resend for transactional email and supported application delivery; Apple and Google for sign-in; Apple and relevant subscription infrastructure for entitlement status; and Google Analytics for consented website analytics. Employers, applicant-tracking systems and job platforms receive data only as needed for applications you initiate.",
+          "We use carefully selected providers only where needed to operate Landeo. These may include Supabase for authentication, database and private file storage; OpenAI for user-enabled AI drafting; Resend for transactional email and supported application delivery; Apple and Google for sign-in; Apple and relevant subscription infrastructure for entitlement status; Google Analytics for consented website analytics; and Microsoft Clarity for consented, privacy-masked session replays and heatmaps. Form inputs and marked private areas are masked. Employers, applicant-tracking systems and job platforms receive data only as needed for applications you initiate.",
           "Some providers may process information outside Spain or the European Economic Area. Where required, transfers rely on an adequacy decision, contractual safeguards such as Standard Contractual Clauses, or another lawful mechanism. Providers must protect information consistently with their contracts and applicable law.",
           "Landeo is not designed for routine manual reading of private CVs or profile content. Authorized access may nevertheless occur when reasonably necessary for support requested by you, security, abuse prevention or legal compliance.",
         ] },
@@ -134,7 +134,7 @@ const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> = {
     privacy: {
       title: "Política de privacidad",
       intro: "Esta política explica qué información utiliza Landeo, por qué es necesaria, quién puede tratarla y qué opciones tienes.",
-      updated: "Vigente y actualizada por última vez: 7 de septiembre de 2026",
+      updated: "Vigente y actualizada por última vez: 14 de septiembre de 2026",
       notice: "Landeo está diseñado para mantener privada tu información. No vendemos datos personales. El acceso está restringido y la información se cifra durante la transmisión; ningún servicio en línea puede prometer seguridad absoluta.",
       sections: [
         { title: "1. Responsable del tratamiento", paragraphs: [
@@ -148,7 +148,7 @@ const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> = {
           "Actividad de candidatura, como empleos vistos, guardados o descartados, tu decisión expresa de postularte, estado de entrega y cualquier carta generada.",
           "Información técnica y de seguridad necesaria para operar el servicio, incluidos marcas de tiempo, datos de dispositivo o navegador, datos de seguridad derivados de la IP y registros de errores.",
           "Estado de suscripción o acceso facilitado por la tienda o el proveedor correspondiente. Landeo no recibe de Apple los datos completos de tu tarjeta.",
-          "Analítica web opcional únicamente después de que aceptes las cookies analíticas. No usamos este consentimiento para activar publicidad personalizada.",
+          "Analítica web opcional y datos de interacción protegidos, como páginas, clics y desplazamiento, únicamente después de que aceptes las cookies analíticas. No usamos este consentimiento para activar publicidad personalizada.",
         ] },
         { title: "3. Para qué usamos la información", bullets: [
           "Crear y proteger tu cuenta y sincronizar tu perfil entre dispositivos.",
@@ -168,7 +168,7 @@ const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> = {
           "Si un acceso externo, pregunta, pantalla de consentimiento o CAPTCHA requiere tu atención, Landeo te devuelve el control. Cuando la información llega a una empresa o plataforma, ese destinatario la trata conforme a su propio aviso de privacidad y la ley aplicable.",
         ] },
         { title: "7. Proveedores y tratamiento internacional", paragraphs: [
-          "Utilizamos proveedores seleccionados solo cuando son necesarios para operar Landeo. Pueden incluir Supabase para autenticación, base de datos y archivos privados; OpenAI para redacción con IA activada por el usuario; Resend para correo transaccional y entregas compatibles; Apple y Google para iniciar sesión; Apple y la infraestructura de suscripciones correspondiente para confirmar el acceso; y Google Analytics para analítica web consentida. Las empresas, sistemas de candidatos y portales reciben datos únicamente cuando es necesario para candidaturas iniciadas por ti.",
+          "Utilizamos proveedores seleccionados solo cuando son necesarios para operar Landeo. Pueden incluir Supabase para autenticación, base de datos y archivos privados; OpenAI para redacción con IA activada por el usuario; Resend para correo transaccional y entregas compatibles; Apple y Google para iniciar sesión; Apple y la infraestructura de suscripciones correspondiente para confirmar el acceso; Google Analytics para analítica web consentida; y Microsoft Clarity para mapas de calor y grabaciones de sesión protegidas y consentidas. Los formularios y las zonas privadas marcadas permanecen ocultos. Las empresas, sistemas de candidatos y portales reciben datos únicamente cuando es necesario para candidaturas iniciadas por ti.",
           "Algunos proveedores pueden tratar información fuera de España o del Espacio Económico Europeo. Cuando es necesario, las transferencias se apoyan en una decisión de adecuación, garantías contractuales como las Cláusulas Contractuales Tipo u otro mecanismo válido. Los proveedores deben proteger la información conforme a sus contratos y a la ley aplicable.",
           "Landeo no está diseñado para la lectura manual habitual de CV o perfiles privados. Aun así, puede producirse acceso autorizado cuando sea razonablemente necesario para el soporte que solicites, seguridad, prevención de abusos o cumplimiento legal.",
         ] },

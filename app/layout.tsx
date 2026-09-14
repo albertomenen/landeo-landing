@@ -23,5 +23,5 @@ export async function generateMetadata():Promise<Metadata>{
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale=detectLandingLocale(await headers());
   const analyticsId=process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID;
-  return <html lang={locale}><head><meta name="msvalidate.01" content="8817032EE0ED5D0365743F3506BDC91B"/></head><body className={geist.variable}>{children}<GoogleAnalytics measurementId={analyticsId} locale={locale}/></body></html>;
+  return <html lang={locale}><head><meta name="msvalidate.01" content="8817032EE0ED5D0365743F3506BDC91B"/></head><body className={geist.variable}>{children}<GoogleAnalytics measurementId={analyticsId} clarityId="yi6pc0lycq" locale={locale}/></body></html>;
 }

@@ -54,6 +54,21 @@ test("server-renders the Landeo landing page and social metadata", async () => {
   );
 });
 
+test("loads Microsoft Clarity only after analytics consent and masks private routes", async () => {
+  const layout = await readFile(new URL("app/layout.tsx", root), "utf8");
+  const analytics = await readFile(
+    new URL("components/GoogleAnalytics.tsx", root),
+    "utf8",
+  );
+  const legal = await readFile(new URL("components/LegalPage.tsx", root), "utf8");
+  assert.match(layout, /clarityId="yi6pc0lycq"/);
+  assert.match(analytics, /consent !== "granted"/);
+  assert.match(analytics, /www\.clarity\.ms\/tag/);
+  assert.match(analytics, /"consentv2"/);
+  assert.match(analytics, /data-clarity-mask/);
+  assert.match(legal, /Microsoft Clarity/);
+});
+
 test("server-renders the English landing page for an English locale", async () => {
   const response = await render("/", { "accept-language": "en-GB,en;q=0.9" });
   assert.equal(response.status, 200);
