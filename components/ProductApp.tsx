@@ -539,6 +539,7 @@ function JobsView({
   const [mode, setMode] = useState("all");
   const [workMode, setWorkMode] = useState("all");
   const [market, setMarket] = useState("all");
+  const [showAutomaticArchive, setShowAutomaticArchive] = useState(false);
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
@@ -555,13 +556,18 @@ function JobsView({
       return;
     }
     try {
-      setJobs(await loadJobs());
+      setJobs(
+        await loadJobs(120, {
+          includeDismissed: showAutomaticArchive,
+          includeWorldwide: showAutomaticArchive,
+        }),
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.loadError);
     } finally {
       setLoading(false);
     }
-  }, [demo, t.notices.loadError]);
+  }, [demo, showAutomaticArchive, t.notices.loadError]);
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -769,6 +775,7 @@ function JobsView({
                 setWorkMode("all");
                 setMarket("all");
                 setQuery("");
+                setShowAutomaticArchive(false);
               }}
             >
               {t.jobs.clear}
@@ -1027,8 +1034,49 @@ function JobsView({
                 >
                   ✓
                 </m.span>
-                <h2>{t.jobs.upToDate}</h2>
-                <p>{t.jobs.upToDateDetail}</p>
+                <h2>
+                  {mode === "automatic"
+                    ? showAutomaticArchive
+                      ? t.jobs.automaticArchiveEmpty
+                      : t.jobs.automaticEmpty
+                    : t.jobs.upToDate}
+                </h2>
+                <p>
+                  {mode === "automatic"
+                    ? showAutomaticArchive
+                      ? t.jobs.automaticArchiveEmptyDetail
+                      : t.jobs.automaticEmptyDetail
+                    : t.jobs.upToDateDetail}
+                </p>
+                {mode === "automatic" && (
+                  <div className="automatic-empty-actions">
+                    {!showAutomaticArchive && (
+                      <m.button
+                        type="button"
+                        whileHover={{ y: -2 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => {
+                          setQuery("");
+                          setWorkMode("all");
+                          setMarket("all");
+                          setIndex(0);
+                          setShowAutomaticArchive(true);
+                        }}
+                      >
+                        {t.jobs.automaticEverywhere} →
+                      </m.button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("all");
+                        setIndex(0);
+                      }}
+                    >
+                      {t.jobs.viewAllJobs}
+                    </button>
+                  </div>
+                )}
               </m.div>
             )}
           </AnimatePresence>

@@ -60,6 +60,14 @@ export const dashboardCopy = {
       salary: "Salario publicado",
       upToDate: "Estás al día",
       upToDateDetail: "Limpia los filtros o actualiza para ver más ofertas.",
+      automaticEmpty: "No quedan automáticas nuevas cerca de ti",
+      automaticEmptyDetail:
+        "Las ofertas que ya solicitaste o descartaste se ocultan para que no vuelvan a aparecer.",
+      automaticEverywhere: "Ver descartadas y otros mercados",
+      automaticArchiveEmpty: "Ya has revisado las automáticas disponibles",
+      automaticArchiveEmptyDetail:
+        "Publicaremos más cuando exista un canal de envío compatible y verificado.",
+      viewAllJobs: "Ver todas las ofertas",
       pass: "Pasar",
       save: "Guardar",
       applying: "Procesando",
@@ -186,6 +194,14 @@ export const dashboardCopy = {
       salary: "Published salary",
       upToDate: "You’re all caught up",
       upToDateDetail: "Clear the filters or refresh to see more jobs.",
+      automaticEmpty: "No new automatic roles near you",
+      automaticEmptyDetail:
+        "Roles you already applied to or dismissed stay hidden so they do not appear again.",
+      automaticEverywhere: "Show dismissed roles and other markets",
+      automaticArchiveEmpty: "You’ve reviewed every available automatic role",
+      automaticArchiveEmptyDetail:
+        "We’ll add more when a compatible, verified submission channel is available.",
+      viewAllJobs: "View all jobs",
       pass: "Pass",
       save: "Save",
       applying: "Applying",

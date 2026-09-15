@@ -1993,6 +1993,31 @@ h1 em:after {
 .deck-actions .action-apply small {
   color: #cfdfd6;
 }
+
+.automatic-empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.automatic-empty-actions button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 850;
+}
+.automatic-empty-actions button:first-child {
+  border-color: var(--green);
+  background: var(--green);
+  color: white;
+  box-shadow: 0 8px 20px rgba(59, 127, 90, 0.2);
+}
 .toast {
   position: absolute;
   left: 34px;

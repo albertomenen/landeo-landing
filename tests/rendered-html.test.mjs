@@ -271,6 +271,9 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.doesNotMatch(productApp, /\{outcome &&/);
   assert.match(landeo, /prioritizeJobsByLocation/);
   assert.match(landeo, /metadata->>market_country/);
+  assert.match(landeo, /application_capability","automatic"/);
+  assert.match(landeo, /includeDismissed/);
+  assert.match(landeo, /includeWorldwide/);
   assert.match(landeo, /work_mode","Remoto"/);
   assert.match(landeo, /profile\?\.universal_profile/);
   assert.match(
@@ -278,6 +281,8 @@ test("removes the disposable starter and keeps integration contracts", async () 
     /global\|worldwide\|anywhere\|europe\|europa\|emea/,
   );
   assert.match(styles, /@keyframes landeo-confetti/);
+  assert.match(productApp, /automaticEverywhere/);
+  assert.match(styles, /\.automatic-empty-actions/);
   assert.match(
     styles,
     /prefers-reduced-motion:\s*reduce\)[\s\S]*\.confetti-burst\s*\{[\s\S]*display:\s*none/,
