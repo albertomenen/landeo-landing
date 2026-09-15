@@ -41,6 +41,7 @@ import {
   type LiveApplication,
 } from "../lib/landeo";
 import { Brand } from "./Brand";
+import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
 import { marketingDemoJobs } from "../lib/marketing-demo";
 
@@ -296,6 +297,7 @@ export default function ProductApp({
         pro={pro || demo}
         locale={locale}
         demo={demo}
+        tourReady={!identityLoading}
       />
     ) : view === "applications" ? (
       <ApplicationsView user={user} locale={locale} />
@@ -362,6 +364,7 @@ export default function ProductApp({
                   key={item.id}
                   href={demo ? "/demo/marketing" : item.href}
                   className={view === item.id ? "active" : ""}
+                  data-tour={item.id === "applications" ? "applications-nav" : undefined}
                 >
                   {view === item.id && (
                     <m.span
@@ -478,6 +481,7 @@ export default function ProductApp({
               <Link
                 key={item.id}
                 href={demo ? "/demo/marketing" : item.href}
+                data-tour={item.id === "applications" ? "applications-nav" : undefined}
                 className={
                   view === item.id ||
                   (view === "universal" && item.id === "profile")
@@ -517,12 +521,14 @@ function JobsView({
   pro,
   locale,
   demo,
+  tourReady,
 }: {
   user: User | null;
   profile: CandidateProfile | null;
   pro: boolean;
   locale: DashboardLocale;
   demo: boolean;
+  tourReady: boolean;
 }) {
   const t = dashboardCopy[locale];
   const router = useRouter();
@@ -701,6 +707,7 @@ function JobsView({
   ]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (document.querySelector(".dashboard-tour-layer")) return;
       if (
         (event.target as HTMLElement).matches("input,select,textarea,button,a")
       )
@@ -749,6 +756,7 @@ function JobsView({
       <div className="jobs-layout">
         <m.aside
           className="filters-panel"
+          data-tour="filters"
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.28 }}
@@ -896,6 +904,7 @@ function JobsView({
               <m.div
                 key={job.id}
                 className="feed-card"
+                data-tour="job-card"
                 custom={cardDirection}
                 variants={jobCardMotion}
                 initial="enter"
@@ -992,7 +1001,10 @@ function JobsView({
                     <span>{job.seniority}</span>
                   )}
                 </div>
-                <div className={`capability ${job.applyCapability}`}>
+                <div
+                  className={`capability ${job.applyCapability}`}
+                  data-tour="application-channel"
+                >
                   <b>{capabilityIcon[job.applyCapability]}</b>
                   <div>
                     <strong>{t.capability[job.applyCapability].label}</strong>
@@ -1037,6 +1049,7 @@ function JobsView({
           <div className="deck-actions">
             <m.button
               className="action-pass"
+              data-tour="pass-action"
               whileHover={job ? { y: -3 } : {}}
               whileTap={job ? { scale: 0.96, rotate: -1 } : {}}
               onClick={pass}
@@ -1050,6 +1063,7 @@ function JobsView({
             </m.button>
             <m.button
               className={`action-save ${job && savedJobIds.has(job.id) ? "is-saved" : ""}`}
+              data-tour="save-action"
               animate={{
                 scale: job && savedJobIds.has(job.id) ? [1, 0.94, 1.04, 1] : 1,
               }}
@@ -1067,6 +1081,7 @@ function JobsView({
             </m.button>
             <m.button
               className="action-apply"
+              data-tour="apply-action"
               whileHover={job ? { y: -3, scale: 1.01 } : {}}
               whileTap={job ? { scale: 0.96 } : {}}
               onClick={apply}
@@ -1138,6 +1153,11 @@ function JobsView({
           )}
         </AnimatePresence>
       </div>
+      <DashboardTour
+        locale={locale}
+        enabled={!demo && tourReady && !loading && Boolean(job)}
+        identityKey={user?.id ?? "guest"}
+      />
       {confettiBurst > 0 && <ConfettiBurst key={confettiBurst} />}{" "}
       <AnimatePresence>
         {paywall && (

@@ -123,6 +123,34 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
 });
 
+test("guides first-time dashboard visitors through every job action", async () => {
+  const tour = await readFile(
+    new URL("components/DashboardTour.tsx", root),
+    "utf8",
+  );
+  const productApp = await readFile(
+    new URL("components/ProductApp.tsx", root),
+    "utf8",
+  );
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(tour, /landeo-dashboard-tour-v1/);
+  assert.match(tour, /localStorage\.setItem\(storageKey, "complete"\)/);
+  assert.match(tour, /role="dialog"/);
+  assert.match(tour, /aria-modal="true"/);
+  assert.match(tour, /Automática significa/);
+  assert.match(tour, /Automatic means Landeo/);
+  assert.match(tour, /createPortal/);
+  assert.match(productApp, /data-tour="filters"/);
+  assert.match(productApp, /data-tour="job-card"/);
+  assert.match(productApp, /data-tour="pass-action"/);
+  assert.match(productApp, /data-tour="save-action"/);
+  assert.match(productApp, /data-tour="apply-action"/);
+  assert.match(productApp, /data-tour=\{item\.id === "applications"/);
+  assert.match(productApp, /querySelector\("\.dashboard-tour-layer"\)/);
+  assert.match(styles, /\.dashboard-tour-spotlight/);
+  assert.match(styles, /\.dashboard-tour-card\.is-anchored/);
+});
+
 test("keeps the marketing demo isolated from real applications", async () => {
   assert.equal(marketingDemoJobs.length, 20);
   assert.equal(new Set(marketingDemoJobs.map((job) => job.id)).size, 20);
