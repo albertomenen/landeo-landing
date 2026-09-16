@@ -123,6 +123,24 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
 });
 
+test("tracks each application with a persistent user-owned pipeline", async () => {
+  const productApp = await readFile(
+    new URL("components/ProductApp.tsx", root),
+    "utf8",
+  );
+  const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(productApp, /trackingStages/);
+  assert.match(productApp, /Próxima acción/);
+  assert.match(productApp, /Notas privadas/);
+  assert.match(productApp, /updateApplicationTracking/);
+  assert.match(landeo, /trackingStage/);
+  assert.match(landeo, /trackingNextActionAt/);
+  assert.match(landeo, /\.eq\("user_id",user\.id\)/);
+  assert.match(styles, /\.tracking-stages/);
+  assert.match(styles, /\.tracking-notes/);
+});
+
 test("guides first-time dashboard visitors through every job action", async () => {
   const tour = await readFile(
     new URL("components/DashboardTour.tsx", root),

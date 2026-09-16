@@ -35,10 +35,12 @@ import {
   saveProfile,
   startStripe,
   submitApplication,
+  updateApplicationTracking,
   type ApplyOutcome,
   type CandidateProfile,
   type CoverLetterProfile,
   type LiveApplication,
+  type TrackingStage,
 } from "../lib/landeo";
 import { Brand } from "./Brand";
 import { DashboardTour } from "./DashboardTour";
@@ -95,6 +97,21 @@ const jobCardMotion = {
 };
 const localized = (locale: DashboardLocale, es: string, en: string) =>
   locale === "es" ? es : en;
+const trackingStages: TrackingStage[] = [
+  "applied",
+  "screening",
+  "interview",
+  "offer",
+  "closed",
+];
+const trackingLabel = (stage: TrackingStage, locale: DashboardLocale) =>
+  ({
+    applied: localized(locale, "Aplicada", "Applied"),
+    screening: localized(locale, "En revisión", "Screening"),
+    interview: localized(locale, "Entrevista", "Interview"),
+    offer: localized(locale, "Oferta", "Offer"),
+    closed: localized(locale, "Cerrada", "Closed"),
+  })[stage];
 const adzunaDomains: Record<string, string> = {
   AT: "https://www.adzuna.at",
   AU: "https://www.adzuna.com.au",
@@ -1372,12 +1389,17 @@ function ApplicationsView({
   const t = dashboardCopy[locale];
   const [items, setItems] = useState<LiveApplication[]>([]);
   const [selected, setSelected] = useState<LiveApplication | null>(null);
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "progress" | "sent"
-  >("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | TrackingStage>(
+    "all",
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [trackingNotes, setTrackingNotes] = useState("");
+  const [nextAction, setNextAction] = useState("");
+  const [nextActionAt, setNextActionAt] = useState("");
+  const [savingTracking, setSavingTracking] = useState(false);
+  const [trackingSaved, setTrackingSaved] = useState(false);
   const refresh = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -1414,10 +1436,7 @@ function ApplicationsView({
     () =>
       items.filter((item) => {
         if (statusFilter === "all") return true;
-        if (statusFilter === "sent") return item.status === "sent";
-        return ["queued", "processing", "action_required"].includes(
-          item.status,
-        );
+        return item.tracking.stage === statusFilter;
       }),
     [items, statusFilter],
   );
@@ -1426,6 +1445,58 @@ function ApplicationsView({
       setSelected(filteredItems[0] ?? null);
     }
   }, [filteredItems, selected?.id]);
+  useEffect(() => {
+    setTrackingNotes(selected?.tracking.notes ?? "");
+    setNextAction(selected?.tracking.nextAction ?? "");
+    setNextActionAt(selected?.tracking.nextActionAt?.slice(0, 10) ?? "");
+    setTrackingSaved(false);
+  }, [selected?.id, selected?.tracking.updatedAt]);
+  const saveTracking = async (stage = selected?.tracking.stage) => {
+    if (!selected || !stage || savingTracking) return;
+    const previous = selected;
+    const updatedAt = new Date().toISOString();
+    const nextTracking = {
+      stage,
+      notes: trackingNotes,
+      nextAction,
+      nextActionAt: nextActionAt || null,
+      updatedAt,
+    };
+    setSavingTracking(true);
+    setTrackingSaved(false);
+    setItems((current) =>
+      current.map((item) =>
+        item.id === selected.id ? { ...item, tracking: nextTracking } : item,
+      ),
+    );
+    setSelected({ ...selected, tracking: nextTracking });
+    try {
+      await updateApplicationTracking(selected.id, {
+        stage,
+        notes: trackingNotes,
+        nextAction,
+        nextActionAt: nextActionAt || null,
+      });
+      setTrackingSaved(true);
+      setError("");
+    } catch (value) {
+      setItems((current) =>
+        current.map((item) => (item.id === previous.id ? previous : item)),
+      );
+      setSelected(previous);
+      setError(
+        value instanceof Error
+          ? value.message
+          : localized(
+              locale,
+              "No pudimos guardar el seguimiento.",
+              "We couldn’t save your tracking update.",
+            ),
+      );
+    } finally {
+      setSavingTracking(false);
+    }
+  };
   if (!user)
     return (
       <SignInState
@@ -1442,14 +1513,14 @@ function ApplicationsView({
       <header className="view-header">
         <div>
           <span className="overline">
-            {localized(locale, "SEGUIMIENTO REAL", "LIVE TRACKING")}
+            {localized(locale, "TU PIPELINE", "YOUR PIPELINE")}
           </span>
           <h1>{localized(locale, "Mis candidaturas", "My applications")}</h1>
           <p>
             {localized(
               locale,
-              "Se actualizan automáticamente cada 15 segundos.",
-              "Automatically refreshed every 15 seconds.",
+              "Organiza cada proceso, apunta el próximo paso y no pierdas ninguna oportunidad.",
+              "Organize every process, plan the next step, and never lose track of an opportunity.",
             )}
           </p>
         </div>
@@ -1473,30 +1544,20 @@ function ApplicationsView({
             >
               {localized(locale, "Todas", "All")} <b>{items.length}</b>
             </button>
-            <button
-              type="button"
-              className={statusFilter === "progress" ? "active" : ""}
-              aria-pressed={statusFilter === "progress"}
-              onClick={() => setStatusFilter("progress")}
-            >
-              {localized(locale, "En curso", "In progress")}{" "}
-              <b>
-                {
-                  items.filter((item) =>
-                    ["queued", "processing"].includes(item.status),
-                  ).length
-                }
-              </b>
-            </button>
-            <button
-              type="button"
-              className={statusFilter === "sent" ? "active" : ""}
-              aria-pressed={statusFilter === "sent"}
-              onClick={() => setStatusFilter("sent")}
-            >
-              {localized(locale, "Enviadas", "Sent")}{" "}
-              <b>{items.filter((item) => item.status === "sent").length}</b>
-            </button>
+            {trackingStages.map((stage) => (
+              <button
+                type="button"
+                key={stage}
+                className={statusFilter === stage ? "active" : ""}
+                aria-pressed={statusFilter === stage}
+                onClick={() => setStatusFilter(stage)}
+              >
+                {trackingLabel(stage, locale)}{" "}
+                <b>
+                  {items.filter((item) => item.tracking.stage === stage).length}
+                </b>
+              </button>
+            ))}
           </div>
           {loading && (
             <p className="inline-loading">
@@ -1561,9 +1622,8 @@ function ApplicationsView({
                   }).format(new Date(application.updatedAt))}
                 </small>
               </div>
-              <span className={`status-badge ${application.status}`}>
-                {t.status[application.status as keyof typeof t.status] ??
-                  application.status}
+              <span className={`tracking-badge ${application.tracking.stage}`}>
+                {trackingLabel(application.tracking.stage, locale)}
               </span>
             </m.button>
           ))}
@@ -1579,16 +1639,129 @@ function ApplicationsView({
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <span className={`status-badge ${selected.status}`}>
-                  {t.status[selected.status as keyof typeof t.status] ??
-                    selected.status}
+                <span className={`tracking-badge ${selected.tracking.stage}`}>
+                  {trackingLabel(selected.tracking.stage, locale)}
                 </span>
                 <h2>{selected.job.title}</h2>
                 <p>
                   {selected.job.company} · {selected.job.location}
                 </p>
+                <section className="tracking-panel">
+                  <div className="tracking-panel-heading">
+                    <div>
+                      <span className="overline">
+                        {localized(locale, "SEGUIMIENTO", "TRACKING")}
+                      </span>
+                      <h3>
+                        {localized(
+                          locale,
+                          "¿En qué punto está?",
+                          "Where does it stand?",
+                        )}
+                      </h3>
+                    </div>
+                    {trackingSaved && (
+                      <small>{localized(locale, "✓ Guardado", "✓ Saved")}</small>
+                    )}
+                  </div>
+                  <div
+                    className="tracking-stages"
+                    role="group"
+                    aria-label={localized(
+                      locale,
+                      "Etapa de la candidatura",
+                      "Application stage",
+                    )}
+                  >
+                    {trackingStages.map((stage, index) => (
+                      <button
+                        type="button"
+                        key={stage}
+                        className={
+                          selected.tracking.stage === stage ? "active" : ""
+                        }
+                        aria-pressed={selected.tracking.stage === stage}
+                        disabled={savingTracking}
+                        onClick={() => saveTracking(stage)}
+                      >
+                        <i>{index + 1}</i>
+                        <span>{trackingLabel(stage, locale)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="tracking-fields">
+                    <label>
+                      <span>
+                        {localized(locale, "Próxima acción", "Next action")}
+                      </span>
+                      <input
+                        value={nextAction}
+                        maxLength={240}
+                        onChange={(event) => {
+                          setNextAction(event.target.value);
+                          setTrackingSaved(false);
+                        }}
+                        placeholder={localized(
+                          locale,
+                          "Ej. Preparar entrevista técnica",
+                          "E.g. Prepare technical interview",
+                        )}
+                      />
+                    </label>
+                    <label>
+                      <span>{localized(locale, "Fecha", "Date")}</span>
+                      <input
+                        type="date"
+                        value={nextActionAt}
+                        onChange={(event) => {
+                          setNextActionAt(event.target.value);
+                          setTrackingSaved(false);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <label className="tracking-notes">
+                    <span>
+                      {localized(locale, "Notas privadas", "Private notes")}
+                    </span>
+                    <textarea
+                      value={trackingNotes}
+                      maxLength={4000}
+                      rows={4}
+                      onChange={(event) => {
+                        setTrackingNotes(event.target.value);
+                        setTrackingSaved(false);
+                      }}
+                      placeholder={localized(
+                        locale,
+                        "Contacto, preguntas, feedback o detalles que quieras recordar…",
+                        "Contacts, questions, feedback, or anything you want to remember…",
+                      )}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button-primary tracking-save"
+                    disabled={savingTracking}
+                    onClick={() => saveTracking()}
+                  >
+                    {savingTracking
+                      ? localized(locale, "Guardando…", "Saving…")
+                      : localized(
+                          locale,
+                          "Guardar seguimiento",
+                          "Save tracking",
+                        )}
+                  </button>
+                </section>
                 <div className="status-explain">
                   <strong>
+                    {localized(
+                      locale,
+                      "Estado del envío",
+                      "Delivery status",
+                    )}
+                    :{" "}
                     {t.status[selected.status as keyof typeof t.status] ??
                       selected.status}
                   </strong>

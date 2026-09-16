@@ -2357,6 +2357,39 @@ h1 em:after {
 .status-badge.queued {
   background: #eef0ef;
 }
+.tracking-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 850;
+  white-space: nowrap;
+  color: #365743;
+  background: #edf2eb;
+  border: 1px solid #d9e4d6;
+}
+.tracking-badge.screening {
+  color: #526698;
+  background: #edf0f9;
+  border-color: #dce3f5;
+}
+.tracking-badge.interview {
+  color: #795a18;
+  background: #fff4d9;
+  border-color: #f1dfad;
+}
+.tracking-badge.offer {
+  color: #24704b;
+  background: #dff5e8;
+  border-color: #bde7cd;
+}
+.tracking-badge.closed {
+  color: #6e7470;
+  background: #f0f1f0;
+  border-color: #e0e2e0;
+}
 .application-detail {
   background: #f8f9f6;
   padding: 30px 36px;
@@ -2369,6 +2402,123 @@ h1 em:after {
 .application-detail > p {
   font-size: 10px;
   color: var(--muted);
+}
+.tracking-panel {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #dbe5d8;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(36, 92, 64, 0.06);
+}
+.tracking-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.tracking-panel-heading h3 {
+  margin: 3px 0 0;
+  font-size: 14px;
+}
+.tracking-panel-heading small {
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+}
+.tracking-stages {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 17px 0;
+}
+.tracking-stages button {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 9px 4px 8px;
+  background: #f8faf7;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 7px;
+  font-weight: 750;
+  transition: transform 160ms ease, border-color 160ms ease,
+    background 160ms ease, color 160ms ease;
+}
+.tracking-stages button:hover {
+  transform: translateY(-2px);
+  border-color: #a9c0a6;
+}
+.tracking-stages button.active {
+  color: white;
+  background: var(--green);
+  border-color: var(--green);
+  box-shadow: 0 6px 16px rgba(36, 92, 64, 0.2);
+}
+.tracking-stages button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.tracking-stages i {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 7px;
+  font-style: normal;
+  background: white;
+  color: var(--green);
+  border: 1px solid #d9e4d6;
+}
+.tracking-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(118px, 0.75fr);
+  gap: 10px;
+}
+.tracking-fields label,
+.tracking-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #405047;
+  font-size: 8px;
+  font-weight: 750;
+}
+.tracking-fields input,
+.tracking-notes textarea {
+  width: 100%;
+  border: 1px solid #d8e0d6;
+  border-radius: 10px;
+  background: #fbfcfa;
+  color: var(--ink);
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 9px;
+  outline: none;
+}
+.tracking-fields input {
+  min-height: 39px;
+}
+.tracking-notes {
+  margin-top: 10px;
+}
+.tracking-notes textarea {
+  resize: vertical;
+  min-height: 82px;
+  line-height: 1.5;
+}
+.tracking-fields input:focus,
+.tracking-notes textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(36, 92, 64, 0.1);
+}
+.tracking-save {
+  width: 100%;
+  margin-top: 11px;
 }
 .status-explain {
   display: flex;
@@ -4739,6 +4889,10 @@ h1 em:after {
     align-self: flex-start;
     font-size: 7px;
   }
+  .application-row .tracking-badge {
+    align-self: flex-start;
+    font-size: 7px;
+  }
   .application-detail {
     margin: 0 14px 18px;
     padding: 22px 18px;
@@ -4774,6 +4928,32 @@ h1 em:after {
   .application-detail .button {
     width: 100%;
     min-height: 46px;
+  }
+  .tracking-panel {
+    padding: 15px;
+  }
+  .tracking-stages {
+    display: flex;
+    overflow-x: auto;
+    gap: 7px;
+    margin-inline: -2px;
+    padding: 2px 2px 7px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .tracking-stages button {
+    flex: 0 0 80px;
+    min-height: 62px;
+    font-size: 8px;
+    scroll-snap-align: start;
+  }
+  .tracking-fields {
+    grid-template-columns: 1fr;
+  }
+  .tracking-fields input,
+  .tracking-notes textarea {
+    min-height: 44px;
+    font-size: 10px;
   }
   .content-narrow,
   .profile-content {

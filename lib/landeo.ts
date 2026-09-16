@@ -5,6 +5,8 @@ import {prioritizeJobsByLocation,resolveCountryCode} from "./job-location";
 
 export type SwipeDirection="left"|"right"|"save";
 export type ApplicationStatus="queued"|"processing"|"sent"|"action_required"|"viewed"|"interview"|"rejected"|"failed";
+export type TrackingStage="applied"|"screening"|"interview"|"offer"|"closed";
+export type ApplicationTracking={stage:TrackingStage;notes:string;nextAction:string;nextActionAt:string|null;updatedAt:string|null};
 export type ApplyOutcome={status:"queued"|"sent"|"action_required"|"failed";message:string;actionUrl?:string;externalReference?:string};
 export type CoverLetterProfile={
   enabled:boolean;motivation:string;valueProposition:string;achievement:string;companyPreferences:string;
@@ -27,7 +29,7 @@ export type CandidateProfile={
 export type LiveApplication={
   id:string;jobId:string;status:ApplicationStatus;appliedAt:string;updatedAt:string;actionUrl:string|null;
   errorMessage:string|null;requiredFields:string[];deliveryStatus:string|null;coverLetter:string|null;
-  coverLetterGeneratedAt:string|null;job:Job;events:ApplicationEvent[];
+  coverLetterGeneratedAt:string|null;tracking:ApplicationTracking;job:Job;events:ApplicationEvent[];
 };
 export type ApplicationEvent={id:string;applicationId:string;type:string;message:string;createdAt:string;readAt:string|null};
 
@@ -160,7 +162,17 @@ export async function loadApplications():Promise<LiveApplication[]>{
   const[{data:jobRows},{data:eventRows}]=await Promise.all([client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",jobIds),client.from("application_events").select("id,application_id,event_type,message,created_at,read_at").in("application_id",appIds).order("created_at",{ascending:true})]);
   const byJob=new Map(((jobRows??[])as JobRow[]).map(row=>[row.id,mapJob(row)]));
   const events=((eventRows??[]) as Array<{id:string;application_id:string;event_type:string;message:string;created_at:string;read_at:string|null}>).map(row=>({id:row.id,applicationId:row.application_id,type:row.event_type,message:row.message,createdAt:row.created_at,readAt:row.read_at}));
-  return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);const letter=typeof row.answers?.generatedCoverLetter==="string"?row.answers.generatedCoverLetter:null;const generatedAt=typeof row.answers?.coverLetterGeneratedAt==="string"?row.answers.coverLetterGeneratedAt:null;return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,coverLetter:letter,coverLetterGeneratedAt:generatedAt,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
+  const stages=new Set<TrackingStage>(["applied","screening","interview","offer","closed"]);
+  return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);const letter=typeof row.answers?.generatedCoverLetter==="string"?row.answers.generatedCoverLetter:null;const generatedAt=typeof row.answers?.coverLetterGeneratedAt==="string"?row.answers.coverLetterGeneratedAt:null;const storedStage=row.answers?.trackingStage;const fallbackStage:TrackingStage=row.status==="interview"?"interview":row.status==="rejected"||row.status==="failed"?"closed":row.status==="viewed"?"screening":"applied";const tracking:ApplicationTracking={stage:typeof storedStage==="string"&&stages.has(storedStage as TrackingStage)?storedStage as TrackingStage:fallbackStage,notes:typeof row.answers?.trackingNotes==="string"?row.answers.trackingNotes:"",nextAction:typeof row.answers?.trackingNextAction==="string"?row.answers.trackingNextAction:"",nextActionAt:typeof row.answers?.trackingNextActionAt==="string"?row.answers.trackingNextActionAt:null,updatedAt:typeof row.answers?.trackingUpdatedAt==="string"?row.answers.trackingUpdatedAt:null};return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,coverLetter:letter,coverLetterGeneratedAt:generatedAt,tracking,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
+}
+
+export async function updateApplicationTracking(applicationId:string,input:{stage:TrackingStage;notes:string;nextAction:string;nextActionAt:string|null}){
+  if(!UUID.test(applicationId))throw new Error("Candidatura no válida.");
+  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para actualizar tu seguimiento.");
+  const{data:existing,error:readError}=await client.from("applications").select("answers").eq("id",applicationId).eq("user_id",user.id).maybeSingle();if(readError)throw readError;if(!existing)throw new Error("No encontramos esta candidatura.");
+  const now=new Date().toISOString();const previous=existing.answers&&typeof existing.answers==="object"?existing.answers as Record<string,unknown>:{};
+  const answers={...previous,trackingStage:input.stage,trackingNotes:input.notes.trim().slice(0,4000),trackingNextAction:input.nextAction.trim().slice(0,240),trackingNextActionAt:input.nextActionAt||null,trackingUpdatedAt:now};
+  const{error}=await client.from("applications").update({answers,updated_at:now}).eq("id",applicationId).eq("user_id",user.id);if(error)throw error;
 }
 
 export async function loadSavedJobs(){const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];const{data}=await client.from("swipes").select("job_id").eq("user_id",user.id).eq("direction","save").order("created_at",{ascending:false});if(!data?.length)return[];const{data:rows,error}=await client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",data.map((row:{job_id:string})=>row.job_id));if(error)throw error;return((rows??[])as JobRow[]).map(mapJob)}
