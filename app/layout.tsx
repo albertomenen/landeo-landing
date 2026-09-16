@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import {detectLandingLocale} from "../lib/locale";
 import GoogleAnalytics from "../components/GoogleAnalytics";
+import RouteTransition from "../components/RouteTransition";
 import "./globals.css";
 import "./cover-letter.css";
 
@@ -23,5 +24,5 @@ export async function generateMetadata():Promise<Metadata>{
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale=detectLandingLocale(await headers());
   const analyticsId=process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID;
-  return <html lang={locale}><head><meta name="msvalidate.01" content="8817032EE0ED5D0365743F3506BDC91B"/></head><body className={geist.variable}>{children}<GoogleAnalytics measurementId={analyticsId} clarityId="yi6pc0lycq" locale={locale}/></body></html>;
+  return <html lang={locale}><head><meta name="msvalidate.01" content="8817032EE0ED5D0365743F3506BDC91B"/></head><body className={geist.variable}>{children}<RouteTransition/><GoogleAnalytics measurementId={analyticsId} clarityId="yi6pc0lycq" locale={locale}/></body></html>;
 }

@@ -141,6 +141,28 @@ test("tracks each application with a persistent user-owned pipeline", async () =
   assert.match(styles, /\.tracking-notes/);
 });
 
+test("shows accessible route feedback without flashing on quick navigation", async () => {
+  const layout = await readFile(new URL("app/layout.tsx", root), "utf8");
+  const loading = await readFile(new URL("app/loading.tsx", root), "utf8");
+  const transition = await readFile(
+    new URL("components/RouteTransition.tsx", root),
+    "utf8",
+  );
+  const safeLink = await readFile(
+    new URL("components/SafeLink.tsx", root),
+    "utf8",
+  );
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(layout, /<RouteTransition\s*\/>/);
+  assert.match(safeLink, /from "next\/link"/);
+  assert.match(transition, /SHOW_DELAY_MS = 180/);
+  assert.match(transition, /SAFETY_TIMEOUT_MS/);
+  assert.match(transition, /role="status"/);
+  assert.match(loading, /route-transition-fallback/);
+  assert.match(styles, /\.route-transition\.is-visible/);
+  assert.match(styles, /prefers-reduced-motion: reduce/);
+});
+
 test("guides first-time dashboard visitors through every job action", async () => {
   const tour = await readFile(
     new URL("components/DashboardTour.tsx", root),
