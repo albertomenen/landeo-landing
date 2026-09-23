@@ -80,6 +80,26 @@ const nav = [
 ] as const;
 const mobileNavItems = nav.filter((item) => item.id !== "notifications");
 const capabilityIcon = { automatic: "✓", assisted: "↗", external: "↗" };
+const matchReasonCopy: Record<DashboardLocale, Record<string, string>> = {
+  es: {
+    role: "El puesto encaja con el rol que buscas",
+    skills: "Coincide con habilidades de tu perfil",
+    remote: "Modalidad remota compatible",
+    location: "Ubicación compatible con tu búsqueda",
+    salary: "Dentro de tu rango salarial",
+    experience: "Nivel de experiencia compatible",
+    profile: "Estimación inicial; completa tu perfil para afinarla",
+  },
+  en: {
+    role: "The role matches what you are looking for",
+    skills: "Matches skills in your profile",
+    remote: "Compatible remote setup",
+    location: "Location matches your search",
+    salary: "Within your salary range",
+    experience: "Compatible experience level",
+    profile: "Initial estimate; complete your profile to refine it",
+  },
+};
 const dashboardViewMotion = {
   hidden: { opacity: 0, y: 12, scale: 0.992 },
   visible: { opacity: 1, y: 0, scale: 1 },
@@ -648,6 +668,9 @@ function JobsView({
     [jobs],
   );
   const job = filtered[index % Math.max(filtered.length, 1)];
+  const matchReasons = job && Array.isArray(job.metadata?.match_reason_keys)
+    ? job.metadata.match_reason_keys.filter((key): key is string => typeof key === "string").slice(0, 3)
+    : ["profile"];
   const attribution = job ? sourceAttribution(job, locale) : null;
   const removeCurrent = useCallback(
     (direction: -1 | 1) => {
@@ -1018,6 +1041,9 @@ function JobsView({
                         ? t.jobs.hybrid
                         : t.jobs.onsite}
                   </span>
+                  <span className="personal-match-badge">
+                    <strong>{job.match}%</strong> {t.jobs.match}
+                  </span>
                 </div>
                 <h2>{job.title}</h2>
                 <p>{job.summary}</p>
@@ -1212,19 +1238,13 @@ function JobsView({
                 <small>{t.jobs.relevance}</small>
               </div>
               <div className="match-reasons">
-                <strong>{t.jobs.channel}</strong>
-                <p>
-                  <i>✓</i>
-                  {t.capability[job.applyCapability].label}
-                </p>
-                <p>
-                  <i>✓</i>
-                  {t.jobs.updated}
-                </p>
-                <p>
-                  <i>✓</i>
-                  {t.jobs.privateDestination}
-                </p>
+                <strong>{t.jobs.relevance}</strong>
+                {matchReasons.map((reason) => (
+                  <p key={reason}>
+                    <i>✓</i>
+                    {matchReasonCopy[locale][reason] ?? matchReasonCopy[locale].profile}
+                  </p>
+                ))}
               </div>
               <hr />
               <h3>{t.jobs.about}</h3>

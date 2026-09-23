@@ -4,6 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
+import { calculateJobMatch } from "../lib/job-match.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -195,6 +196,7 @@ test("guides first-time dashboard visitors through every job action", async () =
   const styles = await readFile(new URL("app/globals.css", root), "utf8");
   assert.match(tour, /landeo-dashboard-tour-v1/);
   assert.match(tour, /localStorage\.setItem\(storageKey, "complete"\)/);
+  assert.match(tour, /dashboard_tour_version/);
   assert.match(tour, /role="dialog"/);
   assert.match(tour, /aria-modal="true"/);
   assert.match(tour, /Automática significa/);
@@ -209,6 +211,44 @@ test("guides first-time dashboard visitors through every job action", async () =
   assert.match(productApp, /querySelector\("\.dashboard-tour-layer"\)/);
   assert.match(styles, /\.dashboard-tour-spotlight/);
   assert.match(styles, /\.dashboard-tour-card\.is-anchored/);
+});
+
+test("calculates a personalized job match without inflating it by apply channel", () => {
+  const profile = {
+    role: "Frontend React developer",
+    location: "Madrid",
+    country: "España",
+    skills: ["React", "TypeScript", "Testing"],
+    workModes: ["Remoto", "Híbrido"],
+    minSalary: 45000,
+    maxSalary: 70000,
+    yearsExperience: 4,
+  };
+  const aligned = calculateJobMatch({
+    title: "Frontend React Developer",
+    summary: "Build a TypeScript product with automated testing.",
+    description: "React, TypeScript and testing for a distributed product team.",
+    location: "Madrid, España",
+    work_mode: "Híbrido",
+    salary_min: 50000,
+    salary_max: 65000,
+    seniority: "Mid level",
+    metadata: {},
+  }, profile);
+  const unrelated = calculateJobMatch({
+    title: "Senior Medical Sales Director",
+    summary: "Lead hospital sales across Lisbon.",
+    description: "Healthcare procurement and enterprise sales.",
+    location: "Lisboa, Portugal",
+    work_mode: "Presencial",
+    salary_min: 25000,
+    salary_max: 35000,
+    seniority: "Senior",
+    metadata: {},
+  }, profile);
+  assert.ok(aligned.score > unrelated.score);
+  assert.ok(aligned.reasons.includes("skills"));
+  assert.ok(aligned.reasons.includes("location"));
 });
 
 test("keeps the marketing demo isolated from real applications", async () => {

@@ -10,7 +10,7 @@ import {
 } from "motion/react";
 import Link from "./SafeLink";
 import { Brand } from "./Brand";
-import { completeWebOnboarding } from "../lib/landeo";
+import { completeWebOnboarding, currentUser, loadProfile } from "../lib/landeo";
 
 type Locale = "es" | "en";
 type Step =
@@ -524,12 +524,35 @@ export default function Onboarding() {
     [cityOpen, setCityOpen] = useState(false),
     [cityResults, setCityResults] = useState<WorldCity[]>([]),
     [cityLoading, setCityLoading] = useState(false),
-    [draftReady, setDraftReady] = useState(false);
+    [draftReady, setDraftReady] = useState(false),
+    [completionChecked, setCompletionChecked] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null),
     step = steps[index],
     t = copy[locale],
     ambitious = answers.interviews > 4,
     categorySpecialties = specialties[answers.category] ?? [];
+  useEffect(() => {
+    let active = true;
+    async function guardCompletedOnboarding() {
+      let redirecting = false;
+      try {
+        const user = await currentUser();
+        if (user) {
+          const profile = await loadProfile();
+          if (profile?.onboardingCompletedAt) {
+            redirecting = true;
+            localStorage.removeItem("landeo-onboarding-draft");
+            window.location.replace("/app/jobs");
+            return;
+          }
+        }
+      } finally {
+        if (active && !redirecting) setCompletionChecked(true);
+      }
+    }
+    void guardCompletedOnboarding();
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     const saved = localStorage.getItem("landeo-locale"),
       draft = localStorage.getItem("landeo-onboarding-draft");
@@ -1175,6 +1198,13 @@ export default function Onboarding() {
     );
   else body = <Welcome locale={locale} />;
   const supportHref = `mailto:careers@haired.app?subject=${encodeURIComponent(locale === "es" ? "Problema durante el onboarding de Landeo" : "Problem during Landeo onboarding")}&body=${encodeURIComponent(locale === "es" ? `Hola, he encontrado un problema en el paso ${index + 1} del onboarding. Descripción:` : `Hi, I found a problem on step ${index + 1} of onboarding. Description:`)}`;
+  if (!completionChecked) {
+    return (
+      <main className="onboarding-page onboarding-v2 onboarding-checking" role="status" aria-live="polite">
+        <div><span aria-hidden="true">↻</span><p>{locale === "es" ? "Preparando tu experiencia…" : "Preparing your experience…"}</p></div>
+      </main>
+    );
+  }
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">

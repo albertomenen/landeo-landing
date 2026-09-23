@@ -37,6 +37,14 @@ const greenhouseBoards = [
   ["aircallioinc", "Aircall", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
   ["neoris", "NEORIS", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
   ["workato", "Workato", ["ES", "MX", "CO", "US", "GB", "REMOTE"]],
+  ["anthropic", "Anthropic"],
+  ["airbnb", "Airbnb"],
+  ["dropbox", "Dropbox"],
+  ["duolingo", "Duolingo"],
+  ["robinhood", "Robinhood"],
+  ["samsara", "Samsara"],
+  ["scaleai", "Scale AI"],
+  ["stripe", "Stripe"],
 ];
 
 const leverBoards = [

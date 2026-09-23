@@ -4584,6 +4584,41 @@ h1 em:after {
   background: #eef0f7;
   color: #596b9d;
 }
+.personal-match-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  min-height: 24px;
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 1px solid rgba(47, 111, 76, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #edf8e7, #e2f5ec);
+  color: var(--green);
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.personal-match-badge strong {
+  font-size: 11px;
+}
+.onboarding-checking {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+}
+.onboarding-checking > div {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.onboarding-checking span {
+  color: var(--green);
+  font-size: 28px;
+  animation: route-spinner 0.9s linear infinite;
+}
 @media (max-width: 800px) {
   .filters-panel .work-mode-filter {
     display: flex !important;

@@ -12,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import { AnimatePresence, m } from "motion/react";
 import type { DashboardLocale } from "../lib/dashboard-i18n";
+import { createSupabaseBrowserClient } from "../lib/supabase/client";
 
 type TourRect = {
   top: number;
@@ -221,12 +222,27 @@ export function DashboardTour({
     if (!mounted || !enabled || checkedKey.current === storageKey) return;
     checkedKey.current = storageKey;
     if (window.localStorage.getItem(storageKey) === "complete") return;
-    const timer = window.setTimeout(() => {
-      setIndex(0);
-      setOpen(true);
-    }, 550);
-    return () => window.clearTimeout(timer);
-  }, [enabled, mounted, storageKey]);
+    let cancelled = false;
+    let timer: number | undefined;
+    async function checkAccountCompletion() {
+      if (identityKey !== "guest") {
+        const { data } = await createSupabaseBrowserClient().auth.getUser();
+        if (data.user?.user_metadata?.dashboard_tour_version === TOUR_VERSION) {
+          window.localStorage.setItem(storageKey, "complete");
+          return;
+        }
+      }
+      if (!cancelled) timer = window.setTimeout(() => {
+        setIndex(0);
+        setOpen(true);
+      }, 550);
+    }
+    void checkAccountCompletion();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [enabled, identityKey, mounted, storageKey]);
 
   const measure = useCallback(() => {
     const target = visibleTarget(step.selector);
@@ -270,8 +286,13 @@ export function DashboardTour({
 
   const complete = useCallback(() => {
     window.localStorage.setItem(storageKey, "complete");
+    if (identityKey !== "guest") {
+      void createSupabaseBrowserClient().auth.updateUser({
+        data: { dashboard_tour_version: TOUR_VERSION },
+      });
+    }
     setOpen(false);
-  }, [storageKey]);
+  }, [identityKey, storageKey]);
 
   useEffect(() => {
     if (!open) return;
