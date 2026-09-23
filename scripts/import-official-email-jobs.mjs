@@ -87,6 +87,150 @@ const sources = [
       ["PHP Developer", "India / Remote", "Remoto", "REMOTE", "Application: PHP Developer", "Remote PHP development role at an AI-native B2B creative agency."],
     ],
   },
+  {
+    company: "Kevala",
+    url: "https://www.kevala.com/career/senior-software-engineer-full-stack-03232026",
+    email: "careers@kevala.com",
+    industry: "Energy Technology",
+    jobs: [
+      ["Senior Software Engineer, Full Stack", "Remote — United States", "Remoto", "US", "Application for Senior Software Engineer, Full Stack", "Senior full-stack engineering role building cloud applications for electric-grid planning and analysis.", 120000, 160000, "USD", "year", "Full time", "2026-03-23T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "Kevala",
+    url: "https://www.kevala.com/career/senior-data-scientist-01122026",
+    email: "careers@kevala.com",
+    industry: "Energy Technology",
+    jobs: [
+      ["Senior Data Scientist", "Remote — United States", "Remoto", "US", "Application for Senior Data Scientist", "Senior data-science role developing production models for solar, storage, electric vehicles and the power grid.", 112000, 162000, "USD", "year", "Full time", "2026-01-12T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "Kevala",
+    url: "https://www.kevala.com/career/staff-site-reliability-engineer-01122026",
+    email: "careers@kevala.com",
+    industry: "Energy Technology",
+    jobs: [
+      ["Staff Site Reliability Engineer", "Remote — United States", "Remoto", "US", "Application for Staff Site Reliability Engineer", "Staff-level SRE role leading the reliability, security and architecture of Kevala's cloud infrastructure.", 136000, 180000, "USD", "year", "Full time", "2026-01-12T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "The Ram Group",
+    url: "https://theramgroupinc.com/careers/executive-assistant-remote",
+    email: "ea@theramgroupinc.com",
+    industry: "Industrial Technology",
+    jobs: [
+      ["Executive Assistant", "Remote — United States", "Remoto", "US", "Application: Executive Assistant", "Part-time executive support role coordinating schedules, communication and follow-up in an industrial technology company.", 60000, 80000, "USD", "year", "Part time"],
+    ],
+  },
+  {
+    company: "The Ram Group",
+    url: "https://theramgroupinc.com/careers/supply-chain-specialist-remote",
+    email: "chain@theramgroupinc.com",
+    industry: "Industrial Technology",
+    jobs: [
+      ["Supply Chain Specialist", "Remote — United States", "Remoto", "US", "Application: Supply Chain Specialist", "Part-time sourcing and supply-chain role supporting industrial machinery, components and project deliveries.", 85000, 105000, "USD", "year", "Part time"],
+    ],
+  },
+  {
+    company: "The Ram Group",
+    url: "https://theramgroupinc.com/careers/partnerships-manager-remote",
+    email: "partnership@theramgroupinc.com",
+    industry: "Industrial Technology",
+    jobs: [
+      ["Partnerships Manager", "Remote — United States", "Remoto", "US", "Application: Partnerships Manager", "Part-time business-development role building partnerships across industrial automation and manufacturing markets.", 105000, 135000, "USD", "year", "Part time"],
+    ],
+  },
+  {
+    company: "The Ram Group",
+    url: "https://theramgroupinc.com/careers/cad-automation-engineer-remote",
+    email: "cad@theramgroupinc.com",
+    industry: "Industrial Technology",
+    jobs: [
+      ["CAD Automation Engineer", "Remote — United States", "Remoto", "US", "Application: CAD Automation Engineer", "Part-time engineering role creating CAD automation workflows, reusable standards and configuration tools.", 100000, 130000, "USD", "year", "Part time"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/client-reporting-specialist-hybrid-schedule-from-any-office/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Client Reporting Specialist", "Hybrid — multiple US offices", "Híbrido", "US", "Application: Client Reporting Specialist", "Client reporting and legal-billing compliance role available from any McCarter office.", 90000, 110000, "USD", "year", "Full time", "2026-09-22T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/patent-specialist-4/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Patent Specialist", "Boston, Massachusetts, United States", "Presencial", "US", "Application: Patent Specialist", "Patent prosecution support role assisting legal professionals with filings and portfolio administration.", 50000, 90000, "USD", "year", "Full time", "2026-09-01T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/information-disclosure-statements-paralegal/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Information Disclosure Statements Paralegal", "Boston, Massachusetts, United States", "Presencial", "US", "Application: Information Disclosure Statements Paralegal", "Patent-practice paralegal role focused on information disclosure statements and prosecution support.", 80000, 100000, "USD", "year", "Full time", "2026-09-01T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/word-processing-project-service-center-specialist/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Word Processing / Project Service Center Specialist", "Newark, New Jersey, United States", "Presencial", "US", "Application: Word Processing / Project Service Center Specialist", "Document production and project-service role supporting legal and non-legal staff.", 75000, 85000, "USD", "year", "Full time", "2026-08-20T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/onboarding-offboarding-manager/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Onboarding / Offboarding Manager", "Newark, New Jersey, United States", "Presencial", "US", "Application: Onboarding / Offboarding Manager", "HR operations role managing the onboarding lifecycle for attorneys and professional staff.", 105000, 115000, "USD", "year", "Full time", "2026-08-19T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/litigation-legal-assistant/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Litigation Legal Assistant", "Newark, New Jersey, United States", "Presencial", "US", "Application: Litigation Legal Assistant", "Experienced litigation legal-assistant role providing confidential administrative and document support.", 85000, 95000, "USD", "year", "Full time", "2026-08-11T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/litigation-associate/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Litigation Associate", "Stamford, Connecticut, United States", "Presencial", "US", "Application: Litigation Associate", "Associate attorney role focused on real-estate, financial-services and creditors' rights litigation.", 190000, 220000, "USD", "year", "Full time", "2026-08-11T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/legal-assistant-2/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Legal Assistant", "Miami, Florida, United States", "Presencial", "US", "Application: Legal Assistant", "Legal administrative support role for McCarter's Miami office.", 70000, 75000, "USD", "year", "Full time", "2026-04-17T00:00:00.000Z"],
+    ],
+  },
+  {
+    company: "McCarter & English",
+    url: "https://www.mccarter.com/jobs/foreign-filing-reporting-paralegal-2/",
+    email: "recruiting@mccarter.com",
+    industry: "Legal Services",
+    jobs: [
+      ["Foreign Filing Reporting Paralegal", "Boston, Massachusetts, United States", "Presencial", "US", "Application: Foreign Filing Reporting Paralegal", "Paralegal role reviewing foreign correspondence, filing deadlines and client reporting.", 53000, 53000, "USD", "year", "Full time", "2026-02-24T00:00:00.000Z"],
+    ],
+  },
 ];
 
 async function loadEnv() {
@@ -110,14 +254,26 @@ function slug(value) {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
 }
 
+function decodeCloudflareEmail(encoded) {
+  const key = Number.parseInt(encoded.slice(0, 2), 16);
+  let result = "";
+  for (let index = 2; index < encoded.length; index += 2) {
+    result += String.fromCharCode(Number.parseInt(encoded.slice(index, index + 2), 16) ^ key);
+  }
+  return result;
+}
+
 async function verifySource(source) {
   const response = await fetch(source.url, {
     headers: { "User-Agent": "Landeo official job verifier/1.0 (+https://getlandeo.com)" },
   });
   if (!response.ok) throw new Error(`${source.company}: official page returned ${response.status}`);
   const rawBody = await response.text();
+  const publishedEmails = [
+    ...rawBody.matchAll(/data-cfemail="([0-9a-f]+)"/gi),
+  ].map((match) => decodeCloudflareEmail(match[1]).toLowerCase());
   const body = rawBody.toLowerCase();
-  if (!body.includes(source.email.toLowerCase())) {
+  if (!body.includes(source.email.toLowerCase()) && !publishedEmails.includes(source.email.toLowerCase())) {
     throw new Error(`${source.company}: application email is no longer published on the official page`);
   }
   const searchable = rawBody
@@ -140,7 +296,7 @@ function buildRows() {
   const jobs = [];
   const targets = [];
   for (const source of sources) {
-    for (const [title, location, workMode, market, subject, description] of source.jobs) {
+    for (const [title, location, workMode, market, subject, description, salaryMin = null, salaryMax = null, salaryCurrency, salaryInterval, contractType = "Full time", publishedAt] of source.jobs) {
       const externalId = `${slug(source.company)}:${slug(title)}:${slug(location)}`;
       const id = stableUuid(`official-email:${externalId}`);
       jobs.push({
@@ -153,14 +309,14 @@ function buildRows() {
         description,
         location,
         work_mode: workMode,
-        salary_min: null,
-        salary_max: null,
-        contract_type: "Full time",
+        salary_min: salaryMin,
+        salary_max: salaryMax,
+        contract_type: contractType,
         seniority: /senior|manager/i.test(title) ? "Senior" : /junior|entry-level/i.test(title) ? "Entry level" : null,
         industry: source.industry,
         apply_mode: "direct",
         status: "active",
-        published_at: verifiedAt,
+        published_at: publishedAt || verifiedAt,
         expires_at: null,
         application_capability: "automatic",
         application_provider: "email",
@@ -169,7 +325,9 @@ function buildRows() {
           canonical_apply_url: source.url,
           apply_provider: "email",
           market_country: market,
-          salary_currency: market === "US" ? "USD" : "EUR",
+          salary_currency: salaryCurrency || (market === "US" ? "USD" : "EUR"),
+          salary_interval: salaryInterval || (salaryMin ? "year" : null),
+          salary_disclosed: Boolean(salaryMin),
           official_company_board: true,
           verified_email_application: true,
           employer_delivery_confirmed: true,
