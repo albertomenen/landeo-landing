@@ -154,13 +154,25 @@ test("shows accessible route feedback without flashing on quick navigation", asy
   );
   const styles = await readFile(new URL("app/globals.css", root), "utf8");
   assert.match(layout, /<RouteTransition\s*\/>/);
-  assert.match(safeLink, /from "next\/link"/);
+  assert.match(safeLink, /return <a href=\{href\}/);
   assert.match(transition, /SHOW_DELAY_MS = 180/);
   assert.match(transition, /SAFETY_TIMEOUT_MS/);
   assert.match(transition, /role="status"/);
   assert.match(loading, /route-transition-fallback/);
   assert.match(styles, /\.route-transition\.is-visible/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
+});
+
+test("keeps authentication redirects recoverable and preserves the requested route", async () => {
+  const authCard = await readFile(
+    new URL("components/AuthCard.tsx", root),
+    "utf8",
+  );
+  assert.match(authCard, /skipBrowserRedirect:true/);
+  assert.match(authCard, /window\.location\.assign\(data\.url\)/);
+  assert.match(authCard, /OAUTH_REDIRECT_TIMEOUT_MS/);
+  assert.match(authCard, /new URLSearchParams\(window\.location\.search\)\.get\("next"\)/);
+  assert.match(authCard, /window\.location\.replace\("\/app\/jobs"\)/);
 });
 
 test("guides first-time dashboard visitors through every job action", async () => {
