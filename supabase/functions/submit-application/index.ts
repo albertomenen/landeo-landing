@@ -59,6 +59,14 @@ function safeDisplayName(value: unknown) {
     .slice(0, 80);
 }
 
+function safeEmailSubject(value: unknown) {
+  return String(value ?? "")
+    .replace(/[\r\n\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+}
+
 type RevenueCatPlatform = "ios" | "android";
 type ApplicationPlatform = RevenueCatPlatform | "web";
 
@@ -569,6 +577,9 @@ Deno.serve(async (request) => {
       const coverLetterPlain = coverLetterText
         ? `\n\nCarta de presentación personalizada:\n\n${coverLetterText}`
         : "";
+      const officialSubject = safeEmailSubject(
+        target.metadata?.application_subject,
+      );
       const resendResponse = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -581,7 +592,8 @@ Deno.serve(async (request) => {
           reply_to: candidateEmail,
           subject: internalIntake
             ? `[Landeo · Por gestionar] ${job.company} — ${job.title} — ${profile.full_name}`
-            : `Candidatura: ${job.title} — ${profile.full_name}`,
+            : officialSubject ||
+              `Candidatura: ${job.title} — ${profile.full_name}`,
           html: `<p>Hola,</p><p>${introduction}</p><p>Email: ${
             escapeHtml(candidateEmail)
           }${phoneLine}</p>${coverLetterHtml}<p>CV adjunto. ${

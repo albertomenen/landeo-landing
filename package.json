@@ -14,6 +14,7 @@
     "jobs:import-top": "node scripts/import-top-company-jobs.mjs",
     "jobs:import-yc": "node scripts/import-yc-jobs.mjs",
     "jobs:import-regional": "node scripts/import-regional-jobs.mjs",
+    "jobs:import-email": "node scripts/import-official-email-jobs.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
