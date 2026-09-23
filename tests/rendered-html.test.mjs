@@ -251,6 +251,23 @@ test("calculates a personalized job match without inflating it by apply channel"
   assert.ok(aligned.reasons.includes("location"));
 });
 
+test("offers the real Landeo plans before opening Stripe", async () => {
+  const productApp = await readFile(
+    new URL("components/ProductApp.tsx", root),
+    "utf8",
+  );
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(productApp, /14,99 €/);
+  assert.match(productApp, /34,99 €/);
+  assert.match(productApp, /89,99 €/);
+  assert.match(productApp, /startStripe\("checkout", selectedPlan\)/);
+  assert.match(productApp, /name="landeo-plan"/);
+  assert.match(productApp, /Secure payment with Stripe/);
+  assert.match(styles, /\.plan-picker-modal/);
+  assert.match(styles, /\.plan-picker-options label\.selected/);
+  assert.match(styles, /\.plan-picker-visual/);
+});
+
 test("keeps the marketing demo isolated from real applications", async () => {
   assert.equal(marketingDemoJobs.length, 20);
   assert.equal(new Set(marketingDemoJobs.map((job) => job.id)).size, 20);

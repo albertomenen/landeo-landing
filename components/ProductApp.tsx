@@ -1295,13 +1295,25 @@ function Paywall({
   onClose: () => void;
 }) {
   const t = dashboardCopy[locale].paywall;
+  const [selectedPlan, setSelectedPlan] = useState<"starter" | "pro" | "sprint">("pro");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const plans: Array<{id:"starter"|"pro"|"sprint";name:string;price:string;period:string;detail:string;popular?:string;extra?:string}> = locale === "es" ? [
+    { id: "starter" as const, name: "Starter", price: "14,99 €", period: "/ mes", detail: "50 candidaturas al mes" },
+    { id: "pro" as const, name: "Pro", price: "34,99 €", period: "/ mes", detail: "200 candidaturas al mes", popular: "Más elegido" },
+    { id: "sprint" as const, name: "Sprint", price: "89,99 €", period: "/ 3 meses", detail: "600 candidaturas disponibles", extra: "Equivale a 29,99 €/mes" },
+  ] : [
+    { id: "starter" as const, name: "Starter", price: "€14.99", period: "/ month", detail: "50 applications per month" },
+    { id: "pro" as const, name: "Pro", price: "€34.99", period: "/ month", detail: "200 applications per month", popular: "Most popular" },
+    { id: "sprint" as const, name: "Sprint", price: "€89.99", period: "/ 3 months", detail: "600 applications available", extra: "Equivalent to €29.99/month" },
+  ];
+  const chosen = plans.find((plan) => plan.id === selectedPlan) ?? plans[1];
   async function checkout() {
     setLoading(true);
     setError("");
     try {
-      await startStripe("checkout");
+      window.localStorage.setItem("landeo-selected-plan", selectedPlan);
+      await startStripe("checkout", selectedPlan);
     } catch (value) {
       setError(value instanceof Error ? value.message : t.error);
       setLoading(false);
@@ -1316,7 +1328,7 @@ function Paywall({
     >
       <button className="modal-scrim" aria-label={t.close} onClick={onClose} />
       <m.section
-        className="paywall-modal"
+        className="paywall-modal plan-picker-modal"
         role="dialog"
         aria-modal="true"
         initial={{ opacity: 0, y: 22, scale: 0.96 }}
@@ -1324,33 +1336,47 @@ function Paywall({
         exit={{ opacity: 0, y: 14, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 230, damping: 24 }}
       >
-        <button className="modal-close" onClick={onClose} aria-label={t.close}>
+        <button className="modal-close plan-picker-close" onClick={onClose} aria-label={t.close}>
           ×
         </button>
-        <span className="pro-gem">✦</span>
-        <p className="overline">LANDEO PRO · STRIPE</p>
-        <h2>{t.title}</h2>
-        <p>{t.description}</p>
-        <ul>
-          {t.benefits.map((benefit) => (
-            <li key={benefit}>✓ {benefit}</li>
-          ))}
-        </ul>
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button
-          className="button button-primary"
-          onClick={checkout}
-          disabled={loading}
-        >
-          {loading ? t.opening : t.continue}
-        </button>
-        <button className="text-button" onClick={onClose}>
-          {t.free}
-        </button>
+        <div className="plan-picker-main">
+          <div className="plan-picker-brand"><Brand /></div>
+          <p className="overline">LANDEO MEMBERSHIP</p>
+          <h2>{locale === "es" ? "Convierte tu búsqueda en entrevistas." : "Turn your job search into interviews."}</h2>
+          <p className="plan-picker-lead">{locale === "es" ? "Elige el ritmo que mejor encaja contigo. Todas las funciones están incluidas." : "Choose the pace that fits you. Every feature is included."}</p>
+          <div className="plan-picker-assurance"><span>✓</span>{locale === "es" ? "Sin permanencia. Cancela cuando quieras." : "No commitment. Cancel any time."}</div>
+          <fieldset className="plan-picker-options" aria-label={locale === "es" ? "Selecciona un plan" : "Choose a plan"}>
+            {plans.map((plan) => {
+              const active = plan.id === selectedPlan;
+              return <m.label key={plan.id} className={active ? "selected" : ""} whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }}>
+                <input type="radio" name="landeo-plan" value={plan.id} checked={active} onChange={() => setSelectedPlan(plan.id)} />
+                <span className="plan-picker-radio">{active ? "✓" : ""}</span>
+                <span className="plan-picker-name"><strong>{plan.name}</strong><small>{plan.detail}{plan.extra ? ` · ${plan.extra}` : ""}</small></span>
+                <span className="plan-picker-price"><strong>{plan.price}</strong><small>{plan.period}</small></span>
+                {plan.popular && <b>{plan.popular}</b>}
+              </m.label>;
+            })}
+          </fieldset>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button className="button button-primary plan-picker-cta" onClick={checkout} disabled={loading}>
+            {loading ? t.opening : locale === "es" ? `Empezar con ${chosen.name}` : `Start with ${chosen.name}`}
+          </button>
+          <div className="plan-picker-footer">
+            <span>◆ {locale === "es" ? "Pago seguro con Stripe" : "Secure payment with Stripe"}</span>
+            <span><Link href="/terms">{locale === "es" ? "Términos" : "Terms"}</Link><Link href="/privacy">{locale === "es" ? "Privacidad" : "Privacy"}</Link></span>
+          </div>
+        </div>
+        <div className="plan-picker-visual" aria-hidden="true">
+          <p>{locale === "es" ? "Tu candidatura, preparada para cada puesto" : "Your application, tailored to every role"}</p>
+          <div className="plan-demo-window">
+            <div className="plan-demo-bar"><i/><i/><i/><span>LANDEO · APPLICATION</span></div>
+            <div className="plan-demo-job"><span className="plan-demo-logo">L</span><div><strong>Product Designer</strong><small>Remote · Technology</small></div><b>92% MATCH</b></div>
+            <div className="plan-demo-progress"><span><i style={{ width: "92%" }} /></span><small>{locale === "es" ? "Perfil adaptado al puesto" : "Profile tailored to the role"}</small></div>
+            <div className="plan-demo-document"><span/><span/><span/><span/><div><i/><i/><i/></div></div>
+            <div className="plan-demo-ready"><span>✓</span><div><strong>{locale === "es" ? "Lista para postularte" : "Ready to apply"}</strong><small>{locale === "es" ? "CV y carta personalizados" : "Tailored résumé and cover letter"}</small></div></div>
+          </div>
+          <div className="plan-visual-pills"><span>✓ {locale === "es" ? "CV adaptado" : "Tailored résumé"}</span><span>✦ {locale === "es" ? "Carta con IA" : "AI cover letter"}</span><span>↗ {locale === "es" ? "Seguimiento" : "Tracking"}</span></div>
+        </div>
       </m.section>
     </m.div>
   );
