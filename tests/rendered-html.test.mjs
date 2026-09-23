@@ -115,12 +115,18 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(productApp, /LazyMotion/);
   assert.match(productApp, /dashboardViewMotion/);
   assert.match(productApp, /jobCardMotion/);
+  assert.match(productApp, /actionButtonMotion/);
+  assert.match(productApp, /passIconMotion/);
+  assert.match(productApp, /saveIconMotion/);
+  assert.match(productApp, /applyIconMotion/);
   assert.match(productApp, /reducedMotion="user"/);
   assert.match(styles, /\.deck-actions button:focus-visible/);
   assert.match(styles, /\.dashboard-view-motion/);
   assert.match(styles, /\.dashboard-profile-progress/);
   assert.match(styles, /\.action-apply:hover:not\(:disabled\)::after/);
   assert.match(styles, /linear-gradient\(135deg,\s*#3b7f5a,\s*#2f6f4c\)/);
+  assert.match(styles, /@keyframes action-apply-alive/);
+  assert.match(styles, /@keyframes action-ready-pulse/);
 });
 
 test("tracks each application with a persistent user-owned pipeline", async () => {

@@ -95,6 +95,34 @@ const jobCardMotion = {
     rotate: direction < 0 ? -2.5 : 2.5,
   }),
 };
+const actionButtonMotion = {
+  rest: { y: 0, scale: 1 },
+  hover: {
+    y: -4,
+    scale: 1.015,
+    transition: { type: "spring", stiffness: 420, damping: 24 },
+  },
+  tap: { y: 0, scale: 0.955, transition: { duration: 0.1 } },
+} as const;
+const actionLabelMotion = {
+  rest: { x: 0 },
+  hover: { x: 2, transition: { type: "spring", stiffness: 500, damping: 28 } },
+} as const;
+const passIconMotion = {
+  rest: { rotate: 0, scale: 1 },
+  hover: { rotate: 90, scale: 1.1 },
+  tap: { rotate: 70, scale: 0.88 },
+} as const;
+const saveIconMotion = {
+  rest: { rotate: 0, scale: 1 },
+  hover: { rotate: -7, scale: 1.16 },
+  tap: { rotate: 0, scale: 0.82 },
+} as const;
+const applyIconMotion = {
+  rest: { x: 0, scale: 1 },
+  hover: { x: 4, scale: 1.08 },
+  tap: { x: 7, scale: 0.9 },
+} as const;
 const localized = (locale: DashboardLocale, es: string, en: string) =>
   locale === "es" ? es : en;
 const trackingStages: TrackingStage[] = [
@@ -1115,48 +1143,54 @@ function JobsView({
             <m.button
               className="action-pass"
               data-tour="pass-action"
-              whileHover={job ? { y: -3 } : {}}
-              whileTap={job ? { scale: 0.96, rotate: -1 } : {}}
+              variants={actionButtonMotion}
+              initial="rest"
+              animate="rest"
+              whileHover={job ? "hover" : "rest"}
+              whileTap={job ? "tap" : "rest"}
               onClick={pass}
               disabled={!job}
             >
-              <b>×</b>
-              <span>
+              <m.b variants={passIconMotion}>×</m.b>
+              <m.span variants={actionLabelMotion}>
                 {t.jobs.pass}
                 <small>←</small>
-              </span>
+              </m.span>
             </m.button>
             <m.button
               className={`action-save ${job && savedJobIds.has(job.id) ? "is-saved" : ""}`}
               data-tour="save-action"
-              animate={{
-                scale: job && savedJobIds.has(job.id) ? [1, 0.94, 1.04, 1] : 1,
-              }}
-              whileHover={job ? { y: -3 } : {}}
-              whileTap={job ? { scale: 0.95 } : {}}
+              variants={actionButtonMotion}
+              initial="rest"
+              animate="rest"
+              whileHover={job ? "hover" : "rest"}
+              whileTap={job ? "tap" : "rest"}
               onClick={save}
               disabled={!job}
               aria-pressed={Boolean(job && savedJobIds.has(job.id))}
             >
-              <b>{job && savedJobIds.has(job.id) ? "♥" : "♡"}</b>
-              <span>
+              <m.b variants={saveIconMotion}>{job && savedJobIds.has(job.id) ? "♥" : "♡"}</m.b>
+              <m.span variants={actionLabelMotion}>
                 {t.jobs.save}
                 <small>S</small>
-              </span>
+              </m.span>
             </m.button>
             <m.button
               className="action-apply"
               data-tour="apply-action"
-              whileHover={job ? { y: -3, scale: 1.01 } : {}}
-              whileTap={job ? { scale: 0.96 } : {}}
+              variants={actionButtonMotion}
+              initial="rest"
+              animate="rest"
+              whileHover={job ? "hover" : "rest"}
+              whileTap={job ? "tap" : "rest"}
               onClick={apply}
               disabled={!job}
             >
-              <b>→</b>
-              <span>
+              <m.b variants={applyIconMotion}>→</m.b>
+              <m.span variants={actionLabelMotion}>
                 {t.jobs.apply}
                 <small>ENTER</small>
-              </span>
+              </m.span>
             </m.button>
           </div>
         </section>
