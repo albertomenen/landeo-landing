@@ -168,7 +168,7 @@ export default function AffiliateProgram({ initialLocale }: { initialLocale: Lan
   return (
     <main className="affiliate-page">
       <header className="affiliate-header">
-        <Link className="brand" href="/" aria-label="Landeo"><span className="brand-mark">L</span><span>Landeo</span></Link>
+        <Link className="brand" href="/" aria-label="Landeo"><span className="brand-mark" aria-hidden="true">L</span><span>Landeo</span></Link>
         <nav aria-label={text.nav.label}>
           <Link href="/">{text.nav.back}</Link>
           <Link href="/pricing">{text.nav.pricing}</Link>
@@ -244,7 +244,7 @@ export default function AffiliateProgram({ initialLocale }: { initialLocale: Lan
       </section>
 
       <footer className="affiliate-footer">
-        <div><Link className="brand" href="/"><span className="brand-mark">L</span><span>Landeo</span></Link><p>{text.footer.tagline}</p></div>
+        <div><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true">L</span><span>Landeo</span></Link><p>{text.footer.tagline}</p></div>
         <nav aria-label={text.nav.label}><Link href="/pricing">{text.nav.pricing}</Link><Link href="/affiliate-program">{text.footer.affiliate}</Link><Link href="/privacy">{text.footer.privacy}</Link><Link href="/terms">{text.footer.terms}</Link></nav>
         <small>© 2026 Landeo · {text.footer.legal}</small>
       </footer>

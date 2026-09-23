@@ -23,6 +23,7 @@ async function render(path = "/", requestHeaders = {}) {
 }
 
 test("server-renders the Landeo landing page and social metadata", async () => {
+  await access(new URL("public/brand/landeo-mark.webp", root));
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -44,6 +45,7 @@ test("server-renders the Landeo landing page and social metadata", async () => {
   assert.doesNotMatch(html, /Northstar/);
   assert.match(html, /aria-label="Cambiar idioma"/i);
   assert.match(html, /og-bilingual\.png/);
+  assert.match(html, /brand\/landeo-mark\.webp/);
   assert.match(
     html,
     /<meta name="msvalidate\.01" content="8817032EE0ED5D0365743F3506BDC91B"\s*\/>/i,

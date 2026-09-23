@@ -216,7 +216,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
     <main className="landing-page">
       <header className="site-header">
         <Link className="brand" href="/" aria-label="Landeo">
-          <span className="brand-mark">L</span><span>Landeo</span>
+          <span className="brand-mark" aria-hidden="true">L</span><span>Landeo</span>
         </Link>
         <nav aria-label={t.nav.label}>
           <a href="#how-it-works">{t.nav.how}</a>
@@ -392,7 +392,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
       </section>
 
       <footer className="site-footer">
-        <div><Link className="brand" href="/"><span className="brand-mark">L</span><span>Landeo</span></Link><p>{t.footer.tagline}</p></div>
+        <div><Link className="brand" href="/"><span className="brand-mark" aria-hidden="true">L</span><span>Landeo</span></Link><p>{t.footer.tagline}</p></div>
         <nav aria-label={t.nav.label}><Link href="/pricing">{t.nav.pricing}</Link><Link href="/support">{t.footer.support}</Link><Link href="/affiliate-program">{t.footer.affiliate}</Link><Link href="/privacy">{t.footer.privacy}</Link><Link href="/terms">{t.footer.terms}</Link><Link href="/login">{t.nav.login}</Link></nav>
         <small>© 2026 Landeo</small>
       </footer>

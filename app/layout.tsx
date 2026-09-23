@@ -18,7 +18,7 @@ export async function generateMetadata():Promise<Metadata>{
   const title=locale==="es"?"Landeo — Deja los formularios. Empieza a recibir respuestas":"Landeo — Stop filling out forms. Start hearing back";
   const description=locale==="es"?"Encuentra ofertas que encajan contigo y postúlate con un único perfil. Tú eliges el trabajo; Landeo quita lo repetitivo.":"Find roles that fit and apply with one universal profile. You choose the opportunity; Landeo removes the repetitive work.";
   const alt=locale==="es"?"Landeo — Buscar trabajo, sin repetir tu historia":"Landeo — Job hunting, without repeating your story";
-  return {metadataBase:origin,title,description,openGraph:{title,description,locale:locale==="es"?"es_ES":"en_GB",alternateLocale:locale==="es"?["en_GB"]:["es_ES"],type:"website",images:[{url:new URL("/og-bilingual.png",origin),width:1729,height:910,alt}]},twitter:{card:"summary_large_image",title,description,images:[new URL("/og-bilingual.png",origin)]}};
+  return {metadataBase:origin,title,description,icons:{icon:[{url:"/brand/landeo-mark.webp",type:"image/webp"}]},openGraph:{title,description,locale:locale==="es"?"es_ES":"en_GB",alternateLocale:locale==="es"?["en_GB"]:["es_ES"],type:"website",images:[{url:new URL("/og-bilingual.png",origin),width:1729,height:910,alt}]},twitter:{card:"summary_large_image",title,description,images:[new URL("/og-bilingual.png",origin)]}};
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
