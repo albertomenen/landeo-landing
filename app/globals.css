@@ -6218,15 +6218,15 @@ h1 em:after {
 }
 .onboarding-choice-grid button {
   appearance: none;
-  min-height: 70px;
+  min-height: 88px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: #fff;
   display: grid;
-  grid-template-columns: 40px 1fr 18px;
+  grid-template-columns: 48px 1fr 20px;
   align-items: center;
-  gap: 13px;
-  padding: 12px 15px;
+  gap: 16px;
+  padding: 16px 18px;
   text-align: left;
   color: var(--text);
   cursor: pointer;
@@ -6243,19 +6243,19 @@ h1 em:after {
 }
 .onboarding-choice-grid button.selected {
   border: 2px solid var(--green);
-  padding: 11px 14px;
+  padding: 15px 17px;
   background: #eef6eb;
   box-shadow: 0 8px 20px rgba(59, 127, 90, 0.1);
 }
 .onboarding-choice-grid button > i {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
   background: #eef2eb;
   display: grid;
   place-items: center;
   font-style: normal;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 850;
   color: var(--dark);
 }
@@ -6269,16 +6269,16 @@ h1 em:after {
   gap: 4px;
 }
 .onboarding-choice-grid strong {
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.25;
 }
 .onboarding-choice-grid small {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.35;
   color: var(--muted);
 }
 .onboarding-choice-grid button > b {
-  font-size: 12px;
+  font-size: 15px;
   color: #a8b4ad;
 }
 .onboarding-choice-grid button.selected > b {
@@ -6634,6 +6634,153 @@ h1 em:after {
   font-weight: 900;
   letter-spacing: 1.7px;
 }
+.authorization-market {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  margin: 22px 0 -8px;
+  padding: 10px 14px;
+  border: 1px solid #dce6da;
+  border-radius: 14px;
+  background: #f1f6ee;
+}
+.authorization-market > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--green);
+  color: white;
+  font-size: 15px;
+}
+.authorization-market > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.authorization-market small {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.authorization-market strong {
+  font-size: 12px;
+  color: var(--text);
+}
+.job-route-map {
+  width: min(700px, 100%);
+  height: 330px;
+  margin: 25px auto 15px;
+  position: relative;
+  border: 1px solid #e2e9df;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(216, 241, 105, 0.2), transparent 34%),
+    linear-gradient(145deg, #f8faf6, #eef3ee);
+  overflow: hidden;
+}
+.route-profile {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  width: 290px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #d4ddd4;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 45px rgba(36, 92, 64, 0.12);
+  text-align: left;
+}
+.route-profile > p {
+  margin: 0 !important;
+  padding: 12px 16px;
+  border-bottom: 1px solid #edf1ec;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.route-profile > p:last-child {
+  border-bottom: 0;
+}
+.route-profile small {
+  color: #94a199;
+  font-size: 7px;
+  letter-spacing: 0.8px;
+}
+.route-profile strong {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.25;
+  text-transform: capitalize;
+}
+.route-company {
+  position: absolute;
+  z-index: 3;
+  width: 158px;
+  min-height: 58px;
+  padding: 9px 11px;
+  border: 1px solid #e5ebe3;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 11px 28px rgba(36, 92, 64, 0.09);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+}
+.route-company img {
+  width: 36px;
+  height: 36px;
+  padding: 5px;
+  border: 1px solid #edf0ec;
+  border-radius: 10px;
+  background: white;
+  object-fit: contain;
+}
+.route-company > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.route-company strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-company small {
+  color: #0d9761;
+  font-size: 8px;
+  font-weight: 800;
+}
+.company-1 { left: 22px; top: 24px; }
+.company-2 { right: 22px; top: 34px; }
+.company-3 { left: 34px; bottom: 28px; }
+.company-4 { right: 30px; bottom: 24px; }
+.route-connector {
+  position: absolute;
+  z-index: 1;
+  width: 190px;
+  height: 4px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #d2ddd3 0 42%, #6d5cff 50%, #d2ddd3 58% 100%);
+  background-size: 230% 100%;
+  transform-origin: center;
+  animation: route-flow 2.4s linear infinite;
+}
+.route-1 { left: 145px; top: 100px; rotate: 18deg; }
+.route-2 { right: 145px; top: 104px; rotate: -17deg; }
+.route-3 { left: 150px; bottom: 92px; rotate: -17deg; }
+.route-4 { right: 145px; bottom: 91px; rotate: 18deg; }
+@keyframes route-flow {
+  to { background-position: -230% 0; }
+}
 .growth-line {
   width: min(500px, 100%);
   height: 170px;
@@ -6849,9 +6996,9 @@ h1 em:after {
   cursor: pointer;
 }
 .onboarding-v2 .onboarding-actions .button {
-  min-height: 45px;
-  font-size: 10px;
-  padding: 12px 20px;
+  min-height: 52px;
+  font-size: 12px;
+  padding: 14px 24px;
 }
 .onboarding-v2 .onboarding-actions button:disabled {
   cursor: not-allowed;
@@ -6905,23 +7052,24 @@ h1 em:after {
     margin-top: 21px;
   }
   .onboarding-choice-grid button {
-    min-height: 62px;
-    grid-template-columns: 36px 1fr 15px;
-    padding: 9px 11px;
-    border-radius: 13px;
+    min-height: 76px;
+    grid-template-columns: 42px 1fr 16px;
+    gap: 11px;
+    padding: 12px 13px;
+    border-radius: 15px;
   }
   .onboarding-choice-grid button.selected {
-    padding: 8px 10px;
+    padding: 11px 12px;
   }
   .onboarding-choice-grid button > i {
-    width: 36px;
-    height: 36px;
+    width: 42px;
+    height: 42px;
   }
   .onboarding-choice-grid strong {
-    font-size: 11px;
+    font-size: 13px;
   }
   .onboarding-choice-grid small {
-    font-size: 8px;
+    font-size: 10px;
   }
   .specialty-panel {
     padding: 16px;
@@ -7005,6 +7153,32 @@ h1 em:after {
   .growth-line {
     height: 150px;
   }
+  .job-route-map {
+    height: 430px;
+    margin-top: 20px;
+  }
+  .route-profile {
+    top: 50%;
+    width: min(265px, calc(100% - 56px));
+  }
+  .route-company {
+    width: 132px;
+    min-height: 52px;
+    padding: 7px 8px;
+  }
+  .route-company img {
+    width: 32px;
+    height: 32px;
+  }
+  .company-1 { left: 10px; top: 18px; }
+  .company-2 { right: 10px; top: 78px; }
+  .company-3 { left: 10px; bottom: 72px; }
+  .company-4 { right: 10px; bottom: 14px; }
+  .route-connector { width: 125px; }
+  .route-1 { left: 82px; top: 116px; rotate: 49deg; }
+  .route-2 { right: 80px; top: 151px; rotate: -36deg; }
+  .route-3 { left: 80px; bottom: 145px; rotate: -40deg; }
+  .route-4 { right: 82px; bottom: 112px; rotate: 48deg; }
   .city-search {
     margin-top: 25px;
   }
@@ -7353,8 +7527,8 @@ h1 em:after {
     grid-template-columns: 1fr 1fr;
   }
   .step-role .onboarding-choice-grid button {
-    min-height: 56px;
-    grid-template-columns: 31px 1fr 12px;
+    min-height: 68px;
+    grid-template-columns: 36px 1fr 13px;
     gap: 8px;
     padding: 8px;
   }
@@ -7362,12 +7536,12 @@ h1 em:after {
     padding: 7px;
   }
   .step-role .onboarding-choice-grid button > i {
-    width: 31px;
-    height: 31px;
-    font-size: 9px;
+    width: 36px;
+    height: 36px;
+    font-size: 10px;
   }
   .step-role .onboarding-choice-grid strong {
-    font-size: 9px;
+    font-size: 10px;
   }
   .city-picker {
     margin-top: 25px;
@@ -7419,6 +7593,9 @@ h1 em:after {
   .welcome-animation > i,
   .completion-list li,
   .step-welcome .onboarding-actions .button {
+    animation: none !important;
+  }
+  .route-connector {
     animation: none !important;
   }
   .completion-list li {

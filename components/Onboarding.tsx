@@ -21,6 +21,7 @@ type Step =
   | "role"
   | "experience"
   | "city"
+  | "authorization"
   | "salary"
   | "goal"
   | "goalProof"
@@ -50,6 +51,7 @@ type Answers = {
   specialties: string[];
   experience: string;
   city: string;
+  workAuthorization: string;
   currency: string;
   salaryMin: number;
   salaryMax: number;
@@ -70,6 +72,7 @@ const steps: Step[] = [
   "role",
   "experience",
   "city",
+  "authorization",
   "salary",
   "goal",
   "goalProof",
@@ -92,6 +95,7 @@ const initial: Answers = {
   specialties: [],
   experience: "",
   city: "",
+  workAuthorization: "",
   currency: "EUR",
   salaryMin: 40000,
   salaryMax: 80000,
@@ -378,6 +382,7 @@ const copy = {
       role: "¿Qué tipo de empleo estás buscando?",
       experience: "¿Cuánta experiencia tienes?",
       city: "¿En qué ciudad estás buscando?",
+      authorization: "¿Cuál es tu autorización para trabajar?",
       salary: "¿Qué rango salarial esperas?",
       goal: "¿Cuál es tu objetivo?",
       interviews: "¿Cuántas entrevistas quieres por semana?",
@@ -395,6 +400,8 @@ const copy = {
       role: "Primero elige un área y después afina la especialidad.",
       experience: "Evitaremos mostrarte puestos demasiado junior o senior.",
       city: "Usaremos tu ubicación para encontrar opciones cercanas, híbridas o remotas.",
+      authorization:
+        "Solo te mostraremos oportunidades compatibles con tu situación laboral.",
       salary: "Ajusta el rango bruto anual que quieres encontrar.",
       goal: "Tu objetivo marcará cómo priorizamos las oportunidades.",
       interviews: "Define un objetivo semanal. Te diremos si parece realista.",
@@ -442,6 +449,7 @@ const copy = {
       role: "What kind of job are you looking for?",
       experience: "How much experience do you have?",
       city: "Where are you looking for work?",
+      authorization: "What is your work authorization status?",
       salary: "Expected salary range?",
       goal: "What’s your goal?",
       interviews: "How many interviews do you want per week?",
@@ -459,6 +467,8 @@ const copy = {
       role: "Choose a field first, then narrow it down to a specialization.",
       experience: "We’ll avoid roles that are far too junior or senior.",
       city: "We’ll use your location to find nearby, hybrid and remote roles.",
+      authorization:
+        "We’ll only show opportunities compatible with your work status.",
       salary: "Set the annual gross salary range you want to see.",
       goal: "Your goal will shape how we prioritize opportunities.",
       interviews:
@@ -491,6 +501,97 @@ const normalizeSearch = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+const selectedCountry = (city: string) => {
+  const parts = city.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.at(-1) || "";
+};
+const euCountries = new Set([
+  "Austria",
+  "Belgium",
+  "Bulgaria",
+  "Croatia",
+  "Cyprus",
+  "Czechia",
+  "Denmark",
+  "Estonia",
+  "Finland",
+  "France",
+  "Germany",
+  "Greece",
+  "Hungary",
+  "Ireland",
+  "Italy",
+  "Latvia",
+  "Lithuania",
+  "Luxembourg",
+  "Malta",
+  "Netherlands",
+  "Poland",
+  "Portugal",
+  "Romania",
+  "Slovakia",
+  "Slovenia",
+  "Spain",
+  "Sweden",
+]);
+const authorizationChoices = (city: string, locale: Locale): Choice[] => {
+  const country = selectedCountry(city) || (locale === "es" ? "el país seleccionado" : "the selected country");
+  const eu = euCountries.has(country);
+  if (locale === "es") {
+    return make([
+      [
+        "citizen",
+        "✓",
+        eu ? "Tengo derecho a trabajar en la UE/EEE" : `Soy ciudadano o residente de ${country}`,
+        "",
+        eu ? "Ciudadanía o residencia que permite trabajar sin patrocinio." : "Puedo trabajar sin patrocinio de la empresa.",
+        "",
+      ],
+      ["permit", "▣", `Tengo un permiso de trabajo válido para ${country}`, "", "El permiso está vigente para este mercado.", ""],
+      ["sponsorship", "↗", "Necesito patrocinio de visado", "", "Priorizaremos empresas que puedan patrocinarlo.", ""],
+      ["unsure", "?", "No estoy seguro", "", "Podrás completarlo o corregirlo más adelante.", ""],
+    ]);
+  }
+  return make([
+    [
+      "citizen",
+      "✓",
+      "",
+      eu ? "I have the right to work in the EU/EEA" : `I’m a citizen or resident of ${country}`,
+      "",
+      eu ? "Citizenship or residency lets me work without sponsorship." : "I can work without employer sponsorship.",
+    ],
+    ["permit", "▣", "", `I have a valid work permit for ${country}`, "", "My permit is valid for this market."],
+    ["sponsorship", "↗", "", "I need visa sponsorship", "", "We’ll prioritize employers that can sponsor."],
+    ["unsure", "?", "", "I’m not sure", "", "You can complete or update this later."],
+  ]);
+};
+const routeCompanies: Record<string, Array<[string, string, number]>> = {
+  software: [
+    ["OpenAI", "/company-logos/openai.png", 94],
+    ["Anthropic", "/company-logos/anthropic.webp", 91],
+    ["Google", "/company-logos/google.webp", 89],
+    ["SpaceX", "/company-logos/spacex.png", 86],
+  ],
+  marketing: [
+    ["Spotify", "/company-logos/spotify.png", 93],
+    ["HubSpot", "/company-logos/hubspot.png", 90],
+    ["Notion", "/company-logos/notion.webp", 88],
+    ["Google", "/company-logos/google.webp", 85],
+  ],
+  operations: [
+    ["Tesla", "/company-logos/tesla.png", 92],
+    ["SpaceX", "/company-logos/spacex.png", 89],
+    ["Apple", "/company-logos/apple.svg", 87],
+    ["Google", "/company-logos/google.webp", 84],
+  ],
+  default: [
+    ["Notion", "/company-logos/notion.webp", 92],
+    ["Apple", "/company-logos/apple.svg", 90],
+    ["Spotify", "/company-logos/spotify.png", 87],
+    ["OpenAI", "/company-logos/openai.png", 85],
+  ],
+};
 const stepMotion = {
   enter: (direction: number) => ({
     opacity: 0,
@@ -677,6 +778,8 @@ export default function Onboarding() {
         return !!answers.experience;
       case "city":
         return answers.city.trim().length > 1;
+      case "authorization":
+        return !!answers.workAuthorization;
       case "salary":
         return answers.salaryMax > answers.salaryMin;
       case "goal":
@@ -928,7 +1031,11 @@ export default function Onboarding() {
             onFocus={() => setCityOpen(true)}
             onBlur={() => window.setTimeout(() => setCityOpen(false), 120)}
             onChange={(e) => {
-              setOne("city", e.target.value);
+              setAnswers((current) => ({
+                ...current,
+                city: e.target.value,
+                workAuthorization: "",
+              }));
               setCityOpen(true);
             }}
             placeholder={t.cityPlaceholder}
@@ -974,7 +1081,11 @@ export default function Onboarding() {
                       key={`${city.n}-${city.cc}`}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        setOne("city", value);
+                        setAnswers((current) => ({
+                          ...current,
+                          city: value,
+                          workAuthorization: "",
+                        }));
                         setCityOpen(false);
                       }}
                     >
@@ -1006,6 +1117,35 @@ export default function Onboarding() {
         </AnimatePresence>
       </div>,
     );
+  else if (step === "authorization") {
+    const country = selectedCountry(answers.city);
+    body = (
+      <>
+        <p className="onboarding-eyebrow">
+          {String(index + 1).padStart(2, "0")} · LANDEO PROFILE
+        </p>
+        <h1>
+          {locale === "es"
+            ? `¿Puedes trabajar legalmente en ${country || "el país seleccionado"}?`
+            : `Can you legally work in ${country || "the selected country"}?`}
+        </h1>
+        <p className="onboarding-lead">{t.subtitles.authorization}</p>
+        <div className="authorization-market">
+          <span aria-hidden="true">◎</span>
+          <div>
+            <small>{locale === "es" ? "MERCADO OBJETIVO" : "TARGET MARKET"}</small>
+            <strong>{country || answers.city}</strong>
+          </div>
+        </div>
+        {renderChoices(
+          authorizationChoices(answers.city, locale),
+          [answers.workAuthorization],
+          (id) => setOne("workAuthorization", id),
+          true,
+        )}
+      </>
+    );
+  }
   else if (step === "salary")
     body = question(
       "salary",
@@ -1086,6 +1226,8 @@ export default function Onboarding() {
         interviews={answers.interviews}
         deadline={answers.deadline}
         ambitious={ambitious}
+        category={answers.category}
+        specialties={answers.specialties}
       />
     );
   else if (step === "blocker")
@@ -1620,15 +1762,28 @@ function Feasibility({
   interviews,
   deadline,
   ambitious,
+  category,
+  specialties,
 }: {
   locale: Locale;
   interviews: number;
   deadline: string;
   ambitious: boolean;
+  category: string;
+  specialties: string[];
 }) {
   const horizon = deadline.split("-")[0] || "3";
+  const companies = routeCompanies[category] ?? routeCompanies.default;
+  const targetRoles = specialties.length
+    ? specialties
+        .slice(0, 2)
+        .map((value) => value.replace(/-/g, " "))
+        .join(" · ")
+    : locale === "es"
+      ? "Puestos compatibles"
+      : "Matching roles";
   return (
-    <div className="validation-screen">
+    <div className="validation-screen feasibility-screen">
       <m.span
         className="validation-icon"
         initial={{ opacity: 0, scale: 0.45 }}
@@ -1664,26 +1819,66 @@ function Feasibility({
             ? "Un proceso constante, buenas coincidencias y seguimiento claro te ayudarán a mantener el ritmo."
             : "A consistent process, strong matches and clear tracking can help you keep the pace."}
       </p>
-      <div className="feasibility-meter">
-        <m.i
-          initial={{ width: 0 }}
-          animate={{ width: ambitious ? "76%" : "58%" }}
-          transition={{ duration: 0.75, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
-        />
-        <span>
-          {ambitious
-            ? locale === "es"
-              ? "EXIGENTE"
-              : "DIFFICULT"
-            : locale === "es"
-              ? "REALISTA"
-              : "REALISTIC"}
-        </span>
+      <div className="job-route-map">
+        {[0, 1, 2, 3].map((position) => (
+          <m.span
+            aria-hidden="true"
+            className={`route-connector route-${position + 1}`}
+            key={position}
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            transition={{ duration: 0.65, delay: 0.18 + position * 0.09 }}
+          />
+        ))}
+        <m.div
+          className="route-profile"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.08, type: "spring", stiffness: 190, damping: 18 }}
+        >
+          <p>
+            <small>{locale === "es" ? "TU OBJETIVO" : "YOUR TARGET"}</small>
+            <strong>
+              {interviews} {locale === "es" ? "entrevistas por semana" : "interviews per week"}
+            </strong>
+          </p>
+          <p>
+            <small>{locale === "es" ? "ROLES OBJETIVO" : "TARGET ROLES"}</small>
+            <strong className="route-role">{targetRoles}</strong>
+          </p>
+          <p>
+            <small>{locale === "es" ? "RITMO" : "PACE"}</small>
+            <strong>
+              {ambitious
+                ? locale === "es" ? "Ambicioso" : "Ambitious"
+                : locale === "es" ? "Realista" : "Realistic"}
+            </strong>
+          </p>
+        </m.div>
+        {companies.map(([name, logo, match], position) => (
+          <m.article
+            className={`route-company company-${position + 1}`}
+            key={name}
+            initial={{ opacity: 0, scale: 0.82, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: [0, -3, 0] }}
+            transition={{
+              opacity: { delay: 0.48 + position * 0.1, duration: 0.25 },
+              scale: { delay: 0.48 + position * 0.1, type: "spring" },
+              y: { delay: 0.9 + position * 0.12, duration: 2.4, repeat: Infinity },
+            }}
+          >
+            <img src={logo} alt="" />
+            <span>
+              <strong>{name}</strong>
+              <small>{match}% match</small>
+            </span>
+          </m.article>
+        ))}
       </div>
       <small className="claim-note">
         {locale === "es"
-          ? "Landeo no garantiza entrevistas ni contrataciones."
-          : "Landeo does not guarantee interviews or offers."}
+          ? "Vista ilustrativa de cómo Landeo conecta tu perfil con oportunidades. No garantiza entrevistas ni contrataciones."
+          : "Illustrative view of how Landeo connects your profile with opportunities. Interviews and offers are not guaranteed."}
       </small>
     </div>
   );

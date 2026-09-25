@@ -172,7 +172,7 @@ export async function saveCoverLetterProfile(input:Omit<CoverLetterProfile,"upda
 
 export type WebOnboardingAnswers={
   search:string;priorities:string[];apps:string;category:string;categoryLabel:string;specialties:string[];specialtyLabels:string[];
-  experience:string;city:string;currency:string;salaryMin:number;salaryMax:number;goal:string;interviews:number;deadline:string;
+  experience:string;city:string;workAuthorization:string;currency:string;salaryMin:number;salaryMax:number;goal:string;interviews:number;deadline:string;
   blocker:string;outcome:string;source:string;promoCode:string;
 };
 
@@ -186,7 +186,10 @@ export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;
   const metadataName=String(user.user_metadata?.full_name??user.user_metadata?.name??"");const fullName=existing?.full_name||metadataName;
   const experienceYears:Record<string,number>={internship:0,entry:0,junior:2,mid:4,senior:7,expert:10};
   const previous=(existing?.universal_profile as UniversalProfile|null)??defaultUniversal(user);
-  const universal:UniversalProfile={...previous,city:input.answers.city,country:previous.country||(input.locale==="es"?"España":""),salaryCurrency:input.answers.currency,yearsExperience:experienceYears[input.answers.experience]??0,version:1};
+  const targetCountry=input.answers.city.split(",").map(value=>value.trim()).filter(Boolean).at(-1)||(input.locale==="es"?"País seleccionado":"Selected country");
+  const authorized=["citizen","permit"].includes(input.answers.workAuthorization);
+  const visaRequirement=input.answers.workAuthorization==="sponsorship"?"Requires sponsorship":input.answers.workAuthorization==="unsure"?"Unknown":"No sponsorship required";
+  const universal:UniversalProfile={...previous,city:input.answers.city,country:targetCountry,salaryCurrency:input.answers.currency,yearsExperience:experienceYears[input.answers.experience]??0,workAuthorizationCountries:authorized?[targetCountry]:[],visaRequirement,version:1};
   const now=new Date().toISOString();const onboardingAnswers={...input.answers,promoCode:input.answers.promoCode.trim().toUpperCase(),locale:input.locale,completedFrom:"web",completedAt:now};
   const{error}=await client.from("profiles").upsert({id:user.id,full_name:fullName,email:existing?.email||user.email||null,phone:existing?.phone||null,role:input.answers.specialtyLabels.join(", ")||input.answers.categoryLabel,location:input.answers.city,skills:input.answers.specialtyLabels,work_modes:input.answers.priorities.includes("remote")?["Remoto","Híbrido"]:[],min_salary:input.answers.salaryMin,max_salary:input.answers.salaryMax,cv_path:cvPath,universal_profile:universal,onboarding_answers:onboardingAnswers,onboarding_completed_at:now,updated_at:now},{onConflict:"id"});if(error)throw error;
 }

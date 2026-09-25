@@ -317,12 +317,23 @@ test("animates onboarding interactions and exposes issue reporting", async () =>
     new URL("components/Onboarding.tsx", root),
     "utf8",
   );
+  const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
   assert.match(packageJson, /"motion"/);
   assert.match(onboarding, /AnimatePresence/);
   assert.match(onboarding, /LazyMotion/);
   assert.match(onboarding, /reducedMotion="user"/);
   assert.match(onboarding, /careers@haired\.app/);
   assert.match(onboarding, /onboarding-report-link/);
+  assert.match(onboarding, /workAuthorization/);
+  assert.match(onboarding, /authorizationChoices/);
+  assert.match(onboarding, /job-route-map/);
+  assert.match(onboarding, /company-logos\/openai\.png/);
+  assert.match(landeo, /workAuthorizationCountries/);
+  assert.match(landeo, /Requires sponsorship/);
+  assert.match(styles, /\.route-connector/);
+  assert.match(styles, /@keyframes route-flow/);
+  assert.match(styles, /\.onboarding-choice-grid button \{[\s\S]*?min-height: 88px/);
 });
 
 test("prioritizes Madrid and compatible remote jobs without leaking Lisbon roles", () => {
