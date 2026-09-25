@@ -115,7 +115,15 @@ export async function loadJobs(limit=120,options:{includeDismissed?:boolean;incl
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const available=rows.map(row=>mapJob(row,matchProfile)).filter(job=>!hidden.has(job.id)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
-  return candidateCity&&!options.includeWorldwide?prioritizeJobsByLocation(available,candidateCity,candidateCountry):available;
+  if(candidateCity&&!options.includeWorldwide){
+    const localFirst=prioritizeJobsByLocation(available,candidateCity,candidateCountry);
+    if(options.search){
+      const localIds=new Set(localFirst.map(job=>job.id));
+      return [...localFirst,...available.filter(job=>!localIds.has(job.id))];
+    }
+    return localFirst;
+  }
+  return available;
 }
 
 export async function recordSwipe(jobId:string,direction:SwipeDirection){

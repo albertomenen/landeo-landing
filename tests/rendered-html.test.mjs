@@ -429,6 +429,7 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(productApp, /Ver oferta completa/);
   assert.match(landeo, /jobSearchGroups/);
   assert.match(landeo, /featuredScore/);
+  assert.match(landeo, /if\(options\.search\)/);
   assert.match(styles, /\.automatic-empty-actions/);
   assert.match(
     styles,
