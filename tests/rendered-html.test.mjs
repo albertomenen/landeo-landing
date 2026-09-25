@@ -251,6 +251,32 @@ test("calculates a personalized job match without inflating it by apply channel"
   assert.ok(aligned.reasons.includes("location"));
 });
 
+test("understands adjacent marketing role names when calculating relevance", () => {
+  const profile = {
+    role: "Marketing",
+    location: "Madrid",
+    country: "España",
+    skills: ["SEO", "Content strategy"],
+    workModes: ["Híbrido"],
+    minSalary: null,
+    maxSalary: null,
+    yearsExperience: 3,
+  };
+  const growthRole = calculateJobMatch({
+    title: "Growth & Brand Specialist",
+    summary: "Own acquisition campaigns and content strategy.",
+    description: "Build lifecycle and SEO programs for Spain.",
+    location: "Madrid, España",
+    work_mode: "Híbrido",
+    salary_min: null,
+    salary_max: null,
+    seniority: "Mid level",
+    metadata: {},
+  }, profile);
+  assert.ok(growthRole.score >= 80);
+  assert.ok(growthRole.reasons.includes("role"));
+});
+
 test("offers the real Landeo plans before opening Stripe", async () => {
   const productApp = await readFile(
     new URL("components/ProductApp.tsx", root),
@@ -399,6 +425,10 @@ test("removes the disposable starter and keeps integration contracts", async () 
   );
   assert.match(styles, /@keyframes landeo-confetti/);
   assert.match(productApp, /automaticEverywhere/);
+  assert.match(productApp, /router\.push\(`\/app\/jobs\/\$\{job\.id\}`\)/);
+  assert.match(productApp, /Ver oferta completa/);
+  assert.match(landeo, /jobSearchGroups/);
+  assert.match(landeo, /featuredScore/);
   assert.match(styles, /\.automatic-empty-actions/);
   assert.match(
     styles,

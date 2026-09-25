@@ -34,6 +34,24 @@ function tokens(value: string) {
   return new Set(value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9+#.]+/).filter((token) => token.length > 2 && !STOP_WORDS.has(token)));
 }
 
+const ROLE_ALIASES: Array<{ match: RegExp; terms: string }> = [
+  { match: /marketing|mercadotecnia|comunicacion/, terms: "marketing marketer growth brand content communications demand generation acquisition lifecycle seo sem performance go-to-market community" },
+  { match: /software|ingenier|developer|programador/, terms: "software engineering developer frontend backend fullstack mobile platform devops" },
+  { match: /product|producto/, terms: "product product-management product-owner product-operations" },
+  { match: /design|disen|ux|ui/, terms: "design designer ux ui product-design research" },
+  { match: /sales|ventas|comercial/, terms: "sales account executive business development partnerships revenue" },
+  { match: /data|datos|analytics/, terms: "data analytics analyst machine-learning artificial-intelligence" },
+  { match: /human resources|recursos humanos|talent|people/, terms: "recruiting recruiter talent people human-resources hr" },
+  { match: /finance|finanzas|accounting/, terms: "finance financial accounting accountant controller" },
+  { match: /consult/, terms: "consulting consultant strategy operations" },
+];
+
+function roleTokens(value: string) {
+  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const alias = ROLE_ALIASES.find((group) => group.match.test(normalized));
+  return tokens(`${value} ${alias?.terms ?? ""}`);
+}
+
 function overlap(left: Set<string>, right: Set<string>) {
   let total = 0;
   for (const token of left) if (right.has(token)) total++;
@@ -60,7 +78,7 @@ export function calculateJobMatch(row: MatchableJob, profile: MatchProfile | nul
   let score = 42;
   const reasons: string[] = [];
   const jobText = tokens(`${row.title} ${clean(row.summary)} ${clean(row.description)}`);
-  const roleHits = overlap(tokens(profile.role), jobText);
+  const roleHits = overlap(roleTokens(profile.role), jobText);
   const skillHits = overlap(tokens(profile.skills.join(" ")), jobText);
   if (roleHits) { score += Math.min(24, 10 + roleHits * 6); reasons.push("role"); }
   if (skillHits) { score += Math.min(24, 8 + skillHits * 5); reasons.push("skills"); }

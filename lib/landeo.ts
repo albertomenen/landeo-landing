@@ -50,9 +50,35 @@ function currency(metadata:Record<string,unknown>|null){return typeof metadata?.
 function mapJob(row:JobRow,profile:MatchProfile|null=null):Job{const meta=row.metadata??{};const result=calculateJobMatch(row,profile);return{id:row.id,company:row.company,title:row.title,summary:clean(row.summary)||"Consulta los detalles completos de esta oportunidad.",description:clean(row.description)||clean(row.summary)||"",location:row.location||"Ubicación no indicada",market:typeof meta.market_country==="string"?meta.market_country:"",workMode:workMode(row.work_mode),salaryMin:row.salary_min,salaryMax:row.salary_max,salaryCurrency:currency(meta),contractType:row.contract_type||"No indicado",seniority:row.seniority||"No indicado",industry:row.industry||"Otros",applyCapability:capability(row.application_capability),match:result.score,publishedAt:row.published_at||new Date().toISOString(),skills:Array.isArray(meta.requirements)?meta.requirements.filter((x):x is string=>typeof x==="string").slice(0,3):[],source:row.source,applyProvider:row.application_provider||"external",applyMode:row.apply_mode||"external",metadata:{...meta,match_reason_keys:result.reasons}}}
 function clean(value:string|null){return(value??"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim()}
 
+const jobSearchGroups:Array<{match:RegExp;terms:string[]}>= [
+  {match:/marketing|mercadotecnia|comunicacion/i,terms:["marketing","growth","brand","content","communications","demand generation","acquisition","lifecycle","seo"]},
+  {match:/software|ingenier|developer|programador/i,terms:["software","engineer","developer","frontend","backend","fullstack","platform","devops"]},
+  {match:/product|producto/i,terms:["product","product manager","product owner","product operations"]},
+  {match:/design|disen|ux|ui/i,terms:["design","designer","ux","ui","product design","research"]},
+  {match:/sales|ventas|comercial/i,terms:["sales","account executive","business development","partnerships","revenue"]},
+  {match:/data|datos|analytics/i,terms:["data","analytics","analyst","machine learning","artificial intelligence"]},
+  {match:/human resources|recursos humanos|talent|people/i,terms:["recruiting","recruiter","talent","people","human resources"]},
+];
+function searchTerms(value:string){
+  const safe=value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[%_,().]/g," ").replace(/\s+/g," ").trim().slice(0,80);
+  if(!safe)return[];
+  const group=jobSearchGroups.find(item=>item.match.test(safe));
+  return Array.from(new Set([safe,...(group?.terms??[])]));
+}
+function jobSearchFilter(value:string){
+  return searchTerms(value).flatMap(term=>["title","company","industry"].map(field=>`${field}.ilike.%${term}%`)).join(",");
+}
+function featuredScore(job:Job){
+  const company=job.company.toLowerCase().replace(/[^a-z0-9]/g,"");
+  const flagship=["openai","anthropic","google","meta","apple","microsoft","netflix","airbnb","stripe","cloudflare"];
+  const brandBoost=flagship.includes(company)?14:job.metadata?.top_company===true||job.metadata?.top_company==="true"?9:0;
+  const feedBoost=Math.max(0,Math.min(8,Number(job.metadata?.feed_priority??0)));
+  return job.match+brandBoost+feedBoost+(job.applyCapability==="automatic"?3:0);
+}
+
 export async function currentUser(){const {data,error}=await createSupabaseBrowserClient().auth.getUser();if(error)return null;return data.user}
 
-export async function loadJobs(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean}={}){
+export async function loadJobs(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();
   let hidden=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
@@ -70,6 +96,10 @@ export async function loadJobs(limit=120,options:{includeDismissed?:boolean;incl
   const recent=client.from("jobs").select(select).eq("status","active").order("published_at",{ascending:false}).limit(limit);
   const topCompanies=client.from("jobs").select(select).eq("status","active").eq("metadata->>top_company","true").order("published_at",{ascending:false}).limit(240);
   const automatic=client.from("jobs").select(select).eq("status","active").eq("application_capability","automatic").order("published_at",{ascending:false}).limit(160);
+  const roleFilter=matchProfile?.role?jobSearchFilter(matchProfile.role):"";
+  const requestedFilter=options.search?jobSearchFilter(options.search):"";
+  const roleFocused=roleFilter?client.from("jobs").select(select).eq("status","active").or(roleFilter).order("published_at",{ascending:false}).limit(220):null;
+  const requestedSearch=requestedFilter?client.from("jobs").select(select).eq("status","active").or(requestedFilter).order("published_at",{ascending:false}).limit(260):null;
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const focused=candidateMarket?[
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(120),
@@ -79,12 +109,12 @@ export async function loadJobs(limit=120,options:{includeDismissed?:boolean;incl
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").order("published_at",{ascending:false}).limit(180),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").order("published_at",{ascending:false}).limit(100),
   ];
-  const results=await Promise.all([recent,topCompanies,automatic,...focused]);
+  const results=await Promise.all([recent,topCompanies,automatic,...focused,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
-  const available=rows.map(row=>mapJob(row,matchProfile)).filter(job=>!hidden.has(job.id)).sort((a,b)=>rank[a.applyCapability]-rank[b.applyCapability]||b.match-a.match||Number(b.metadata?.feed_priority??0)-Number(a.metadata?.feed_priority??0)||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
+  const available=rows.map(row=>mapJob(row,matchProfile)).filter(job=>!hidden.has(job.id)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
   return candidateCity&&!options.includeWorldwide?prioritizeJobsByLocation(available,candidateCity,candidateCountry):available;
 }
 

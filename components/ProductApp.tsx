@@ -145,6 +145,20 @@ const applyIconMotion = {
 } as const;
 const localized = (locale: DashboardLocale, es: string, en: string) =>
   locale === "es" ? es : en;
+const queryAliases: Array<{ match: RegExp; terms: RegExp }> = [
+  { match: /marketing|mercadotecnia|comunicacion/i, terms: /marketing|growth|brand|content|communications?|demand generation|acquisition|lifecycle|seo/i },
+  { match: /software|ingenier|developer|programador/i, terms: /software|engineer|engineering|developer|frontend|backend|fullstack|platform|devops/i },
+  { match: /product|producto/i, terms: /product|product owner|product operations/i },
+  { match: /design|disen|ux|ui/i, terms: /design|designer|ux|ui|research/i },
+  { match: /sales|ventas|comercial/i, terms: /sales|account executive|business development|partnerships|revenue/i },
+];
+function matchesJobQuery(job: Job, query: string) {
+  const value = query.trim();
+  if (!value) return true;
+  const haystack = `${job.title} ${job.company} ${job.industry} ${job.skills.join(" ")}`;
+  if (haystack.toLowerCase().includes(value.toLowerCase())) return true;
+  return queryAliases.some((group) => group.match.test(value) && group.terms.test(haystack));
+}
 const trackingStages: TrackingStage[] = [
   "applied",
   "screening",
@@ -601,6 +615,7 @@ function JobsView({
   const [loading, setLoading] = useState(true);
   const [index, setIndex] = useState(0);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [mode, setMode] = useState("all");
   const [workMode, setWorkMode] = useState("all");
   const [market, setMarket] = useState("all");
@@ -612,6 +627,11 @@ function JobsView({
   const [cardDirection, setCardDirection] = useState(1);
   const dragStart = useRef<number | null>(null);
   const pendingApplications = useRef(new Set<string>());
+  const didSwipe = useRef(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 320);
+    return () => window.clearTimeout(timer);
+  }, [query]);
   const refresh = useCallback(async () => {
     setLoading(true);
     if (demo) {
@@ -625,6 +645,7 @@ function JobsView({
         await loadJobs(120, {
           includeDismissed: showAutomaticArchive,
           includeWorldwide: showAutomaticArchive,
+          search: debouncedQuery,
         }),
       );
     } catch (error) {
@@ -632,7 +653,7 @@ function JobsView({
     } finally {
       setLoading(false);
     }
-  }, [demo, showAutomaticArchive, t.notices.loadError]);
+  }, [debouncedQuery, demo, showAutomaticArchive, t.notices.loadError]);
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -646,9 +667,7 @@ function JobsView({
             String(
               job.market || job.metadata?.market_country || "",
             ).toUpperCase() === market) &&
-          `${job.title} ${job.company}`
-            .toLowerCase()
-            .includes(query.toLowerCase()),
+          matchesJobQuery(job, query),
       ),
     [jobs, mode, workMode, market, query],
   );
@@ -987,18 +1006,29 @@ function JobsView({
                 exit="exit"
                 transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
                 whileHover={{ y: -3, scale: 1.003 }}
-                role="button"
+                role="link"
                 tabIndex={0}
-                aria-label={`${job.title} · ${job.company}`}
+                aria-label={`${localized(locale, "Ver detalles de", "View details for")} ${job.title} · ${job.company}`}
+                onClick={() => {
+                  if (didSwipe.current) {
+                    didSwipe.current = false;
+                    return;
+                  }
+                  router.push(`/app/jobs/${job.id}`);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowLeft") pass();
-                  if (event.key === "ArrowRight" || event.key === "Enter")
-                    apply();
+                  if (event.key === "ArrowRight") apply();
+                  if (event.key === "Enter") router.push(`/app/jobs/${job.id}`);
                 }}
-                onPointerDown={(event) => (dragStart.current = event.clientX)}
+                onPointerDown={(event) => {
+                  didSwipe.current = false;
+                  dragStart.current = event.clientX;
+                }}
                 onPointerUp={(event) => {
                   if (dragStart.current === null) return;
                   const distance = event.clientX - dragStart.current;
+                  if (Math.abs(distance) > 80) didSwipe.current = true;
                   if (distance > 80) apply();
                   if (distance < -80) pass();
                   dragStart.current = null;
@@ -1089,6 +1119,9 @@ function JobsView({
                     <small>{t.capability[job.applyCapability].detail}</small>
                   </div>
                 </div>
+                <span className="job-details-cta">
+                  {localized(locale, "Ver oferta completa", "View full job")} <b>→</b>
+                </span>
               </m.div>
             ) : (
               <m.div
