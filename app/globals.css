@@ -6717,6 +6717,19 @@ h1 em:after {
   line-height: 1.25;
   text-transform: capitalize;
 }
+.potential-route-map {
+  height: 360px;
+}
+.preference-profile {
+  width: 330px;
+}
+.preference-profile > p {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.preference-profile strong {
+  overflow-wrap: anywhere;
+}
 .route-company {
   position: absolute;
   z-index: 3;
@@ -7160,6 +7173,18 @@ h1 em:after {
   .route-profile {
     top: 50%;
     width: min(265px, calc(100% - 56px));
+  }
+  .potential-route-map {
+    height: 480px;
+  }
+  .preference-profile {
+    width: min(278px, calc(100% - 42px));
+  }
+  .preference-profile > p {
+    padding: 9px 12px;
+  }
+  .preference-profile strong {
+    font-size: 9px;
   }
   .route-company {
     width: 132px;

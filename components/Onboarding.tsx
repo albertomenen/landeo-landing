@@ -1250,7 +1250,8 @@ export default function Onboarding() {
         true,
       ),
     );
-  else if (step === "potential") body = <Potential locale={locale} />;
+  else if (step === "potential")
+    body = <Potential locale={locale} answers={answers} />;
   else if (step === "source")
     body = question(
       "source",
@@ -1883,8 +1884,17 @@ function Feasibility({
     </div>
   );
 }
-function Potential({ locale }: { locale: Locale }) {
-  const heights = ["18%", "31%", "47%", "68%", "92%"];
+function Potential({ locale, answers }: { locale: Locale; answers: Answers }) {
+  const companies = routeCompanies[answers.category] ?? routeCompanies.default;
+  const category = choices.categories.find((item) => item.id === answers.category);
+  const selectedSpecialties = (specialties[answers.category] ?? [])
+    .filter((item) => answers.specialties.includes(item.id))
+    .slice(0, 2)
+    .map((item) => label(item, locale));
+  const selectedPriorities = choices.priorities
+    .filter((item) => answers.priorities.includes(item.id))
+    .slice(0, 2)
+    .map((item) => label(item, locale));
   return (
     <div className="validation-screen potential-screen">
       <m.span
@@ -1910,24 +1920,67 @@ function Potential({ locale }: { locale: Locale }) {
           ? "Tu perfil, tus preferencias y un proceso constante forman una combinación poderosa."
           : "Your profile, preferences and a consistent process are a powerful combination."}
       </p>
-      <div className="growth-line">
-        <m.span
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.75, type: "spring" }}
-        >
-          ↗
-        </m.span>
-        {heights.map((height, position) => (
-          <m.i
-            key={height}
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            transition={{ duration: 0.42, delay: 0.13 + position * 0.1 }}
-            style={{ height, transformOrigin: "bottom" }}
+      <div className="job-route-map potential-route-map">
+        {[0, 1, 2, 3].map((position) => (
+          <m.span
+            aria-hidden="true"
+            className={`route-connector route-${position + 1}`}
+            key={position}
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            transition={{ duration: 0.65, delay: 0.18 + position * 0.09 }}
           />
         ))}
+        <m.div
+          className="route-profile preference-profile"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.08, type: "spring", stiffness: 190, damping: 18 }}
+        >
+          <p>
+            <small>{locale === "es" ? "LO QUE BUSCAS" : "WHAT YOU WANT"}</small>
+            <strong>{category ? label(category, locale) : "—"}</strong>
+          </p>
+          <p>
+            <small>{locale === "es" ? "ESPECIALIDADES" : "SPECIALIZATIONS"}</small>
+            <strong>{selectedSpecialties.join(" · ") || "—"}</strong>
+          </p>
+          <p>
+            <small>{locale === "es" ? "PREFERENCIAS" : "PREFERENCES"}</small>
+            <strong>{selectedPriorities.join(" · ") || "—"}</strong>
+          </p>
+          <p>
+            <small>{locale === "es" ? "UBICACIÓN Y RANGO" : "LOCATION & RANGE"}</small>
+            <strong>
+              {answers.city} · {money(answers.salaryMin, answers.currency, locale)}–{money(answers.salaryMax, answers.currency, locale)}
+            </strong>
+          </p>
+        </m.div>
+        {companies.map(([name, logo, match], position) => (
+          <m.article
+            className={`route-company company-${position + 1}`}
+            key={name}
+            initial={{ opacity: 0, scale: 0.82, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: [0, -3, 0] }}
+            transition={{
+              opacity: { delay: 0.48 + position * 0.1, duration: 0.25 },
+              scale: { delay: 0.48 + position * 0.1, type: "spring" },
+              y: { delay: 0.9 + position * 0.12, duration: 2.4, repeat: Infinity },
+            }}
+          >
+            <img src={logo} alt="" />
+            <span>
+              <strong>{name}</strong>
+              <small>{match}% match</small>
+            </span>
+          </m.article>
+        ))}
       </div>
+      <small className="claim-note">
+        {locale === "es"
+          ? "Empresas y porcentajes mostrados como ejemplo visual de tus preferencias."
+          : "Companies and percentages are an illustrative preview of your preferences."}
+      </small>
     </div>
   );
 }
