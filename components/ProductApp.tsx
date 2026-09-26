@@ -112,9 +112,9 @@ const matchReasonCopy: Record<DashboardLocale, Record<string, string>> = {
   },
 };
 const dashboardViewMotion = {
-  hidden: { opacity: 0, y: 12, scale: 0.992 },
+  hidden: { opacity: 0, y: 6, scale: 0.997 },
   visible: { opacity: 1, y: 0, scale: 1 },
-  exit: { opacity: 0, y: -8, scale: 0.995 },
+  exit: { opacity: 0, y: -4, scale: 0.998 },
 };
 const jobCardMotion = {
   enter: { opacity: 0, y: 18, scale: 0.985 },
@@ -129,11 +129,11 @@ const jobCardMotion = {
 const actionButtonMotion = {
   rest: { y: 0, scale: 1 },
   hover: {
-    y: -4,
-    scale: 1.015,
-    transition: { type: "spring", stiffness: 420, damping: 24 },
+    y: -2,
+    scale: 1.006,
+    transition: { type: "spring", stiffness: 520, damping: 32 },
   },
-  tap: { y: 0, scale: 0.955, transition: { duration: 0.1 } },
+  tap: { y: 0, scale: 0.975, transition: { duration: 0.08 } },
 } as const;
 const actionLabelMotion = {
   rest: { x: 0 },
@@ -591,7 +591,7 @@ export default function ProductApp({
                 {initialsValue}
               </m.span>
             </header>
-            <AnimatePresence mode="wait" initial={false}>
+            <AnimatePresence mode="sync" initial={false}>
               <m.div
                 key={activeView}
                 className="dashboard-view-motion"
@@ -599,7 +599,7 @@ export default function ProductApp({
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
               >
                 {currentView}
               </m.div>
@@ -891,9 +891,14 @@ function JobsView({
         </div>
         <div className="header-actions">
           <m.button
+            className="saas-icon-button"
             aria-label={t.jobs.refresh}
-            whileHover={{ rotate: 18, scale: 1.04 }}
-            whileTap={{ rotate: 180, scale: 0.92 }}
+            aria-busy={loading}
+            disabled={loading}
+            animate={loading ? { rotate: 360 } : { rotate: 0 }}
+            transition={loading ? { duration: 0.75, repeat: Infinity, ease: "linear" } : { duration: 0.16 }}
+            whileHover={loading ? undefined : { y: -1, scale: 1.03 }}
+            whileTap={loading ? undefined : { scale: 0.94 }}
             onClick={refresh}
           >
             ↻
@@ -1264,6 +1269,7 @@ function JobsView({
               animate="rest"
               whileHover={job ? "hover" : "rest"}
               whileTap={job ? "tap" : "rest"}
+              whileFocus={job ? "hover" : "rest"}
               onClick={pass}
               disabled={!job}
             >
@@ -1281,6 +1287,7 @@ function JobsView({
               animate="rest"
               whileHover={job ? "hover" : "rest"}
               whileTap={job ? "tap" : "rest"}
+              whileFocus={job ? "hover" : "rest"}
               onClick={save}
               disabled={!job}
               aria-pressed={Boolean(job && savedJobIds.has(job.id))}
@@ -1299,6 +1306,7 @@ function JobsView({
               animate="rest"
               whileHover={job ? "hover" : "rest"}
               whileTap={job ? "tap" : "rest"}
+              whileFocus={job ? "hover" : "rest"}
               onClick={apply}
               disabled={!job}
             >
@@ -1695,12 +1703,17 @@ function ApplicationsView({
           </p>
         </div>
         <m.button
-          className="text-button"
+          className="text-button saas-text-button"
           whileHover={{ y: -2 }}
           whileTap={{ scale: 0.96 }}
           onClick={refresh}
+          disabled={loading}
+          aria-busy={loading}
         >
-          {localized(locale, "Actualizar ahora", "Refresh now")}
+          <span aria-hidden="true">↻</span>
+          {loading
+            ? localized(locale, "Actualizando…", "Refreshing…")
+            : localized(locale, "Actualizar ahora", "Refresh now")}
         </m.button>
       </header>
       <div className="applications-layout">

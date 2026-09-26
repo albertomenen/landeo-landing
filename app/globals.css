@@ -4607,6 +4607,286 @@ h1 em:after {
   }
 }
 
+/* Cohesive SaaS interaction system for the authenticated product */
+.app-frame {
+  --control-border: rgba(23, 55, 42, 0.13);
+  --control-border-hover: rgba(59, 127, 90, 0.42);
+  --control-shadow: 0 1px 2px rgba(23, 55, 42, 0.06),
+    0 7px 18px rgba(23, 55, 42, 0.055);
+  --control-shadow-hover: 0 2px 4px rgba(23, 55, 42, 0.07),
+    0 11px 25px rgba(23, 55, 42, 0.1);
+  --control-focus: 0 0 0 4px rgba(59, 127, 90, 0.16);
+}
+.app-frame button,
+.app-frame .button,
+.app-frame .text-button,
+.app-frame nav a,
+.app-frame .settings-card a {
+  -webkit-tap-highlight-color: transparent;
+}
+.app-frame button:not(.modal-scrim),
+.app-frame .button,
+.app-frame .text-button,
+.app-frame nav a,
+.app-frame .settings-card a {
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease,
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.app-frame button:not(.modal-scrim):focus-visible,
+.app-frame .button:focus-visible,
+.app-frame .text-button:focus-visible,
+.app-frame nav a:focus-visible,
+.app-frame .settings-card a:focus-visible {
+  outline: 0;
+  box-shadow: var(--control-focus);
+}
+.app-frame button:not(:disabled):not(.modal-scrim),
+.app-frame .button,
+.app-frame nav a,
+.app-frame .settings-card a {
+  cursor: pointer;
+}
+.app-frame button:disabled,
+.app-frame .button[aria-disabled="true"] {
+  cursor: wait;
+  opacity: 0.58;
+}
+.app-frame .button {
+  min-height: 44px;
+  border: 1px solid var(--control-border);
+  border-radius: 13px;
+  padding: 0 17px;
+  box-shadow: var(--control-shadow);
+  letter-spacing: -0.01em;
+}
+.app-frame .button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--control-border-hover);
+  box-shadow: var(--control-shadow-hover);
+}
+.app-frame .button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 2px rgba(23, 55, 42, 0.08);
+}
+.app-frame .button-primary {
+  border-color: rgba(36, 92, 64, 0.9);
+  background: linear-gradient(180deg, #438965 0%, #337653 100%);
+  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.2) inset,
+    0 8px 18px rgba(38, 105, 73, 0.22);
+}
+.app-frame .button-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3b825d 0%, #2b6849 100%);
+  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.22) inset,
+    0 12px 25px rgba(38, 105, 73, 0.28);
+}
+.saas-icon-button,
+.header-actions > button {
+  border: 1px solid var(--control-border);
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf6 100%);
+  box-shadow: var(--control-shadow);
+  color: var(--dark);
+}
+.saas-icon-button:hover:not(:disabled),
+.header-actions > button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+  background: #fff;
+  box-shadow: var(--control-shadow-hover);
+}
+.saas-text-button,
+.filter-title button,
+.automatic-empty-actions button,
+.application-cover-letter button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #fff 0%, #f8faf7 100%);
+  color: var(--dark);
+  box-shadow: 0 1px 2px rgba(23, 55, 42, 0.05);
+  font-size: 9px;
+  font-weight: 800;
+}
+.saas-text-button:hover:not(:disabled),
+.filter-title button:hover:not(:disabled),
+.automatic-empty-actions button:hover:not(:disabled),
+.application-cover-letter button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+  background: #fff;
+  transform: translateY(-1px);
+  box-shadow: var(--control-shadow);
+}
+.app-sidebar nav a {
+  border: 1px solid transparent;
+}
+.app-sidebar nav a:hover {
+  border-color: rgba(59, 127, 90, 0.1);
+  background: rgba(237, 244, 233, 0.72);
+  color: var(--dark);
+  transform: translateX(2px);
+}
+.app-sidebar nav a:active {
+  transform: translateX(1px) scale(0.99);
+}
+.app-sidebar nav a.active {
+  border-color: rgba(59, 127, 90, 0.12);
+  box-shadow: 0 1px 2px rgba(23, 55, 42, 0.04);
+}
+.deck-actions button {
+  border-width: 1px;
+  box-shadow: var(--control-shadow);
+  animation: none;
+}
+.deck-actions button:hover:not(:disabled) {
+  box-shadow: var(--control-shadow-hover);
+}
+.deck-actions .action-apply {
+  background: linear-gradient(180deg, #438965 0%, #327451 100%);
+  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.2) inset,
+    0 9px 20px rgba(38, 105, 73, 0.22);
+}
+.deck-actions .action-apply:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3d845f 0%, #2b6849 100%);
+}
+.deck-actions .action-apply b::after {
+  animation: none;
+  width: 6px;
+  height: 6px;
+  box-shadow: 0 0 0 2px rgba(216, 241, 105, 0.16);
+}
+.deck-actions small {
+  border: 1px solid rgba(23, 55, 42, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+}
+.deck-actions .action-apply small {
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.12);
+}
+.status-tabs {
+  width: fit-content;
+  max-width: 100%;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--control-border);
+  border-radius: 12px;
+  background: #f3f6f1;
+  overflow-x: auto;
+}
+.status-tabs button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+.status-tabs button:hover:not(:disabled) {
+  color: var(--dark);
+  background: rgba(255, 255, 255, 0.7);
+}
+.status-tabs button.active {
+  border: 1px solid rgba(23, 55, 42, 0.09);
+  background: white;
+  color: var(--dark);
+  box-shadow: 0 1px 3px rgba(23, 55, 42, 0.09);
+}
+.application-row {
+  border: 1px solid transparent;
+  border-bottom-color: #edf0ec;
+}
+.application-row:hover {
+  border-color: rgba(59, 127, 90, 0.15);
+  background: #fbfdf9;
+  box-shadow: 0 6px 18px rgba(23, 55, 42, 0.055);
+}
+.application-row.selected {
+  border-color: rgba(59, 127, 90, 0.22);
+  background: #f1f7ee;
+  box-shadow: 0 7px 20px rgba(23, 55, 42, 0.07);
+}
+.tracking-stages button {
+  box-shadow: 0 1px 2px rgba(23, 55, 42, 0.035);
+}
+.tracking-stages button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+  background: white;
+  box-shadow: var(--control-shadow);
+}
+.tracking-stages button.active {
+  background: linear-gradient(180deg, #438965 0%, #337653 100%);
+  box-shadow: 0 7px 17px rgba(38, 105, 73, 0.2);
+}
+.saved-card button,
+.profile-hero button {
+  border: 1px solid var(--control-border);
+  box-shadow: 0 1px 2px rgba(23, 55, 42, 0.06);
+}
+.saved-card button:hover,
+.profile-hero button:hover {
+  transform: translateY(-1px);
+  border-color: var(--control-border-hover);
+  box-shadow: var(--control-shadow);
+}
+.settings-card button,
+.settings-card > a {
+  min-height: 43px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid #edf0ec;
+  border-radius: 8px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  font-size: 9px;
+}
+.settings-card button:hover,
+.settings-card > a:hover {
+  background: #f4f8f2;
+  color: var(--dark);
+  transform: translateX(2px);
+}
+.block-nav button:hover {
+  background: #f4f8f2;
+  color: var(--dark);
+  transform: translateX(2px);
+}
+.mobile-bottom-nav a {
+  position: relative;
+  overflow: hidden;
+}
+.mobile-bottom-nav a:active {
+  transform: scale(0.94);
+}
+.mobile-bottom-nav a.active {
+  box-shadow: 0 1px 3px rgba(23, 55, 42, 0.08) inset;
+}
+@media (hover: none) {
+  .app-frame button:not(.modal-scrim):hover,
+  .app-frame .button:hover,
+  .app-frame nav a:hover,
+  .app-frame .settings-card a:hover {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-frame button,
+  .app-frame .button,
+  .app-frame .text-button,
+  .app-frame nav a,
+  .app-frame .settings-card a {
+    transition-duration: 0.01ms;
+  }
+}
+
 @media (max-width: 800px) {
   .paywall-modal.plan-picker-modal {
     align-self: flex-end;
@@ -10297,4 +10577,28 @@ h1 em:after {
     padding-left: 10px;
     padding-right: 10px;
   }
+}
+
+/* Keep the primary action calm and product-like after legacy action styles. */
+.app-frame .deck-actions button {
+  box-shadow: var(--control-shadow);
+  animation: none;
+}
+.app-frame .deck-actions button:hover:not(:disabled) {
+  box-shadow: var(--control-shadow-hover);
+}
+.app-frame .deck-actions .action-apply {
+  background: linear-gradient(180deg, #438965 0%, #327451 100%);
+  animation: none;
+  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.2) inset,
+    0 9px 20px rgba(38, 105, 73, 0.22);
+}
+.app-frame .deck-actions .action-apply:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3d845f 0%, #2b6849 100%);
+}
+.app-frame .deck-actions .action-apply b::after {
+  animation: none;
+  width: 6px;
+  height: 6px;
+  box-shadow: 0 0 0 2px rgba(216, 241, 105, 0.16);
 }
