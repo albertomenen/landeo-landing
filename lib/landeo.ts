@@ -42,6 +42,16 @@ type JobRow={
 };
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const JOB_CACHE_MS=60_000;
+const DASHBOARD_CACHE_MS=30_000;
+type TimedPromise<T>={expiresAt:number;value:Promise<T>};
+const jobsCache=new Map<string,TimedPromise<Job[]>>();
+const applicationsCache=new Map<string,TimedPromise<LiveApplication[]>>();
+const savedJobsCache=new Map<string,TimedPromise<Job[]>>();
+function cacheKey(limit:number,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}){
+  return JSON.stringify({limit,includeDismissed:Boolean(options.includeDismissed),includeWorldwide:Boolean(options.includeWorldwide),search:options.search?.trim().toLowerCase()??""});
+}
+function clearDashboardCaches(){jobsCache.clear();applicationsCache.clear();savedJobsCache.clear()}
 const defaultUniversal=(user?:User|null):UniversalProfile=>({version:1,firstName:String(user?.user_metadata?.full_name??"").split(/\s+/)[0]??"",lastName:String(user?.user_metadata?.full_name??"").split(/\s+/).slice(1).join(" "),addressLine:"",city:"",country:"España",postalCode:"",githubUrl:"",websiteUrl:"",salaryCurrency:"EUR",availability:"",noticePeriod:"",workAuthorizationCountries:["España"],visaRequirement:"No necesito visado",willingToRelocate:false,languages:[],lastCompany:"",lastTitle:"",yearsExperience:0,generalMotivation:"",openToInternship:false,universityAgreement:"No aplica",privacyConsent:false,automaticApplicationConsent:false});
 
 function workMode(value:string|null):Job["workMode"]{const normalized=(value??"").toLowerCase();if(normalized.includes("remot"))return"remote";if(normalized.includes("híbr")||normalized.includes("hybrid"))return"hybrid";return"onsite"}
@@ -78,7 +88,7 @@ function featuredScore(job:Job){
 
 export async function currentUser(){const {data,error}=await createSupabaseBrowserClient().auth.getUser();if(error)return null;return data.user}
 
-export async function loadJobs(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
+async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();
   let hidden=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
@@ -126,10 +136,19 @@ export async function loadJobs(limit=120,options:{includeDismissed?:boolean;incl
   return available;
 }
 
+export async function loadJobs(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
+  const{data}=await createSupabaseBrowserClient().auth.getSession();
+  const key=`${data.session?.user.id??"anonymous"}:${cacheKey(limit,options)}`;const cached=jobsCache.get(key);
+  if(cached&&cached.expiresAt>Date.now())return cached.value;
+  const value=loadJobsFresh(limit,options).catch(error=>{jobsCache.delete(key);throw error});
+  jobsCache.set(key,{expiresAt:Date.now()+JOB_CACHE_MS,value});return value;
+}
+
 export async function recordSwipe(jobId:string,direction:SwipeDirection){
   if(!UUID.test(jobId))throw new Error("Oferta no válida.");
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para guardar tu decisión.");
   const {error}=await client.from("swipes").upsert({user_id:user.id,job_id:jobId,direction},{onConflict:"user_id,job_id"});if(error)throw error;
+  clearDashboardCaches();
 }
 
 export async function submitApplication(jobId:string,answers:Record<string,unknown>={}):Promise<ApplyOutcome>{
@@ -138,7 +157,7 @@ export async function submitApplication(jobId:string,answers:Record<string,unkno
   const {data,error}=await client.functions.invoke("submit-application",{body:{jobId,answers,platform:"web"}});
   if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"El servidor no pudo procesar la candidatura.")}
   if(error)throw new Error(error.message||"No se pudo conectar con el servidor de candidaturas.");
-  return data as ApplyOutcome;
+  clearDashboardCaches();return data as ApplyOutcome;
 }
 
 export async function loadProfile():Promise<CandidateProfile|null>{
@@ -154,6 +173,7 @@ export async function saveProfile(input:{firstName:string;lastName:string;email:
   if(input.cv){if(input.cv.size>8*1024*1024)throw new Error("El CV no puede superar 8 MB.");const extension=input.cv.name.toLowerCase().endsWith(".docx")?"docx":input.cv.name.toLowerCase().endsWith(".doc")?"doc":"pdf";cvPath=`${user.id}/cv.${extension}`;const{error}=await client.storage.from("cvs").upload(cvPath,input.cv,{contentType:input.cv.type||"application/pdf",upsert:true});if(error)throw error}
   const universal:UniversalProfile={...(previous?.universal??defaultUniversal(user)),firstName:input.firstName,lastName:input.lastName,city:input.city,country:input.country,workAuthorizationCountries:[input.authorizationCountry],privacyConsent:input.privacyConsent,automaticApplicationConsent:input.automaticConsent,version:1};
   const now=new Date().toISOString();const{error}=await client.from("profiles").upsert({id:user.id,full_name:`${input.firstName} ${input.lastName}`.trim(),email:input.email,phone:input.phone,role:input.role,location:input.city,cv_path:cvPath,universal_profile:universal,privacy_consent_at:input.privacyConsent?now:null,automatic_application_consent_at:input.automaticConsent?now:null,universal_profile_completed_at:input.privacyConsent&&input.automaticConsent?now:null,updated_at:now},{onConflict:"id"});if(error)throw error;
+  clearDashboardCaches();
 }
 
 export function coverLetterReadiness(profile:CandidateProfile|null){
@@ -192,11 +212,12 @@ export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;
   const universal:UniversalProfile={...previous,city:input.answers.city,country:targetCountry,salaryCurrency:input.answers.currency,yearsExperience:experienceYears[input.answers.experience]??0,workAuthorizationCountries:authorized?[targetCountry]:[],visaRequirement,version:1};
   const now=new Date().toISOString();const onboardingAnswers={...input.answers,promoCode:input.answers.promoCode.trim().toUpperCase(),locale:input.locale,completedFrom:"web",completedAt:now};
   const{error}=await client.from("profiles").upsert({id:user.id,full_name:fullName,email:existing?.email||user.email||null,phone:existing?.phone||null,role:input.answers.specialtyLabels.join(", ")||input.answers.categoryLabel,location:input.answers.city,skills:input.answers.specialtyLabels,work_modes:input.answers.priorities.includes("remote")?["Remoto","Híbrido"]:[],min_salary:input.answers.salaryMin,max_salary:input.answers.salaryMax,cv_path:cvPath,universal_profile:universal,onboarding_answers:onboardingAnswers,onboarding_completed_at:now,updated_at:now},{onConflict:"id"});if(error)throw error;
+  clearDashboardCaches();
 }
 
 export function profileReadiness(profile:CandidateProfile|null){const u=profile?.universal;const checks=[Boolean(u?.firstName),Boolean(u?.lastName),Boolean(profile?.email),Boolean(profile?.phone),Boolean(u?.city),Boolean(u?.country),Boolean(profile?.cvPath),Boolean(u?.workAuthorizationCountries?.length),Boolean(u?.privacyConsent),Boolean(u?.automaticApplicationConsent)];return{ready:checks.every(Boolean),percentage:Math.round(checks.filter(Boolean).length/checks.length*100),missing:["nombre","apellidos","email","teléfono","ciudad","país","CV","permiso de trabajo","consentimiento de privacidad","autorización de candidatura"].filter((_,i)=>!checks[i])}}
 
-export async function loadApplications():Promise<LiveApplication[]>{
+async function loadApplicationsFresh():Promise<LiveApplication[]>{
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];
   const{data:rows,error}=await client.from("applications").select("id,job_id,status,applied_at,updated_at,action_url,error_message,required_fields,delivery_status,answers").eq("user_id",user.id).order("updated_at",{ascending:false});if(error)throw error;if(!rows?.length)return[];
   const typedRows=rows as Array<{id:string;job_id:string;status:string;applied_at:string;updated_at:string;action_url:string|null;error_message:string|null;required_fields:unknown;delivery_status:string|null;answers:Record<string,unknown>|null}>;
@@ -208,6 +229,13 @@ export async function loadApplications():Promise<LiveApplication[]>{
   return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);const letter=typeof row.answers?.generatedCoverLetter==="string"?row.answers.generatedCoverLetter:null;const generatedAt=typeof row.answers?.coverLetterGeneratedAt==="string"?row.answers.coverLetterGeneratedAt:null;const storedStage=row.answers?.trackingStage;const fallbackStage:TrackingStage=row.status==="interview"?"interview":row.status==="rejected"||row.status==="failed"?"closed":row.status==="viewed"?"screening":"applied";const tracking:ApplicationTracking={stage:typeof storedStage==="string"&&stages.has(storedStage as TrackingStage)?storedStage as TrackingStage:fallbackStage,notes:typeof row.answers?.trackingNotes==="string"?row.answers.trackingNotes:"",nextAction:typeof row.answers?.trackingNextAction==="string"?row.answers.trackingNextAction:"",nextActionAt:typeof row.answers?.trackingNextActionAt==="string"?row.answers.trackingNextActionAt:null,updatedAt:typeof row.answers?.trackingUpdatedAt==="string"?row.answers.trackingUpdatedAt:null};return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,coverLetter:letter,coverLetterGeneratedAt:generatedAt,tracking,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
 }
 
+export async function loadApplications():Promise<LiveApplication[]>{
+  const{data}=await createSupabaseBrowserClient().auth.getSession();const key=data.session?.user.id??"anonymous";
+  const cached=applicationsCache.get(key);if(cached&&cached.expiresAt>Date.now())return cached.value;
+  const value=loadApplicationsFresh().catch(error=>{applicationsCache.delete(key);throw error});
+  applicationsCache.set(key,{expiresAt:Date.now()+DASHBOARD_CACHE_MS,value});return value;
+}
+
 export async function updateApplicationTracking(applicationId:string,input:{stage:TrackingStage;notes:string;nextAction:string;nextActionAt:string|null}){
   if(!UUID.test(applicationId))throw new Error("Candidatura no válida.");
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para actualizar tu seguimiento.");
@@ -215,9 +243,17 @@ export async function updateApplicationTracking(applicationId:string,input:{stag
   const now=new Date().toISOString();const previous=existing.answers&&typeof existing.answers==="object"?existing.answers as Record<string,unknown>:{};
   const answers={...previous,trackingStage:input.stage,trackingNotes:input.notes.trim().slice(0,4000),trackingNextAction:input.nextAction.trim().slice(0,240),trackingNextActionAt:input.nextActionAt||null,trackingUpdatedAt:now};
   const{error}=await client.from("applications").update({answers,updated_at:now}).eq("id",applicationId).eq("user_id",user.id);if(error)throw error;
+  applicationsCache.delete(user.id);
 }
 
-export async function loadSavedJobs(){const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];const{data}=await client.from("swipes").select("job_id").eq("user_id",user.id).eq("direction","save").order("created_at",{ascending:false});if(!data?.length)return[];const{data:rows,error}=await client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",data.map((row:{job_id:string})=>row.job_id));if(error)throw error;return((rows??[])as JobRow[]).map(mapJob)}
+async function loadSavedJobsFresh(){const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return[];const{data}=await client.from("swipes").select("job_id").eq("user_id",user.id).eq("direction","save").order("created_at",{ascending:false});if(!data?.length)return[];const{data:rows,error}=await client.from("jobs").select("id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider").in("id",data.map((row:{job_id:string})=>row.job_id));if(error)throw error;return((rows??[])as JobRow[]).map(mapJob)}
+
+export async function loadSavedJobs(){
+  const{data}=await createSupabaseBrowserClient().auth.getSession();const key=data.session?.user.id??"anonymous";
+  const cached=savedJobsCache.get(key);if(cached&&cached.expiresAt>Date.now())return cached.value;
+  const value=loadSavedJobsFresh().catch(error=>{savedJobsCache.delete(key);throw error});
+  savedJobsCache.set(key,{expiresAt:Date.now()+DASHBOARD_CACHE_MS,value});return value;
+}
 
 export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){const client=createSupabaseBrowserClient();let promotionCode="";const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";if(action==="checkout"){const user=await currentUser();if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}}const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");window.location.assign(data.url)}
 

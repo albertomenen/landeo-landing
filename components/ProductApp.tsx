@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -55,6 +56,16 @@ export type ProductView =
   | "profile"
   | "universal"
   | "cover-letter";
+const viewFromPath = (pathname: string): ProductView | null => {
+  if (pathname === "/app/jobs") return "jobs";
+  if (pathname === "/app/applications") return "applications";
+  if (pathname === "/app/cover-letter") return "cover-letter";
+  if (pathname === "/app/saved") return "saved";
+  if (pathname === "/app/notifications") return "notifications";
+  if (pathname === "/app/profile/universal") return "universal";
+  if (pathname === "/app/profile") return "profile";
+  return null;
+};
 const nav = [
   { id: "jobs", href: "/app/jobs", icon: "⌁", labelKey: "jobs" },
   {
@@ -311,6 +322,7 @@ export default function ProductApp({
   demo?: boolean;
 }) {
   const [locale, setLocale] = useState<DashboardLocale>("es");
+  const [activeView, setActiveView] = useState<ProductView>(view);
   const [mobileNav, setMobileNav] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
@@ -339,8 +351,10 @@ export default function ProductApp({
   useEffect(() => {
     refreshIdentity();
     if (demo) return;
-    const { data } = createSupabaseBrowserClient().auth.onAuthStateChange(() =>
-      refreshIdentity(),
+    const { data } = createSupabaseBrowserClient().auth.onAuthStateChange(
+      (event) => {
+        if (event !== "INITIAL_SESSION") refreshIdentity();
+      },
     );
     return () => data.subscription.unsubscribe();
   }, [refreshIdentity]);
@@ -355,6 +369,34 @@ export default function ProductApp({
     setLocale(nextLocale);
     document.documentElement.lang = nextLocale;
   }, []);
+  useEffect(() => setActiveView(view), [view]);
+  useEffect(() => {
+    const syncFromHistory = () => {
+      const nextView = viewFromPath(window.location.pathname);
+      if (nextView) setActiveView(nextView);
+    };
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, []);
+  const navigateDashboard = (
+    event: ReactMouseEvent<HTMLAnchorElement>,
+    nextView: ProductView,
+    href: string,
+  ) => {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) return;
+    event.preventDefault();
+    setMobileNav(false);
+    if (nextView === activeView) return;
+    window.history.pushState({ landeoDashboard: true }, "", href);
+    setActiveView(nextView);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
   const changeLocale = (nextLocale: DashboardLocale) => {
     setLocale(nextLocale);
     window.localStorage.setItem("landeo-locale", nextLocale);
@@ -369,7 +411,7 @@ export default function ProductApp({
     : displayName(user, profile, locale);
   const initialsValue = initials(name) || "L";
   const currentView =
-    view === "jobs" ? (
+    activeView === "jobs" ? (
       <JobsView
         user={user}
         profile={profile}
@@ -378,20 +420,20 @@ export default function ProductApp({
         demo={demo}
         tourReady={!identityLoading}
       />
-    ) : view === "applications" ? (
+    ) : activeView === "applications" ? (
       <ApplicationsView user={user} locale={locale} />
-    ) : view === "cover-letter" ? (
+    ) : activeView === "cover-letter" ? (
       <CoverLetterView
         user={user}
         profile={profile}
         locale={locale}
         onSaved={refreshIdentity}
       />
-    ) : view === "saved" ? (
+    ) : activeView === "saved" ? (
       <SavedView user={user} locale={locale} />
-    ) : view === "notifications" ? (
+    ) : activeView === "notifications" ? (
       <NotificationsView user={user} locale={locale} />
-    ) : view === "universal" ? (
+    ) : activeView === "universal" ? (
       <UniversalProfile
         user={user}
         profile={profile}
@@ -442,10 +484,14 @@ export default function ProductApp({
                 <Link
                   key={item.id}
                   href={demo ? "/demo/marketing" : item.href}
-                  className={view === item.id ? "active" : ""}
+                  data-no-transition="true"
+                  onClick={(event) => {
+                    if (!demo) navigateDashboard(event, item.id, item.href);
+                  }}
+                  className={activeView === item.id ? "active" : ""}
                   data-tour={item.id === "applications" ? "applications-nav" : undefined}
                 >
-                  {view === item.id && (
+                  {activeView === item.id && (
                     <m.span
                       className="sidebar-active-glow"
                       initial={{ opacity: 0, scaleX: 0.7 }}
@@ -487,7 +533,14 @@ export default function ProductApp({
                   ? t.chrome.ready
                   : `${readiness.missing.length} ${t.chrome.completeRequirements}`}
               </p>
-              <Link href={demo ? "/demo/marketing" : "/app/profile/universal"}>
+              <Link
+                href={demo ? "/demo/marketing" : "/app/profile/universal"}
+                data-no-transition="true"
+                onClick={(event) => {
+                  if (!demo)
+                    navigateDashboard(event, "universal", "/app/profile/universal");
+                }}
+              >
                 {readiness.ready
                   ? t.chrome.reviewProfile
                   : t.chrome.completeProfile}{" "}
@@ -540,7 +593,7 @@ export default function ProductApp({
             </header>
             <AnimatePresence mode="wait" initial={false}>
               <m.div
-                key={view}
+                key={activeView}
                 className="dashboard-view-motion"
                 variants={dashboardViewMotion}
                 initial="hidden"
@@ -560,18 +613,22 @@ export default function ProductApp({
               <Link
                 key={item.id}
                 href={demo ? "/demo/marketing" : item.href}
+                data-no-transition="true"
+                onClick={(event) => {
+                  if (!demo) navigateDashboard(event, item.id, item.href);
+                }}
                 data-tour={item.id === "applications" ? "applications-nav" : undefined}
                 className={
-                  view === item.id ||
-                  (view === "universal" && item.id === "profile")
+                  activeView === item.id ||
+                  (activeView === "universal" && item.id === "profile")
                     ? "active"
                     : ""
                 }
               >
                 <m.i
                   animate={
-                    view === item.id ||
-                    (view === "universal" && item.id === "profile")
+                    activeView === item.id ||
+                    (activeView === "universal" && item.id === "profile")
                       ? { y: -2, scale: 1.1 }
                       : { y: 0, scale: 1 }
                   }

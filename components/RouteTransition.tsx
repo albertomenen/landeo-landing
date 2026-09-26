@@ -57,7 +57,10 @@ function RouteTransitionController() {
       if (destination.pathname === current.pathname && destination.search === current.search) return;
       start();
     };
-    const onHistory = () => start();
+    const onHistory = () => {
+      if (window.location.pathname.startsWith("/app/")) return;
+      start();
+    };
     const onPageShow = () => finish();
     document.addEventListener("click", onClick, true);
     window.addEventListener("popstate", onHistory);

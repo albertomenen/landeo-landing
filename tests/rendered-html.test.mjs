@@ -123,6 +123,9 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(productApp, /saveIconMotion/);
   assert.match(productApp, /applyIconMotion/);
   assert.match(productApp, /reducedMotion="user"/);
+  assert.match(productApp, /history\.pushState/);
+  assert.match(productApp, /data-no-transition="true"/);
+  assert.match(productApp, /activeView/);
   assert.match(styles, /\.deck-actions button:focus-visible/);
   assert.match(styles, /\.dashboard-view-motion/);
   assert.match(styles, /\.dashboard-profile-progress/);
@@ -166,10 +169,19 @@ test("shows accessible route feedback without flashing on quick navigation", asy
   assert.match(safeLink, /return <a href=\{href\}/);
   assert.match(transition, /SHOW_DELAY_MS = 180/);
   assert.match(transition, /SAFETY_TIMEOUT_MS/);
+  assert.match(transition, /pathname\.startsWith\("\/app\/"\)/);
   assert.match(transition, /role="status"/);
   assert.match(loading, /route-transition-fallback/);
   assert.match(styles, /\.route-transition\.is-visible/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
+});
+
+test("reuses short-lived dashboard data without crossing user sessions", async () => {
+  const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  assert.match(landeo, /JOB_CACHE_MS=60_000/);
+  assert.match(landeo, /DASHBOARD_CACHE_MS=30_000/);
+  assert.match(landeo, /data\.session\?\.user\.id\?\?"anonymous"/);
+  assert.match(landeo, /clearDashboardCaches/);
 });
 
 test("keeps authentication redirects recoverable and preserves the requested route", async () => {
