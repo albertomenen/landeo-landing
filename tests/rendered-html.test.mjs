@@ -187,6 +187,9 @@ test("reuses short-lived dashboard data without crossing user sessions", async (
   assert.match(landeo, /DASHBOARD_CACHE_MS=30_000/);
   assert.match(landeo, /data\.session\?\.user\.id\?\?"anonymous"/);
   assert.match(landeo, /clearDashboardCaches/);
+  assert.match(landeo, /function mapJob\(row:JobRow\):Job/);
+  assert.match(landeo, /map\(row=>mapJob\(row\)\)/);
+  assert.doesNotMatch(landeo, /\.map\(mapJob\)/);
 });
 
 test("keeps authentication redirects recoverable and preserves the requested route", async () => {
