@@ -310,12 +310,21 @@ test("offers the real Landeo plans before opening Stripe", async () => {
     "utf8",
   );
   const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  const landeoLib = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  const stripeFunction = await readFile(
+    new URL("supabase/functions/create-stripe-checkout/index.ts", root),
+    "utf8",
+  );
   assert.match(productApp, /14,99 €/);
   assert.match(productApp, /34,99 €/);
   assert.match(productApp, /89,99 €/);
   assert.match(productApp, /startStripe\("checkout", selectedPlan\)/);
   assert.match(productApp, /name="landeo-plan"/);
   assert.match(productApp, /Secure payment with Stripe/);
+  assert.match(landeoLib, /window\.location\.pathname/);
+  assert.match(landeoLib, /returnTo/);
+  assert.match(stripeFunction, /safeReturnUrl/);
+  assert.match(stripeFunction, /body\.returnTo/);
   assert.match(styles, /\.plan-picker-modal/);
   assert.match(styles, /\.plan-picker-options label\.selected/);
   assert.match(styles, /\.plan-picker-visual/);

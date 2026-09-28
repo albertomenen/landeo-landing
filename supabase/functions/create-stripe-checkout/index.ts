@@ -26,6 +26,20 @@ function applicationLimit(plan: Plan) {
   return plan === "starter" ? "50" : plan === "sprint" ? "600" : "200";
 }
 
+function safeReturnUrl(siteUrl: string, value: unknown, fallback: string) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return `${siteUrl}${fallback}`;
+  }
+  try {
+    const url = new URL(value, `${siteUrl}/`);
+    return url.origin === new URL(siteUrl).origin
+      ? url.toString()
+      : `${siteUrl}${fallback}`;
+  } catch {
+    return `${siteUrl}${fallback}`;
+  }
+}
+
 async function stripeRequest(path: string, body: URLSearchParams) {
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "POST",
@@ -93,6 +107,7 @@ Deno.serve(async (request) => {
       promotionCode?: string;
       plan?: Plan;
       locale?: "es" | "en";
+      returnTo?: string;
     };
     const plan = selectedPlan(body.plan);
     const { data: existingCustomer } = await admin.from("stripe_customers")
@@ -121,7 +136,7 @@ Deno.serve(async (request) => {
     if (body.action === "portal") {
       const params = new URLSearchParams();
       params.set("customer", customerId);
-      params.set("return_url", `${siteUrl}/app/profile`);
+      params.set("return_url", safeReturnUrl(siteUrl, body.returnTo, "/app/profile"));
       const portal = await stripeRequest("/billing_portal/sessions", params);
       if (!portal.url) throw new Error("Stripe no devolvió la URL del portal.");
       return json({ url: portal.url });
@@ -152,7 +167,7 @@ Deno.serve(async (request) => {
     params.set("line_items[0][quantity]", "1");
     params.set("locale", body.locale === "es" ? "es" : "en");
     params.set("success_url", `${siteUrl}/app/jobs?checkout=success`);
-    params.set("cancel_url", `${siteUrl}/pricing?checkout=cancelled`);
+    params.set("cancel_url", safeReturnUrl(siteUrl, body.returnTo, "/pricing?checkout=cancelled"));
     const promotionCode = String(body.promotionCode ?? "").trim().toUpperCase();
     if (promotionCode) {
       const promotionQuery = new URLSearchParams();
