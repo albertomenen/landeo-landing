@@ -136,9 +136,9 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
-  const targetResults=await Promise.all(chunks(rows.map(row=>row.id)).map(ids=>client.from("job_application_targets").select("job_id").in("job_id",ids)));
+  const targetResults=await Promise.all(chunks(rows.map(row=>row.id)).map(ids=>client.functions.invoke("available-job-targets",{body:{jobIds:ids}})));
   const targetError=targetResults.find(result=>result.error)?.error;if(targetError)throw targetError;
-  const targetIds=new Set(targetResults.flatMap(result=>(result.data??[])as Array<{job_id:string}>).map(row=>row.job_id));
+  const targetIds=new Set(targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[]);
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
   const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});

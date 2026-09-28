@@ -194,7 +194,7 @@ test("keeps applied and duplicate jobs out of the application feed", async () =>
   );
   assert.match(landeo, /neq\("direction","save"\)/);
   assert.match(landeo, /hiddenFingerprints/);
-  assert.match(landeo, /job_application_targets/);
+  assert.match(landeo, /available-job-targets/);
   assert.match(landeo, /targetIds\.has\(row\.id\)/);
   assert.match(landeo, /seenFingerprints/);
   assert.match(submitApplication, /equivalentJobIds/);
