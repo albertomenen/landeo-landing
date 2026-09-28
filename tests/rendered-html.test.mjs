@@ -348,8 +348,13 @@ test("animates onboarding interactions and exposes issue reporting", async () =>
   assert.match(onboarding, /workAuthorization/);
   assert.match(onboarding, /authorizationChoices/);
   assert.match(onboarding, /job-route-map/);
-  assert.match(onboarding, /preference-profile/);
-  assert.match(onboarding, /LOCATION & RANGE/);
+  assert.match(onboarding, /potential-dashboard/);
+  assert.match(onboarding, /potential-match-list/);
+  assert.match(onboarding, /potential-scan-line/);
+  assert.doesNotMatch(onboarding, /job-route-map potential-route-map/);
+  assert.match(onboarding, /YOUR PREFERENCES/);
+  assert.match(onboarding, /PRIORITIZED OPPORTUNITIES/);
+  assert.match(onboarding, /Target range/);
   assert.match(onboarding, /company-logos\/openai\.png/);
   assert.match(landeo, /workAuthorizationCountries/);
   assert.match(landeo, /Requires sponsorship/);

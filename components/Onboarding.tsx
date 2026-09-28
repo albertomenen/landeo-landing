@@ -1920,62 +1920,89 @@ function Potential({ locale, answers }: { locale: Locale; answers: Answers }) {
           ? "Tu perfil, tus preferencias y un proceso constante forman una combinación poderosa."
           : "Your profile, preferences and a consistent process are a powerful combination."}
       </p>
-      <div className="job-route-map potential-route-map">
-        {[0, 1, 2, 3].map((position) => (
-          <m.span
-            aria-hidden="true"
-            className={`route-connector route-${position + 1}`}
-            key={position}
-            initial={{ scaleX: 0, opacity: 0 }}
-            animate={{ scaleX: 1, opacity: 1 }}
-            transition={{ duration: 0.65, delay: 0.18 + position * 0.09 }}
-          />
-        ))}
-        <m.div
-          className="route-profile preference-profile"
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.08, type: "spring", stiffness: 190, damping: 18 }}
-        >
-          <p>
-            <small>{locale === "es" ? "LO QUE BUSCAS" : "WHAT YOU WANT"}</small>
-            <strong>{category ? label(category, locale) : "—"}</strong>
-          </p>
-          <p>
-            <small>{locale === "es" ? "ESPECIALIDADES" : "SPECIALIZATIONS"}</small>
-            <strong>{selectedSpecialties.join(" · ") || "—"}</strong>
-          </p>
-          <p>
-            <small>{locale === "es" ? "PREFERENCIAS" : "PREFERENCES"}</small>
-            <strong>{selectedPriorities.join(" · ") || "—"}</strong>
-          </p>
-          <p>
-            <small>{locale === "es" ? "UBICACIÓN Y RANGO" : "LOCATION & RANGE"}</small>
-            <strong>
-              {answers.city} · {money(answers.salaryMin, answers.currency, locale)}–{money(answers.salaryMax, answers.currency, locale)}
-            </strong>
-          </p>
-        </m.div>
-        {companies.map(([name, logo, match], position) => (
-          <m.article
-            className={`route-company company-${position + 1}`}
-            key={name}
-            initial={{ opacity: 0, scale: 0.82, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: [0, -3, 0] }}
-            transition={{
-              opacity: { delay: 0.48 + position * 0.1, duration: 0.25 },
-              scale: { delay: 0.48 + position * 0.1, type: "spring" },
-              y: { delay: 0.9 + position * 0.12, duration: 2.4, repeat: Infinity },
+      <m.div
+        className="potential-dashboard"
+        initial={{ opacity: 0, y: 14, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="potential-dashboard-bar">
+          <span><i /> LANDEO MATCH</span>
+          <b>{locale === "es" ? "Plan personalizado" : "Personalized plan"}</b>
+        </div>
+        <div className="potential-dashboard-grid">
+          <m.section
+            className="potential-preferences"
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: {},
+              show: { transition: { staggerChildren: 0.07, delayChildren: 0.14 } },
             }}
           >
-            <img src={logo} alt="" />
-            <span>
-              <strong>{name}</strong>
-              <small>{match}% match</small>
-            </span>
-          </m.article>
-        ))}
-      </div>
+            <small>{locale === "es" ? "TUS PREFERENCIAS" : "YOUR PREFERENCES"}</small>
+            {[
+              ["◎", locale === "es" ? "Rol objetivo" : "Target role", category ? label(category, locale) : "—"],
+              ["✦", locale === "es" ? "Especialidades" : "Specializations", selectedSpecialties.join(" · ") || "—"],
+              ["⌖", locale === "es" ? "Ubicación" : "Location", answers.city || "—"],
+              ["↗", locale === "es" ? "Rango objetivo" : "Target range", `${money(answers.salaryMin, answers.currency, locale)}–${money(answers.salaryMax, answers.currency, locale)}`],
+            ].map(([icon, title, value]) => (
+              <m.div
+                key={title}
+                variants={{
+                  hidden: { opacity: 0, x: -12 },
+                  show: { opacity: 1, x: 0 },
+                }}
+              >
+                <i>{icon}</i>
+                <span><small>{title}</small><strong>{value}</strong></span>
+              </m.div>
+            ))}
+            {selectedPriorities.length > 0 && (
+              <m.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+                {selectedPriorities.map((item) => <b key={item}>{item}</b>)}
+              </m.p>
+            )}
+          </m.section>
+          <section className="potential-matches">
+            <div className="potential-matches-heading">
+              <span>
+                <small>{locale === "es" ? "OPORTUNIDADES PRIORIZADAS" : "PRIORITIZED OPPORTUNITIES"}</small>
+                <strong>{locale === "es" ? "Mejores coincidencias" : "Best matches"}</strong>
+              </span>
+              <m.i
+                aria-hidden="true"
+                animate={{ opacity: [0.35, 1, 0.35], scale: [0.9, 1.08, 0.9] }}
+                transition={{ duration: 1.8, repeat: Infinity }}
+              />
+            </div>
+            <div className="potential-match-list">
+              {companies.slice(0, 3).map(([name, logo, match], position) => (
+                <m.article
+                  key={name}
+                  initial={{ opacity: 0, x: 18 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.28 + position * 0.13, duration: 0.32 }}
+                >
+                  <img src={logo} alt="" />
+                  <span>
+                    <strong>{name}</strong>
+                    <small>{selectedSpecialties[position % Math.max(selectedSpecialties.length, 1)] || (locale === "es" ? "Rol compatible" : "Matching role")}</small>
+                    <em><m.i initial={{ scaleX: 0 }} animate={{ scaleX: match / 100 }} transition={{ delay: 0.52 + position * 0.13, duration: 0.72, ease: [0.22, 1, 0.36, 1] }} /></em>
+                  </span>
+                  <b>{match}%</b>
+                </m.article>
+              ))}
+            </div>
+            <m.div
+              className="potential-scan-line"
+              aria-hidden="true"
+              animate={{ y: [0, 184, 0], opacity: [0, 0.7, 0] }}
+              transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </section>
+        </div>
+      </m.div>
       <small className="claim-note">
         {locale === "es"
           ? "Empresas y porcentajes mostrados como ejemplo visual de tus preferencias."

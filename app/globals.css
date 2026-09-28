@@ -7000,6 +7000,229 @@ h1 em:after {
 .potential-route-map {
   height: 360px;
 }
+.potential-dashboard {
+  width: min(760px, 100%);
+  margin: 26px auto 15px;
+  overflow: hidden;
+  border: 1px solid #dce5da;
+  border-radius: 24px;
+  background: #f8faf6;
+  box-shadow: 0 22px 55px rgba(36, 92, 64, 0.11);
+  text-align: left;
+}
+.potential-dashboard-bar {
+  min-height: 45px;
+  padding: 0 17px;
+  border-bottom: 1px solid #e3e9e1;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #7b8d83;
+  font-size: 8px;
+  letter-spacing: 0.75px;
+}
+.potential-dashboard-bar span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 900;
+}
+.potential-dashboard-bar span i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #41b477;
+  box-shadow: 0 0 0 4px rgba(65, 180, 119, 0.12);
+}
+.potential-dashboard-bar b {
+  color: var(--dark);
+  font-size: 9px;
+  letter-spacing: 0;
+}
+.potential-dashboard-grid {
+  min-height: 285px;
+  display: grid;
+  grid-template-columns: minmax(250px, 0.9fr) minmax(330px, 1.1fr);
+}
+.potential-preferences {
+  padding: 19px;
+  border-right: 1px solid #e1e8df;
+  background: linear-gradient(145deg, #eef5ea, #f8faf6);
+}
+.potential-preferences > small,
+.potential-matches-heading small {
+  display: block;
+  margin-bottom: 11px;
+  color: #8a9990;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.potential-preferences > div {
+  min-height: 47px;
+  margin-bottom: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(23, 55, 42, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  display: grid;
+  grid-template-columns: 29px 1fr;
+  align-items: center;
+  gap: 9px;
+}
+.potential-preferences > div > i {
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: #e5f0e1;
+  color: var(--green);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-style: normal;
+}
+.potential-preferences > div > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.potential-preferences > div small {
+  color: #8c9991;
+  font-size: 7px;
+}
+.potential-preferences > div strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.potential-preferences > p {
+  margin: 10px 0 0 !important;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.potential-preferences > p b {
+  padding: 5px 7px;
+  border: 1px solid #d9e6d6;
+  border-radius: 999px;
+  background: white;
+  color: #527060;
+  font-size: 7px;
+}
+.potential-matches {
+  position: relative;
+  overflow: hidden;
+  padding: 19px;
+  background: #fff;
+}
+.potential-matches-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.potential-matches-heading span {
+  display: flex;
+  flex-direction: column;
+}
+.potential-matches-heading small {
+  margin-bottom: 3px;
+}
+.potential-matches-heading strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.potential-matches-heading > i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow: 0 0 0 5px rgba(216, 241, 105, 0.2);
+}
+.potential-match-list {
+  position: relative;
+  z-index: 2;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.potential-match-list article {
+  min-height: 59px;
+  padding: 9px 10px;
+  border: 1px solid #e5ebe3;
+  border-radius: 14px;
+  background: rgba(250, 252, 249, 0.96);
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 5px 14px rgba(36, 92, 64, 0.045);
+}
+.potential-match-list img {
+  width: 38px;
+  height: 38px;
+  padding: 6px;
+  border: 1px solid #e8ede7;
+  border-radius: 11px;
+  background: #fff;
+  object-fit: contain;
+}
+.potential-match-list article > span {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.potential-match-list strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.potential-match-list small {
+  overflow: hidden;
+  color: #839188;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.potential-match-list article > b {
+  min-width: 38px;
+  color: #19875b;
+  font-size: 10px;
+  text-align: right;
+}
+.potential-match-list em {
+  height: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e5ebe3;
+}
+.potential-match-list em i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), #77bd8e);
+  transform-origin: left center;
+}
+.potential-scan-line {
+  position: absolute;
+  z-index: 1;
+  left: 15px;
+  right: 15px;
+  top: 62px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(59, 127, 90, 0.55), transparent);
+  box-shadow: 0 0 13px rgba(59, 127, 90, 0.25);
+}
 .preference-profile {
   width: 330px;
 }
@@ -7456,6 +7679,28 @@ h1 em:after {
   }
   .potential-route-map {
     height: 480px;
+  }
+  .potential-dashboard {
+    margin-top: 20px;
+    border-radius: 19px;
+  }
+  .potential-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .potential-preferences {
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid #e1e8df;
+  }
+  .potential-preferences > div {
+    min-height: 43px;
+  }
+  .potential-matches {
+    min-height: 275px;
+    padding: 15px;
+  }
+  .potential-dashboard-bar {
+    padding: 0 13px;
   }
   .preference-profile {
     width: min(278px, calc(100% - 42px));
