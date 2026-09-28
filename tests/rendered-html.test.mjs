@@ -165,6 +165,21 @@ test("tracks each application with a persistent user-owned pipeline", async () =
   assert.match(styles, /\.tracking-notes/);
 });
 
+test("keeps applied and duplicate jobs out of the application feed", async () => {
+  const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  const submitApplication = await readFile(
+    new URL("supabase/functions/submit-application/index.ts", root),
+    "utf8",
+  );
+  assert.match(landeo, /neq\("direction","save"\)/);
+  assert.match(landeo, /hiddenFingerprints/);
+  assert.match(landeo, /job_application_targets/);
+  assert.match(landeo, /targetIds\.has\(row\.id\)/);
+  assert.match(landeo, /seenFingerprints/);
+  assert.match(submitApplication, /equivalentJobIds/);
+  assert.match(submitApplication, /\.in\("job_id", equivalentJobIds\)/);
+});
+
 test("shows accessible route feedback without flashing on quick navigation", async () => {
   const layout = await readFile(new URL("app/layout.tsx", root), "utf8");
   const loading = await readFile(new URL("app/loading.tsx", root), "utf8");

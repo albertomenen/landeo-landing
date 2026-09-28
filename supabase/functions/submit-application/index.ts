@@ -267,10 +267,19 @@ Deno.serve(async (request) => {
       }, 422);
     }
 
-    const { data: existing } = await admin.from("applications").select("*").eq(
-      "user_id",
-      userData.user.id,
-    ).eq("job_id", job.id).maybeSingle();
+    let equivalentJobsQuery = admin.from("jobs").select("id")
+      .eq("company", job.company).eq("title", job.title);
+    equivalentJobsQuery = job.location === null
+      ? equivalentJobsQuery.is("location", null)
+      : equivalentJobsQuery.eq("location", job.location);
+    const { data: equivalentJobs } = await equivalentJobsQuery;
+    const equivalentJobIds = Array.from(new Set([
+      job.id,
+      ...(equivalentJobs ?? []).map((item: { id: string }) => item.id),
+    ]));
+    const { data: existing } = await admin.from("applications").select("*")
+      .eq("user_id", userData.user.id).in("job_id", equivalentJobIds)
+      .order("updated_at", { ascending: false }).limit(1).maybeSingle();
     if (existing?.status === "sent") {
       return json({
         status: "sent",
@@ -290,7 +299,7 @@ Deno.serve(async (request) => {
         status: "action_required",
         message:
           "Esta candidatura está pendiente de terminar en la web oficial.",
-        actionUrl: target.apply_url,
+        actionUrl: existing.action_url || target.apply_url,
       });
     }
 

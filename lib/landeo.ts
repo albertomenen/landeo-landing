@@ -60,6 +60,9 @@ function currency(metadata:Record<string,unknown>|null){return typeof metadata?.
 function mapJobForProfile(row:JobRow,profile:MatchProfile|null):Job{const meta=row.metadata??{};const result=calculateJobMatch(row,profile);return{id:row.id,company:row.company,title:row.title,summary:clean(row.summary)||"Consulta los detalles completos de esta oportunidad.",description:clean(row.description)||clean(row.summary)||"",location:row.location||"Ubicación no indicada",market:typeof meta.market_country==="string"?meta.market_country:"",workMode:workMode(row.work_mode),salaryMin:row.salary_min,salaryMax:row.salary_max,salaryCurrency:currency(meta),contractType:row.contract_type||"No indicado",seniority:row.seniority||"No indicado",industry:row.industry||"Otros",applyCapability:capability(row.application_capability),match:result.score,publishedAt:row.published_at||new Date().toISOString(),skills:Array.isArray(meta.requirements)?meta.requirements.filter((x):x is string=>typeof x==="string").slice(0,3):[],source:row.source,applyProvider:row.application_provider||"external",applyMode:row.apply_mode||"external",metadata:{...meta,match_reason_keys:result.reasons}}}
 function mapJob(row:JobRow):Job{return mapJobForProfile(row,null)}
 function clean(value:string|null){return(value??"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim()}
+function fingerprintPart(value:string|null|undefined){return(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function jobFingerprint(job:Pick<JobRow,"company"|"title"|"location">|Pick<Job,"company"|"title"|"location">){return[fingerprintPart(job.company),fingerprintPart(job.title),fingerprintPart(job.location)].join("|")}
+function chunks<T>(values:T[],size=120){const result:T[][]=[];for(let start=0;start<values.length;start+=size)result.push(values.slice(start,start+size));return result}
 
 const jobSearchGroups:Array<{match:RegExp;terms:string[]}>= [
   {match:/marketing|mercadotecnia|comunicacion/i,terms:["marketing","growth","brand","content","communications","demand generation","acquisition","lifecycle","seo"]},
@@ -92,14 +95,21 @@ export async function currentUser(){const {data,error}=await createSupabaseBrows
 async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();
-  let hidden=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
+  let hidden=new Set<string>();let hiddenFingerprints=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
   if(session.session?.user){
     const[{data:swipes},{data:applications},{data:profile}]=await Promise.all([
-      client.from("swipes").select("job_id").eq("user_id",session.session.user.id).eq("direction","left"),
+      client.from("swipes").select("job_id,direction").eq("user_id",session.session.user.id).neq("direction","save"),
       client.from("applications").select("job_id").eq("user_id",session.session.user.id),
       client.from("profiles").select("role,location,skills,work_modes,min_salary,max_salary,universal_profile").eq("id",session.session.user.id).maybeSingle(),
     ]);
-    hidden=new Set([...(options.includeDismissed?[]:(swipes??[]).map((row:{job_id:string})=>row.job_id)),...(applications??[]).map((row:{job_id:string})=>row.job_id)]);
+    const hiddenSwipeIds=(swipes??[]).filter((row:{job_id:string;direction:string})=>row.direction==="right"||!options.includeDismissed).map((row:{job_id:string})=>row.job_id);
+    hidden=new Set([...hiddenSwipeIds,...(applications??[]).map((row:{job_id:string})=>row.job_id)]);
+    const hiddenIds=[...hidden];
+    if(hiddenIds.length){
+      const hiddenResults=await Promise.all(chunks(hiddenIds).map(ids=>client.from("jobs").select("company,title,location").in("id",ids)));
+      const hiddenError=hiddenResults.find(result=>result.error)?.error;if(hiddenError)throw hiddenError;
+      hiddenFingerprints=new Set(hiddenResults.flatMap(result=>(result.data??[])as Array<Pick<JobRow,"company"|"title"|"location">>).map(jobFingerprint));
+    }
     const universal=profile?.universal_profile as Partial<UniversalProfile>|null;candidateCity=universal?.city||profile?.location||"";candidateCountry=universal?.country||"";
     matchProfile={role:profile?.role||"",location:candidateCity,skills:Array.isArray(profile?.skills)?profile.skills:[],workModes:Array.isArray(profile?.work_modes)?profile.work_modes:[],minSalary:profile?.min_salary??null,maxSalary:profile?.max_salary??null,yearsExperience:Number(universal?.yearsExperience??0),country:candidateCountry};
   }
@@ -124,8 +134,12 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
+  const targetResults=await Promise.all(chunks(rows.map(row=>row.id)).map(ids=>client.from("job_application_targets").select("job_id").in("job_id",ids)));
+  const targetError=targetResults.find(result=>result.error)?.error;if(targetError)throw targetError;
+  const targetIds=new Set(targetResults.flatMap(result=>(result.data??[])as Array<{job_id:string}>).map(row=>row.job_id));
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
-  const available=rows.map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime());
+  const seenFingerprints=new Set<string>();
+  const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity&&!options.includeWorldwide){
     const localFirst=prioritizeJobsByLocation(available,candidateCity,candidateCountry);
     if(options.search){
