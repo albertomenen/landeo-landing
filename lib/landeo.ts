@@ -92,6 +92,8 @@ function featuredScore(job:Job){
 
 export async function currentUser(){const {data,error}=await createSupabaseBrowserClient().auth.getUser();if(error)return null;return data.user}
 
+export async function deleteCurrentAccount(){const client=createSupabaseBrowserClient();const{data,error}=await client.functions.invoke("delete-account",{body:{confirmation:"delete"}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo eliminar la cuenta.")}if(error)throw new Error(error.message||"No se pudo eliminar la cuenta.");if(!data?.deleted)throw new Error(data?.message||"No se pudo confirmar la eliminación.");clearDashboardCaches();await client.auth.signOut({scope:"local"}).catch(()=>undefined)}
+
 async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();

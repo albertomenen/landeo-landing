@@ -165,6 +165,27 @@ test("tracks each application with a persistent user-owned pipeline", async () =
   assert.match(styles, /\.tracking-notes/);
 });
 
+test("deletes an account and its private data through an authenticated flow", async () => {
+  const productApp = await readFile(
+    new URL("components/ProductApp.tsx", root),
+    "utf8",
+  );
+  const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  const deleteAccount = await readFile(
+    new URL("supabase/functions/delete-account/index.ts", root),
+    "utf8",
+  );
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(productApp, /Eliminar cuenta/);
+  assert.match(productApp, /deleteConfirmation\.trim\(\)/);
+  assert.match(productApp, /Eliminar definitivamente/);
+  assert.match(landeo, /functions\.invoke\("delete-account"/);
+  assert.match(deleteAccount, /deleteStripeCustomer/);
+  assert.match(deleteAccount, /application-receipts/);
+  assert.match(deleteAccount, /admin\.auth\.admin\.deleteUser/);
+  assert.match(styles, /\.account-delete-dialog/);
+});
+
 test("keeps applied and duplicate jobs out of the application feed", async () => {
   const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
   const submitApplication = await readFile(

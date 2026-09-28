@@ -2228,6 +2228,77 @@ h1 em:after {
 .paywall-modal .text-button {
   margin-top: 15px;
 }
+.account-delete-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 100%);
+  padding: 32px;
+  border: 1px solid rgba(166, 59, 51, 0.18);
+  border-radius: 24px;
+  background: #fffefa;
+  box-shadow: 0 32px 90px rgba(24, 8, 7, 0.28);
+}
+.account-delete-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #f9e3e0;
+  color: #a83e38;
+  font-size: 22px;
+  font-weight: 900;
+}
+.account-delete-dialog h2 {
+  margin: 8px 0 10px;
+  font-size: 27px;
+  letter-spacing: -0.8px;
+}
+.account-delete-dialog > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+.account-delete-dialog > label {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.account-delete-dialog input {
+  height: 48px;
+  padding: 0 13px;
+  border: 1px solid #d8c5c2;
+  border-radius: 11px;
+  background: white;
+  font-size: 12px;
+}
+.account-delete-dialog input:focus {
+  outline: 3px solid rgba(168, 62, 56, 0.12);
+  border-color: #a83e38;
+}
+.account-delete-actions {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.account-delete-confirm {
+  border-color: #a83e38;
+  background: #a83e38;
+  color: white;
+}
+.account-delete-confirm:hover:not(:disabled) {
+  background: #91342f;
+  transform: translateY(-1px);
+}
+.account-delete-confirm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .plan-picker-modal {
   width: min(1040px, calc(100vw - 40px));
   max-height: min(760px, calc(100svh - 40px));

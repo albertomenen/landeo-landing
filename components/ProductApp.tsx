@@ -25,6 +25,7 @@ import { createSupabaseBrowserClient } from "../lib/supabase/client";
 import {
   coverLetterReadiness,
   currentUser,
+  deleteCurrentAccount,
   hasWebPro,
   loadApplications,
   loadJobs,
@@ -2374,6 +2375,10 @@ function ProfileView({
   locale: DashboardLocale;
 }) {
   const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   if (!user)
     return (
       <SignInState
@@ -2391,6 +2396,23 @@ function ProfileView({
     await createSupabaseBrowserClient().auth.signOut();
     router.push("/");
     router.refresh();
+  }
+  async function removeAccount() {
+    const expected = locale === "es" ? "ELIMINAR" : "DELETE";
+    if (deleteConfirmation.trim() !== expected) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteCurrentAccount();
+      window.location.assign("/?account=deleted");
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : localized(locale, "No se pudo eliminar la cuenta.", "The account could not be deleted."),
+      );
+      setDeleting(false);
+    }
   }
   const letterReadiness = coverLetterReadiness(profile);
   return (
@@ -2556,9 +2578,39 @@ function ProfileView({
               <span>{localized(locale, "CV privado", "Private résumé")}</span>
               <b>{profile?.cvPath ? "✓" : "›"}</b>
             </Link>
+            <button className="danger" type="button" onClick={() => {
+              setDeleteConfirmation("");
+              setDeleteError("");
+              setDeleteOpen(true);
+            }}>
+              <span>{localized(locale, "Eliminar cuenta", "Delete account")}</span>
+              <b>›</b>
+            </button>
           </section>
         </div>
       </div>
+      <AnimatePresence>
+        {deleteOpen && (
+          <m.div className="modal-backdrop account-delete-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <button className="modal-scrim" aria-label={localized(locale, "Cerrar", "Close")} onClick={() => !deleting && setDeleteOpen(false)} />
+            <m.section className="account-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" initial={{ opacity: 0, y: 18, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.98 }}>
+              <span className="account-delete-icon" aria-hidden="true">!</span>
+              <span className="overline">{localized(locale, "ACCIÓN IRREVERSIBLE", "IRREVERSIBLE ACTION")}</span>
+              <h2 id="delete-account-title">{localized(locale, "Eliminar tu cuenta definitivamente", "Permanently delete your account")}</h2>
+              <p>{localized(locale, "Cancelaremos tu suscripción y eliminaremos tu perfil, CV, preferencias, candidaturas, mensajes e integraciones. No podrás recuperar estos datos.", "We will cancel your subscription and delete your profile, résumé, preferences, applications, messages and integrations. This data cannot be recovered.")}</p>
+              <label>
+                {localized(locale, "Escribe ELIMINAR para confirmar", "Type DELETE to confirm")}
+                <input autoFocus value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} disabled={deleting} placeholder={locale === "es" ? "ELIMINAR" : "DELETE"} />
+              </label>
+              {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
+              <div className="account-delete-actions">
+                <button className="button button-ghost" type="button" onClick={() => setDeleteOpen(false)} disabled={deleting}>{localized(locale, "Conservar mi cuenta", "Keep my account")}</button>
+                <button className="button account-delete-confirm" type="button" onClick={removeAccount} disabled={deleting || deleteConfirmation.trim() !== (locale === "es" ? "ELIMINAR" : "DELETE")}>{deleting ? localized(locale, "Eliminando…", "Deleting…") : localized(locale, "Eliminar definitivamente", "Delete permanently")}</button>
+              </div>
+            </m.section>
+          </m.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
