@@ -3044,6 +3044,7 @@ function UniversalProfile({
   const [cv, setCv] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [profileStep, setProfileStep] = useState(0);
   useEffect(() => {
     if (!user) return;
     const universal = profile?.universal;
@@ -3061,6 +3062,21 @@ function UniversalProfile({
     setPrivacy(Boolean(universal?.privacyConsent));
     setAutomatic(Boolean(universal?.automaticApplicationConsent));
   }, [user, profile]);
+  useEffect(() => {
+    const stepByHash: Record<string, number> = {
+      "#identity": 0,
+      "#resume": 1,
+      "#authorization": 2,
+      "#consents": 3,
+    };
+    const syncHash = () => {
+      const nextStep = stepByHash[window.location.hash];
+      if (typeof nextStep === "number") setProfileStep(nextStep);
+    };
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
   if (!user)
     return (
       <SignInState
@@ -3124,8 +3140,66 @@ function UniversalProfile({
     onboardingCompletedAt: profile?.onboardingCompletedAt ?? null,
   };
   const readiness = profileReadiness(preview);
+  const profileSteps = locale === "es"
+    ? ["Identidad y contacto", "CV privado", "Autorización laboral", "Consentimientos"]
+    : ["Identity and contact", "Private résumé", "Work authorization", "Consents"];
+  const stepComplete = [
+    Boolean(firstName && lastName && email && phone && city && country),
+    Boolean(cv || profile?.cvPath),
+    Boolean(authorization),
+    privacy && automatic,
+  ];
+  const stepContent = [
+    {
+      eyebrow: localized(locale, "01 · IDENTIDAD", "01 · IDENTITY"),
+      title: localized(locale, "Tus datos esenciales", "Your essential details"),
+      detail: localized(locale, "Esta información se reutiliza de forma segura en tus candidaturas.", "This information is securely reused across your applications."),
+    },
+    {
+      eyebrow: localized(locale, "02 · DOCUMENTO PRIVADO", "02 · PRIVATE DOCUMENT"),
+      title: localized(locale, "Añade tu CV una sola vez", "Add your résumé once"),
+      detail: localized(locale, "Se guarda de forma privada y solo se utiliza cuando decides postularte.", "It stays private and is only used when you choose to apply."),
+    },
+    {
+      eyebrow: localized(locale, "03 · ELEGIBILIDAD", "03 · ELIGIBILITY"),
+      title: localized(locale, "Confirma dónde puedes trabajar", "Confirm where you can work"),
+      detail: localized(locale, "Esto evita recomendarte candidaturas para las que necesitarías una autorización diferente.", "This helps avoid roles that require a different work authorization."),
+    },
+    {
+      eyebrow: localized(locale, "04 · CONTROL Y PRIVACIDAD", "04 · CONTROL & PRIVACY"),
+      title: localized(locale, "Tú decides cuándo utilizarlo", "You decide when it is used"),
+      detail: localized(locale, "Revisa los permisos necesarios antes de activar tu perfil universal.", "Review the required permissions before activating your universal profile."),
+    },
+  ][profileStep];
+  const changeProfileStep = (nextStep: number) => {
+    const safeStep = Math.max(0, Math.min(3, nextStep));
+    setProfileStep(safeStep);
+    const hashes = ["identity", "resume", "authorization", "consents"];
+    window.history.replaceState(null, "", `#${hashes[safeStep]}`);
+    document.querySelector(".profile-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!firstName || !lastName || !email || !phone || !city || !country) {
+      changeProfileStep(0);
+      setMessage(localized(locale, "Completa primero tus datos de identidad y contacto.", "Complete your identity and contact details first."));
+      return;
+    }
+    if (!cv && !profile?.cvPath) {
+      changeProfileStep(1);
+      setMessage(localized(locale, "Añade tu CV antes de guardar el perfil.", "Add your résumé before saving the profile."));
+      return;
+    }
+    if (!authorization) {
+      changeProfileStep(2);
+      setMessage(localized(locale, "Indica tu autorización laboral.", "Add your work authorization."));
+      return;
+    }
+    if (!privacy || !automatic) {
+      changeProfileStep(3);
+      setMessage(localized(locale, "Revisa y acepta los consentimientos necesarios.", "Review and accept the required consents."));
+      return;
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -3201,212 +3275,77 @@ function UniversalProfile({
         </div>
       </header>
       <div className="universal-layout">
-        <nav className="block-nav">
-          {(locale === "es"
-            ? [
-                "Identidad y contacto",
-                "CV privado",
-                "Autorización laboral",
-                "Consentimientos",
-              ]
-            : [
-                "Identity and contact",
-                "Private résumé",
-                "Work authorization",
-                "Consents",
-              ]
-          ).map((label, index) => (
+        <nav className="block-nav" role="tablist" aria-label={localized(locale, "Secciones del perfil", "Profile sections")}>
+          {profileSteps.map((label, index) => (
             <button
               key={label}
               type="button"
-              className={index === 0 ? "done" : ""}
-              onClick={() => {
-                const targets = [
-                  "identity",
-                  "resume",
-                  "authorization",
-                  "consents",
-                ];
-                document
-                  .getElementById(targets[index])
-                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
+              role="tab"
+              aria-selected={profileStep === index}
+              aria-controls={`profile-step-${index}`}
+              className={`${profileStep === index ? "active" : ""} ${stepComplete[index] ? "done" : ""}`}
+              onClick={() => changeProfileStep(index)}
             >
-              <i>{index + 1}</i>
+              <i>{stepComplete[index] ? "✓" : index + 1}</i>
               <span>{label}</span>
             </button>
           ))}
         </nav>
         <form className="profile-form" onSubmit={submit}>
-          <span className="overline">
-            {localized(
-              locale,
-              "DATOS MÍNIMOS PARA POSTULARTE",
-              "MINIMUM APPLICATION DETAILS",
-            )}
-          </span>
-          <h2>
-            {localized(
-              locale,
-              "Prepara tu candidatura",
-              "Prepare your application",
-            )}
-          </h2>
-          <p>
-            {localized(
-              locale,
-              "El servidor volverá a validar cada campo antes de enviar.",
-              "The server validates every field again before submission.",
-            )}
-          </p>
-          <div className="form-grid">
-            <label id="identity">
-              {localized(locale, "Nombre", "First name")}
-              <input
-                required
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
-              />
-            </label>
-            <label>
-              {localized(locale, "Apellidos", "Last name")}
-              <input
-                required
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
-              />
-            </label>
-            <label>
-              Email
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-            <label>
-              {localized(locale, "Teléfono", "Phone")}
-              <input
-                required
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-              />
-            </label>
-            <label>
-              {localized(locale, "Ciudad", "City")}
-              <input
-                required
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-              />
-            </label>
-            <label>
-              {localized(locale, "País", "Country")}
-              <input
-                required
-                value={country}
-                onChange={(event) => setCountry(event.target.value)}
-              />
-            </label>
-            <label>
-              {localized(locale, "Puesto actual", "Current role")}
-              <input
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-              />
-            </label>
-            <label id="authorization">
-              {localized(locale, "Autorización laboral", "Work authorization")}
-              <input
-                required
-                value={authorization}
-                onChange={(event) => setAuthorization(event.target.value)}
-              />
-            </label>
-            <label className="full" id="resume">
-              {localized(
-                locale,
-                "CV privado · PDF, DOC o DOCX · máximo 8 MB",
-                "Private résumé · PDF, DOC or DOCX · 8 MB maximum",
-              )}
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={(event) => setCv(event.target.files?.[0] ?? null)}
-              />
-              <small>
-                {cv?.name ||
-                  profile?.cvPath?.split("/").pop() ||
-                  localized(
-                    locale,
-                    "Aún no has subido un CV",
-                    "No résumé uploaded yet",
-                  )}
-              </small>
-            </label>
-          </div>
-          <div className="consent-box" id="consents">
-            <label
-              aria-label={localized(
-                locale,
-                "Consentimiento de privacidad",
-                "Privacy consent",
-              )}
+          <span className="overline">{stepContent.eyebrow}</span>
+          <h2>{stepContent.title}</h2>
+          <p>{stepContent.detail}</p>
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={profileStep}
+              id={`profile-step-${profileStep}`}
+              className="profile-step-panel"
+              role="tabpanel"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.16 }}
             >
-              <input
-                type="checkbox"
-                checked={privacy}
-                onChange={(event) => setPrivacy(event.target.checked)}
-              />
-              <span>
-                <strong>
-                  {localized(
-                    locale,
-                    "Consentimiento de privacidad",
-                    "Privacy consent",
-                  )}
-                </strong>
-                <small>
-                  {localized(
-                    locale,
-                    "Autorizo el tratamiento de mis datos para gestionar candidaturas.",
-                    "I authorize the processing of my information to manage applications.",
-                  )}
-                </small>
-              </span>
-            </label>
-            <label
-              aria-label={localized(
-                locale,
-                "Autorización de candidatura automática",
-                "Automatic application authorization",
+              {profileStep === 0 && (
+                <div className="form-grid" id="identity">
+                  <label>{localized(locale, "Nombre", "First name")}<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
+                  <label>{localized(locale, "Apellidos", "Last name")}<input required value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
+                  <label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+                  <label>{localized(locale, "Teléfono", "Phone")}<input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+                  <label>{localized(locale, "Ciudad", "City")}<input required value={city} onChange={(event) => setCity(event.target.value)} /></label>
+                  <label>{localized(locale, "País", "Country")}<input required value={country} onChange={(event) => setCountry(event.target.value)} /></label>
+                  <label className="full">{localized(locale, "Puesto actual", "Current role")}<input value={role} onChange={(event) => setRole(event.target.value)} /></label>
+                </div>
               )}
-            >
-              <input
-                type="checkbox"
-                checked={automatic}
-                onChange={(event) => setAutomatic(event.target.checked)}
-              />
-              <span>
-                <strong>
-                  {localized(
-                    locale,
-                    "Autorización de candidatura automática",
-                    "Automatic application authorization",
-                  )}
-                </strong>
-                <small>
-                  {localized(
-                    locale,
-                    "Solo se utiliza cuando expreso intención con un swipe derecho.",
-                    "Used only when I express intent with a right swipe.",
-                  )}
-                </small>
-              </span>
-            </label>
-          </div>
+              {profileStep === 1 && (
+                <div className="profile-document-step" id="resume">
+                  <label className="profile-file-drop">
+                    <span aria-hidden="true">⇧</span>
+                    <strong>{localized(locale, "Selecciona tu CV", "Choose your résumé")}</strong>
+                    <small>{localized(locale, "PDF, DOC o DOCX · máximo 8 MB", "PDF, DOC or DOCX · 8 MB maximum")}</small>
+                    <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setCv(event.target.files?.[0] ?? null)} />
+                  </label>
+                  <p className={cv || profile?.cvPath ? "profile-file-current ready" : "profile-file-current"}>
+                    <b>{cv || profile?.cvPath ? "✓" : "i"}</b>
+                    <span><strong>{cv?.name || profile?.cvPath?.split("/").pop() || localized(locale, "Aún no has subido un CV", "No résumé uploaded yet")}</strong><small>{localized(locale, "Cifrado y privado en Supabase Storage", "Encrypted and private in Supabase Storage")}</small></span>
+                  </p>
+                </div>
+              )}
+              {profileStep === 2 && (
+                <div className="profile-authorization-step" id="authorization">
+                  <span aria-hidden="true">◎</span>
+                  <label>{localized(locale, "País o región donde puedes trabajar", "Country or region where you can work")}<input required value={authorization} onChange={(event) => setAuthorization(event.target.value)} /></label>
+                  <p>{localized(locale, "Añade el mercado principal en el que tienes permiso de trabajo. Podrás ampliarlo más adelante.", "Add the primary market where you are authorized to work. You can expand it later.")}</p>
+                </div>
+              )}
+              {profileStep === 3 && (
+                <div className="consent-box profile-consent-step" id="consents">
+                  <label aria-label={localized(locale, "Consentimiento de privacidad", "Privacy consent")}><input type="checkbox" checked={privacy} onChange={(event) => setPrivacy(event.target.checked)} /><span><strong>{localized(locale, "Consentimiento de privacidad", "Privacy consent")}</strong><small>{localized(locale, "Autorizo el tratamiento de mis datos para gestionar candidaturas.", "I authorize the processing of my information to manage applications.")}</small></span></label>
+                  <label aria-label={localized(locale, "Autorización de candidatura automática", "Automatic application authorization")}><input type="checkbox" checked={automatic} onChange={(event) => setAutomatic(event.target.checked)} /><span><strong>{localized(locale, "Autorización de candidatura automática", "Automatic application authorization")}</strong><small>{localized(locale, "Solo se utiliza cuando expreso intención con un swipe derecho.", "Used only when I express intent with a right swipe.")}</small></span></label>
+                </div>
+              )}
+            </m.div>
+          </AnimatePresence>
           {message && (
             <p
               className={
@@ -3427,15 +3366,14 @@ function UniversalProfile({
                   )
                 : `${localized(locale, "Falta", "Missing")}: ${readiness.missing.join(", ")}.`}
             </span>
-            <button
-              className="button button-primary"
-              type="submit"
-              disabled={saving}
-            >
-              {saving
-                ? localized(locale, "Guardando…", "Saving…")
-                : localized(locale, "Guardar perfil →", "Save profile →")}
-            </button>
+            <div className="form-actions-buttons">
+              {profileStep > 0 && <button className="button button-ghost" type="button" onClick={() => changeProfileStep(profileStep - 1)}>← {localized(locale, "Anterior", "Previous")}</button>}
+              {profileStep < 3 ? (
+                <button className="button button-primary" type="button" onClick={() => changeProfileStep(profileStep + 1)}>{localized(locale, "Continuar", "Continue")} →</button>
+              ) : (
+                <button className="button button-primary" type="submit" disabled={saving}>{saving ? localized(locale, "Guardando…", "Saving…") : localized(locale, "Guardar perfil →", "Save profile →")}</button>
+              )}
+            </div>
           </div>
         </form>
       </div>

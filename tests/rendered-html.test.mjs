@@ -117,6 +117,13 @@ test("ships a persistent bilingual dashboard and accessible job actions", async 
   assert.match(productApp, /aria-pressed/);
   assert.match(productApp, /LazyMotion/);
   assert.match(productApp, /dashboardViewMotion/);
+  assert.match(productApp, /profileStep/);
+  assert.match(productApp, /changeProfileStep/);
+  assert.match(productApp, /role="tablist"/);
+  assert.match(productApp, /role="tabpanel"/);
+  assert.match(productApp, /profile-file-drop/);
+  assert.match(styles, /\.block-nav button\.active/);
+  assert.doesNotMatch(styles, /\.block-nav button:first-child/);
   assert.match(productApp, /jobCardMotion/);
   assert.match(productApp, /actionButtonMotion/);
   assert.match(productApp, /AnimatePresence mode="sync"/);
