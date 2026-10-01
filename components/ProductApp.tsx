@@ -171,6 +171,13 @@ function matchesJobQuery(job: Job, query: string) {
   if (haystack.toLowerCase().includes(value.toLowerCase())) return true;
   return queryAliases.some((group) => group.match.test(value) && group.terms.test(haystack));
 }
+type EarlyCareerFilter = "all" | "internship" | "junior";
+function jobCareerLevel(job: Job): Exclude<EarlyCareerFilter, "all"> | "experienced" {
+  const value = `${job.title} ${job.seniority} ${job.contractType}`.toLowerCase();
+  if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|stage\b/.test(value)) return "internship";
+  if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate/.test(value)) return "junior";
+  return "experienced";
+}
 const trackingStages: TrackingStage[] = [
   "applied",
   "screening",
@@ -677,6 +684,7 @@ function JobsView({
   const [mode, setMode] = useState("all");
   const [workMode, setWorkMode] = useState("all");
   const [market, setMarket] = useState("all");
+  const [careerLevel, setCareerLevel] = useState<EarlyCareerFilter>("all");
   const [showAutomaticArchive, setShowAutomaticArchive] = useState(false);
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
@@ -702,7 +710,7 @@ function JobsView({
       setJobs(
         await loadJobs(120, {
           includeDismissed: showAutomaticArchive,
-          includeWorldwide: showAutomaticArchive,
+          includeWorldwide: true,
           search: debouncedQuery,
         }),
       );
@@ -725,9 +733,10 @@ function JobsView({
             String(
               job.market || job.metadata?.market_country || "",
             ).toUpperCase() === market) &&
+          (careerLevel === "all" || jobCareerLevel(job) === careerLevel) &&
           matchesJobQuery(job, query),
       ),
-    [jobs, mode, workMode, market, query],
+    [jobs, mode, workMode, market, careerLevel, query],
   );
   const markets = useMemo(
     () =>
@@ -924,6 +933,7 @@ function JobsView({
                 setMode("all");
                 setWorkMode("all");
                 setMarket("all");
+                setCareerLevel("all");
                 setQuery("");
                 setShowAutomaticArchive(false);
               }}
@@ -964,6 +974,26 @@ function JobsView({
               ))}
             </select>
           </label>
+          <fieldset className="career-level-filter">
+            <legend>{localized(locale, "Nivel de experiencia", "Experience level")}</legend>
+            {[
+              ["all", localized(locale, "Todos los niveles", "All levels")],
+              ["internship", localized(locale, "Prácticas", "Internships")],
+              ["junior", localized(locale, "Junior / Primer empleo", "Junior / Entry-level")],
+            ].map(([value, label]) => (
+              <m.label key={value} className="radio-row" whileHover={{ x: 2 }} whileTap={{ scale: 0.985 }}>
+                <input
+                  type="radio"
+                  checked={careerLevel === value}
+                  onChange={() => {
+                    setCareerLevel(value as EarlyCareerFilter);
+                    setIndex(0);
+                  }}
+                />
+                <span>{label}</span>
+              </m.label>
+            ))}
+          </fieldset>
           <fieldset className="work-mode-filter">
             <legend>{t.jobs.workMode}</legend>
             {[

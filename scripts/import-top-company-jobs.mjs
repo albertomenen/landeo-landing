@@ -45,6 +45,10 @@ const greenhouseBoards = [
   ["samsara", "Samsara"],
   ["scaleai", "Scale AI"],
   ["stripe", "Stripe"],
+  ["gusto", "Gusto"],
+  ["waymo", "Waymo"],
+  ["sigmacomputing", "Sigma Computing"],
+  ["nuro", "Nuro"],
 ];
 
 const leverBoards = [
@@ -57,7 +61,17 @@ const leverBoards = [
   ["coupa", "Coupa", ["CO", "MX", "US", "GB"]],
   ["tryjeeves", "Jeeves", ["CO", "MX", "US", "GB"]],
   ["kavak", "Kavak", ["MX"]],
+  ["doctrine", "Doctrine"],
+  ["winamax", "Winamax"],
+  ["kpler", "Kpler"],
+  ["Qover", "Qover"],
 ];
+
+const earlyCareerOnly = process.argv.includes("--early-career");
+const earlyCareerBoards = new Set([
+  "gusto", "waymo", "sigmacomputing", "nuro",
+  "doctrine", "winamax", "kpler", "qover",
+]);
 
 const countryCodes = new Map([
   ["australia", "AU"], ["austria", "AT"], ["belgium", "BE"],
@@ -184,7 +198,10 @@ function rowBase({ source, board, externalId, company, title, description, locat
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { "User-Agent": "Landeo jobs importer/1.0" } });
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Landeo jobs importer/1.0" },
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!response.ok) throw new Error(`${response.status} while fetching ${url}`);
   return response.json();
 }
@@ -262,7 +279,7 @@ async function upsertRows(rows) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase URL or service role key.");
   for (let index = 0; index < rows.length; index += 150) {
-    const response = await fetch(`${url}/rest/v1/jobs?on_conflict=id`, {
+    const response = await fetch(`${url}/rest/v1/jobs?on_conflict=source,external_id`, {
       method: "POST",
       headers: {
         apikey: key,
@@ -270,7 +287,9 @@ async function upsertRows(rows) {
         "content-type": "application/json",
         prefer: "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify(rows.slice(index, index + 150)),
+      body: JSON.stringify(rows.slice(index, index + 150).map((row) =>
+        Object.fromEntries(Object.entries(row).filter(([key]) => key !== "id"))
+      )),
     });
     if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   }
@@ -315,28 +334,43 @@ await loadEnv();
 const results = [];
 const boardRuns = [];
 for (const [board, company] of ashbyBoards) {
-  const rows = await importAshby(board, company);
-  results.push(...rows);
-  boardRuns.push({ source: "Ashby", board, externalIds: new Set(rows.map((row) => row.external_id)) });
-  console.log(`${company}: ${rows.length}`);
+  if (earlyCareerOnly && !earlyCareerBoards.has(board.toLowerCase())) continue;
+  try {
+    const rows = await importAshby(board, company);
+    results.push(...rows);
+    boardRuns.push({ source: "Ashby", board, externalIds: new Set(rows.map((row) => row.external_id)) });
+    console.log(`${company}: ${rows.length}`);
+  } catch (error) {
+    console.warn(`${company}: skipped (${error instanceof Error ? error.message : error})`);
+  }
 }
 for (const [board, company, allowedMarkets] of greenhouseBoards) {
-  const importedRows = await importGreenhouse(board, company);
-  const rows = allowedMarkets
-    ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
-    : importedRows;
-  results.push(...rows);
-  boardRuns.push({ source: "Greenhouse", board, externalIds: new Set(rows.map((row) => row.external_id)) });
-  console.log(`${company}: ${rows.length}`);
+  if (earlyCareerOnly && !earlyCareerBoards.has(board.toLowerCase())) continue;
+  try {
+    const importedRows = await importGreenhouse(board, company);
+    const rows = allowedMarkets
+      ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
+      : importedRows;
+    results.push(...rows);
+    boardRuns.push({ source: "Greenhouse", board, externalIds: new Set(rows.map((row) => row.external_id)) });
+    console.log(`${company}: ${rows.length}`);
+  } catch (error) {
+    console.warn(`${company}: skipped (${error instanceof Error ? error.message : error})`);
+  }
 }
 for (const [board, company, allowedMarkets] of leverBoards) {
-  const importedRows = await importLever(board, company);
-  const rows = allowedMarkets
-    ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
-    : importedRows;
-  results.push(...rows);
-  boardRuns.push({ source: "Lever", board, externalIds: new Set(rows.map((row) => row.external_id)) });
-  console.log(`${company}: ${rows.length}`);
+  if (earlyCareerOnly && !earlyCareerBoards.has(board.toLowerCase())) continue;
+  try {
+    const importedRows = await importLever(board, company);
+    const rows = allowedMarkets
+      ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
+      : importedRows;
+    results.push(...rows);
+    boardRuns.push({ source: "Lever", board, externalIds: new Set(rows.map((row) => row.external_id)) });
+    console.log(`${company}: ${rows.length}`);
+  } catch (error) {
+    console.warn(`${company}: skipped (${error instanceof Error ? error.message : error})`);
+  }
 }
 
 await upsertRows(results);

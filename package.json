@@ -12,6 +12,7 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "jobs:import-top": "node scripts/import-top-company-jobs.mjs",
+    "jobs:import-early": "node scripts/import-top-company-jobs.mjs --early-career",
     "jobs:import-yc": "node scripts/import-yc-jobs.mjs",
     "jobs:import-regional": "node scripts/import-regional-jobs.mjs",
     "jobs:import-email": "node scripts/import-official-email-jobs.mjs",

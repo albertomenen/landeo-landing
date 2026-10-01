@@ -36,7 +36,7 @@ function tokens(value: string) {
 
 const ROLE_ALIASES: Array<{ match: RegExp; terms: string }> = [
   { match: /marketing|mercadotecnia|comunicacion/, terms: "marketing marketer growth brand content communications demand generation acquisition lifecycle seo sem performance go-to-market community" },
-  { match: /software|ingenier|developer|programador/, terms: "software engineering developer frontend backend fullstack mobile platform devops" },
+  { match: /software|ingenier|developer|programador|frontend|backend|full.?stack|web developer/, terms: "software engineering developer frontend backend fullstack mobile platform devops" },
   { match: /product|producto/, terms: "product product-management product-owner product-operations" },
   { match: /design|disen|ux|ui/, terms: "design designer ux ui product-design research" },
   { match: /sales|ventas|comercial/, terms: "sales account executive business development partnerships revenue" },
@@ -45,6 +45,40 @@ const ROLE_ALIASES: Array<{ match: RegExp; terms: string }> = [
   { match: /finance|finanzas|accounting/, terms: "finance financial accounting accountant controller" },
   { match: /consult/, terms: "consulting consultant strategy operations" },
 ];
+
+type RoleFamily = "software" | "marketing" | "product" | "design" | "sales" | "data" | "people" | "finance" | "consulting";
+
+function roleFamily(value: string): RoleFamily | null {
+  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/frontend|backend|full.?stack|software|developer|programador|devops|web development|mobile development/.test(normalized)) return "software";
+  if (/marketing|mercadotecnia|comunicacion|growth|brand|content|seo|sem/.test(normalized)) return "marketing";
+  if (/product manager|product owner|product operations|producto/.test(normalized)) return "product";
+  if (/product design|ux|ui|designer|disen/.test(normalized)) return "design";
+  if (/sales|ventas|account executive|business development|comercial/.test(normalized)) return "sales";
+  if (/data|datos|analytics|machine learning|artificial intelligence|\bai\b/.test(normalized)) return "data";
+  if (/human resources|recursos humanos|talent|recruit|people operations/.test(normalized)) return "people";
+  if (/finance|finanzas|accounting|accountant|controller/.test(normalized)) return "finance";
+  if (/consulting|consultant|consultor/.test(normalized)) return "consulting";
+  return null;
+}
+
+function jobRoleFamily(row: MatchableJob): RoleFamily | null {
+  const title = `${row.title} ${row.metadata?.department ?? ""} ${row.metadata?.team ?? ""}`;
+  const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const fullText = `${normalized} ${clean(row.summary)} ${clean(row.description)}`.toLowerCase();
+  if (/frontend|backend|full.?stack|software|developer|programmer|devops|web engineer|mobile engineer|ios engineer|android engineer/.test(normalized)) return "software";
+  if (/\bengineer\b/.test(normalized) && /javascript|typescript|react|node|python|java|golang|software|api|cloud|kotlin|swift/.test(fullText)) return "software";
+  return roleFamily(normalized);
+}
+
+export function isJobProfessionallyRelevant(row: MatchableJob, profile: MatchProfile | null) {
+  if (!profile?.role.trim()) return true;
+  const desiredFamily = roleFamily(profile.role);
+  if (!desiredFamily) return overlap(roleTokens(profile.role), tokens(`${row.title} ${row.metadata?.department ?? ""}`)) > 0;
+  if (jobRoleFamily(row) === desiredFamily) return true;
+  const skillHits = overlap(tokens(profile.skills.join(" ")), tokens(`${row.title} ${clean(row.summary)}`));
+  return skillHits > 0;
+}
 
 function roleTokens(value: string) {
   const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -96,6 +130,7 @@ export function calculateJobMatch(row: MatchableJob, profile: MatchProfile | nul
   const [minYears, maxYears] = expectedExperience(row.seniority, row.title);
   if (profile.yearsExperience >= minYears && profile.yearsExperience <= maxYears + 2) { score += 10; reasons.push("experience"); }
   else if (profile.yearsExperience < minYears) score -= 8;
-  if (!roleHits && !skillHits) score -= 6;
-  return { score: Math.max(32, Math.min(98, Math.round(score))), reasons: reasons.slice(0, 3).length ? reasons.slice(0, 3) : ["profile"] };
+  if (!roleHits && !skillHits) score -= 22;
+  if (!isJobProfessionallyRelevant(row, profile)) score = Math.min(score, 24);
+  return { score: Math.max(12, Math.min(98, Math.round(score))), reasons: reasons.slice(0, 3).length ? reasons.slice(0, 3) : ["profile"] };
 }

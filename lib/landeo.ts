@@ -2,7 +2,7 @@ import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
 import {prioritizeJobsByLocation,resolveCountryCode} from "./job-location";
-import {calculateJobMatch,type MatchProfile} from "./job-match";
+import {calculateJobMatch,isJobProfessionallyRelevant,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
 export type ApplicationStatus="queued"|"processing"|"sent"|"action_required"|"viewed"|"interview"|"rejected"|"failed";
@@ -66,7 +66,7 @@ function chunks<T>(values:T[],size=120){const result:T[][]=[];for(let start=0;st
 
 const jobSearchGroups:Array<{match:RegExp;terms:string[]}>= [
   {match:/marketing|mercadotecnia|comunicacion/i,terms:["marketing","growth","brand","content","communications","demand generation","acquisition","lifecycle","seo"]},
-  {match:/software|ingenier|developer|programador/i,terms:["software","engineer","developer","frontend","backend","fullstack","platform","devops"]},
+  {match:/software|ingenier|developer|programador|frontend|backend|full.?stack|web developer/i,terms:["software","engineer","developer","frontend","backend","full stack","fullstack","platform","devops","web"]},
   {match:/product|producto/i,terms:["product","product manager","product owner","product operations"]},
   {match:/design|disen|ux|ui/i,terms:["design","designer","ux","ui","product design","research"]},
   {match:/sales|ventas|comercial/i,terms:["sales","account executive","business development","partnerships","revenue"]},
@@ -123,6 +123,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const requestedFilter=options.search?jobSearchFilter(options.search):"";
   const roleFocused=roleFilter?client.from("jobs").select(select).eq("status","active").or(roleFilter).order("published_at",{ascending:false}).limit(220):null;
   const requestedSearch=requestedFilter?client.from("jobs").select(select).eq("status","active").or(requestedFilter).order("published_at",{ascending:false}).limit(260):null;
+  const earlyCareer=client.from("jobs").select(select).eq("status","active").or("seniority.ilike.%Entry%,title.ilike.%intern%,title.ilike.%internship%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%apprentice%,contract_type.ilike.%intern%").order("published_at",{ascending:false}).limit(260);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const focused=candidateMarket?[
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(120),
@@ -132,7 +133,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").order("published_at",{ascending:false}).limit(180),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").order("published_at",{ascending:false}).limit(100),
   ];
-  const results=await Promise.all([recent,topCompanies,automatic,...focused,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
+  const results=await Promise.all([recent,topCompanies,automatic,earlyCareer,...focused,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
@@ -141,10 +142,10 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const targetIds=new Set(targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[]);
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
-  const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
-  if(candidateCity&&!options.includeWorldwide){
+  const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>Boolean(options.search)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
+  if(candidateCity){
     const localFirst=prioritizeJobsByLocation(available,candidateCity,candidateCountry);
-    if(options.search){
+    if(options.includeWorldwide||options.search){
       const localIds=new Set(localFirst.map(job=>job.id));
       return [...localFirst,...available.filter(job=>!localIds.has(job.id))];
     }

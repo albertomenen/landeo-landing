@@ -79,6 +79,14 @@ const greenhouseBoards = [
   { token: "samsara", company: "Samsara", domain: "samsara.com" },
   { token: "scaleai", company: "Scale AI", domain: "scale.com" },
   { token: "stripe", company: "Stripe", domain: "stripe.com" },
+  { token: "gusto", company: "Gusto", domain: "gusto.com" },
+  { token: "waymo", company: "Waymo", domain: "waymo.com" },
+  {
+    token: "sigmacomputing",
+    company: "Sigma Computing",
+    domain: "sigmacomputing.com",
+  },
+  { token: "nuro", company: "Nuro", domain: "nuro.ai" },
 ] as const;
 
 const leverBoards = [
@@ -88,6 +96,10 @@ const leverBoards = [
   { token: "tsmg", company: "TSMG", domain: "tsmg.io" },
   { token: "palantir", company: "Palantir", domain: "palantir.com" },
   { token: "weloglobal", company: "Welocalize", domain: "welocalize.com" },
+  { token: "doctrine", company: "Doctrine", domain: "doctrine.fr" },
+  { token: "winamax", company: "Winamax", domain: "winamax.fr" },
+  { token: "kpler", company: "Kpler", domain: "kpler.com" },
+  { token: "Qover", company: "Qover", domain: "qover.com" },
 ] as const;
 
 const required = (name: string) => {
@@ -122,6 +134,15 @@ const errorMessage = (error: unknown) => {
     return String(error);
   }
 };
+
+function inferredSeniority(title: string, contractType = "") {
+  const value = `${title} ${contractType}`.toLowerCase();
+  if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|stage\b/.test(value)) return "Internship";
+  if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate/.test(value)) return "Entry level";
+  if (/chief|vp|vice president|head|director/.test(value)) return "Leadership";
+  if (/principal|staff|lead|senior|sr\.?\b/.test(value)) return "Senior";
+  return null;
+}
 
 const inferMode = (value: unknown): NormalizedJob["work_mode"] => {
   const label = String(dictionaryValue(value) ?? value ?? "").toLowerCase();
@@ -437,8 +458,16 @@ async function mapWithConcurrency<T, R>(
 async function greenhouseJobs(
   requestedBoards: Set<string> | null = null,
 ): Promise<NormalizedJob[]> {
-  const selectedBoards = requestedBoards
-    ? greenhouseBoards.filter((board) => requestedBoards.has(board.token))
+  const effectiveBoards = requestedBoards ? new Set(requestedBoards) : null;
+  // The existing fourth cron shard includes the retired `neoris` board. Keep
+  // that shard useful by attaching the early-career boards to it.
+  if (effectiveBoards?.has("neoris")) {
+    for (const token of ["gusto", "waymo", "sigmacomputing", "nuro"]) {
+      effectiveBoards.add(token);
+    }
+  }
+  const selectedBoards = effectiveBoards
+    ? greenhouseBoards.filter((board) => effectiveBoards.has(board.token))
     : greenhouseBoards;
   const results = await Promise.allSettled(
     selectedBoards.map(async (board) => {
@@ -502,7 +531,7 @@ async function greenhouseJobs(
               ? Math.round(payRange.max_cents / 100)
               : null,
             contract_type: "Jornada completa",
-            seniority: null,
+            seniority: inferredSeniority(job.title),
             industry: job.departments?.[0]?.name ?? null,
             apply_mode: provider ? "direct" : "external",
             status: "active",
@@ -542,11 +571,9 @@ async function greenhouseJobs(
     (result): result is PromiseRejectedResult => result.status === "rejected",
   );
   if (failures.length) {
-    throw new Error(
-      `${failures.length} boards de Greenhouse no respondieron: ${
-        failures
-          .map((failure) => errorMessage(failure.reason))
-          .join("; ")
+    console.warn(
+      `${failures.length} boards de Greenhouse omitidos: ${
+        failures.map((failure) => errorMessage(failure.reason)).join("; ")
       }`,
     );
   }
@@ -620,7 +647,10 @@ async function leverJobs(): Promise<NormalizedJob[]> {
               ? Math.round(job.salaryRange.max)
               : null,
             contract_type: job.categories?.commitment ?? null,
-            seniority: null,
+            seniority: inferredSeniority(
+              job.text || "Oferta de empleo",
+              job.categories?.commitment ?? "",
+            ),
             industry: job.categories?.team ?? job.categories?.department ??
               null,
             apply_mode: applyUrl ? "direct" : "external",
