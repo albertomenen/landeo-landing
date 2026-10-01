@@ -175,7 +175,7 @@ type EarlyCareerFilter = "all" | "internship" | "junior";
 function jobCareerLevel(job: Job): Exclude<EarlyCareerFilter, "all"> | "experienced" {
   const value = `${job.title} ${job.seniority} ${job.contractType}`.toLowerCase();
   if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|stage\b/.test(value)) return "internship";
-  if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate/.test(value)) return "junior";
+  if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate|emerging talent/.test(value)) return "junior";
   return "experienced";
 }
 const trackingStages: TrackingStage[] = [

@@ -94,7 +94,7 @@ function overlap(left: Set<string>, right: Set<string>) {
 
 function expectedExperience(value: string | null, title: string) {
   const text = `${value ?? ""} ${title}`.toLowerCase();
-  if (/intern|graduate|entry|beca|práctic/.test(text)) return [0, 2] as const;
+  if (/intern|graduate|entry|beca|práctic|emerging talent/.test(text)) return [0, 2] as const;
   if (/junior|associate/.test(text)) return [0, 3] as const;
   if (/senior|staff|principal|lead|head|director|expert/.test(text)) return [5, 30] as const;
   return [2, 8] as const;

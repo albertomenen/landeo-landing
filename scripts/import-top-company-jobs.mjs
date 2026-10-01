@@ -49,6 +49,11 @@ const greenhouseBoards = [
   ["waymo", "Waymo"],
   ["sigmacomputing", "Sigma Computing"],
   ["nuro", "Nuro"],
+  ["okta", "Okta"],
+  ["hubspotjobs", "HubSpot"],
+  ["alphasights", "AlphaSights"],
+  ["feverup", "Fever"],
+  ["doordashusa", "DoorDash"],
 ];
 
 const leverBoards = [
@@ -65,12 +70,15 @@ const leverBoards = [
   ["winamax", "Winamax"],
   ["kpler", "Kpler"],
   ["Qover", "Qover"],
+  ["octoenergy", "Octopus Energy"],
+  ["contentsquare", "Contentsquare"],
 ];
 
 const earlyCareerOnly = process.argv.includes("--early-career");
 const earlyCareerBoards = new Set([
-  "gusto", "waymo", "sigmacomputing", "nuro",
-  "doctrine", "winamax", "kpler", "qover",
+  "openai", "gusto", "waymo", "sigmacomputing", "nuro",
+  "okta", "hubspotjobs", "alphasights", "feverup", "doordashusa",
+  "doctrine", "winamax", "kpler", "qover", "octoenergy", "contentsquare",
 ]);
 
 const countryCodes = new Map([
@@ -126,8 +134,20 @@ function countryCode(country = "", location = "") {
   for (const [name, code] of countryCodes) {
     if (haystack.includes(name)) return code;
   }
+  if (/california|new york|illinois|washington|massachusetts|colorado|arizona|texas|san francisco|mountain view|sunnyvale|seattle|chicago|boston|denver|phoenix|austin/i.test(haystack)) return "US";
+  if (/madrid|barcelona|valencia|spain|españa/i.test(haystack)) return "ES";
+  if (/bogot[aá]|medell[ií]n|colombia/i.test(haystack)) return "CO";
+  if (/london|england|manchester|united kingdom/i.test(haystack)) return "GB";
+  if (/paris|lyon|france/i.test(haystack)) return "FR";
+  if (/berlin|hamburg|munich|münchen|germany/i.test(haystack)) return "DE";
   if (/\b(remote|worldwide|global|anywhere|emea|europe)\b/i.test(haystack)) return "REMOTE";
   return "";
+}
+
+function earlyCareerRows(rows) {
+  return earlyCareerOnly
+    ? rows.filter((row) => row.seniority === "Entry level")
+    : rows;
 }
 
 function workMode(workplaceType, isRemote, location) {
@@ -144,7 +164,7 @@ function workMode(workplaceType, isRemote, location) {
 function seniority(title) {
   if (/\b(chief|vp|vice president|head|director)\b/i.test(title)) return "Leadership";
   if (/\b(principal|staff|lead|senior|sr\.?)\b/i.test(title)) return "Senior";
-  if (/\b(junior|jr\.?|graduate|intern|entry level)\b/i.test(title)) return "Entry level";
+  if (/\b(junior|jr\.?|graduate|intern|entry level|emerging talent)\b/i.test(title)) return "Entry level";
   return null;
 }
 
@@ -337,7 +357,7 @@ for (const [board, company] of ashbyBoards) {
   if (earlyCareerOnly && !earlyCareerBoards.has(board.toLowerCase())) continue;
   try {
     const rows = await importAshby(board, company);
-    results.push(...rows);
+    results.push(...earlyCareerRows(rows));
     boardRuns.push({ source: "Ashby", board, externalIds: new Set(rows.map((row) => row.external_id)) });
     console.log(`${company}: ${rows.length}`);
   } catch (error) {
@@ -351,7 +371,7 @@ for (const [board, company, allowedMarkets] of greenhouseBoards) {
     const rows = allowedMarkets
       ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
       : importedRows;
-    results.push(...rows);
+    results.push(...earlyCareerRows(rows));
     boardRuns.push({ source: "Greenhouse", board, externalIds: new Set(rows.map((row) => row.external_id)) });
     console.log(`${company}: ${rows.length}`);
   } catch (error) {
@@ -365,7 +385,7 @@ for (const [board, company, allowedMarkets] of leverBoards) {
     const rows = allowedMarkets
       ? importedRows.filter((row) => allowedMarkets.includes(row.metadata.market_country))
       : importedRows;
-    results.push(...rows);
+    results.push(...earlyCareerRows(rows));
     boardRuns.push({ source: "Lever", board, externalIds: new Set(rows.map((row) => row.external_id)) });
     console.log(`${company}: ${rows.length}`);
   } catch (error) {

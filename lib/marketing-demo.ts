@@ -4,11 +4,13 @@ type DemoInput = Pick<
   Job,
   "id" | "company" | "title" | "location" | "market" | "workMode" | "industry"
 > & {
-  logo: string;
+  logo?: string;
   summary: string;
   skills: string[];
   salaryMin: number;
   salaryMax: number;
+  seniority?: string;
+  contractType?: string;
 };
 
 function demoJob(input: DemoInput, index: number): Job {
@@ -16,20 +18,53 @@ function demoJob(input: DemoInput, index: number): Job {
     ...input,
     description: `${input.summary} Esta es una oferta ficticia creada exclusivamente para demostrar la experiencia de Landeo; no corresponde a una vacante real.`,
     salaryCurrency: input.market === "GB" ? "GBP" : "USD",
-    contractType: "Full time",
-    seniority:
-      index % 3 === 0 ? "Senior" : index % 3 === 1 ? "Mid level" : "Lead",
+    contractType: input.contractType ?? "Full time",
+    seniority: input.seniority ??
+      (index % 3 === 0 ? "Senior" : index % 3 === 1 ? "Mid level" : "Lead"),
     applyCapability: index % 4 === 0 ? "assisted" : "automatic",
     match: 96 - (index % 8),
     publishedAt: new Date(Date.UTC(2026, 8, 9 - (index % 5))).toISOString(),
     source: "DEMO",
     applyProvider: "simulation",
     applyMode: "demo",
-    metadata: { demo: true, company_logo: input.logo },
+    metadata: { demo: true, ...(input.logo ? { company_logo: input.logo } : {}) },
   };
 }
 
 const demoInputs: DemoInput[] = [
+  {
+    id: "demo-openai-intern",
+    company: "OpenAI",
+    title: "Software Engineering Intern, Applied AI",
+    location: "San Francisco, CA",
+    market: "US",
+    workMode: "hybrid",
+    industry: "Emerging Talent",
+    logo: "/company-logos/openai.png",
+    summary:
+      "Colabora con equipos de ingeniería aplicada construyendo prototipos, evaluaciones y experiencias con IA.",
+    skills: ["Python", "TypeScript", "AI evaluation"],
+    salaryMin: 95000,
+    salaryMax: 125000,
+    seniority: "Internship",
+    contractType: "Internship · DEMO",
+  },
+  {
+    id: "demo-datadog-madrid-intern",
+    company: "Datadog",
+    title: "Software Engineering Intern",
+    location: "Madrid, Spain",
+    market: "ES",
+    workMode: "hybrid",
+    industry: "Cloud Observability",
+    summary:
+      "Participa en un equipo de producto que desarrolla herramientas de observabilidad para sistemas distribuidos.",
+    skills: ["Programming", "Distributed systems", "Testing"],
+    salaryMin: 24000,
+    salaryMax: 32000,
+    seniority: "Internship",
+    contractType: "Internship · DEMO",
+  },
   {
     id: "demo-google-ai-pm",
     company: "Google",

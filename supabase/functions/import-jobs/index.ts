@@ -87,6 +87,11 @@ const greenhouseBoards = [
     domain: "sigmacomputing.com",
   },
   { token: "nuro", company: "Nuro", domain: "nuro.ai" },
+  { token: "okta", company: "Okta", domain: "okta.com" },
+  { token: "hubspotjobs", company: "HubSpot", domain: "hubspot.com" },
+  { token: "alphasights", company: "AlphaSights", domain: "alphasights.com" },
+  { token: "feverup", company: "Fever", domain: "feverup.com" },
+  { token: "doordashusa", company: "DoorDash", domain: "doordash.com" },
 ] as const;
 
 const leverBoards = [
@@ -100,6 +105,8 @@ const leverBoards = [
   { token: "winamax", company: "Winamax", domain: "winamax.fr" },
   { token: "kpler", company: "Kpler", domain: "kpler.com" },
   { token: "Qover", company: "Qover", domain: "qover.com" },
+  { token: "octoenergy", company: "Octopus Energy", domain: "octopus.energy" },
+  { token: "contentsquare", company: "Contentsquare", domain: "contentsquare.com" },
 ] as const;
 
 const required = (name: string) => {
@@ -138,7 +145,7 @@ const errorMessage = (error: unknown) => {
 function inferredSeniority(title: string, contractType = "") {
   const value = `${title} ${contractType}`.toLowerCase();
   if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|stage\b/.test(value)) return "Internship";
-  if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate/.test(value)) return "Entry level";
+  if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate|emerging talent/.test(value)) return "Entry level";
   if (/chief|vp|vice president|head|director/.test(value)) return "Leadership";
   if (/principal|staff|lead|senior|sr\.?\b/.test(value)) return "Senior";
   return null;
@@ -462,7 +469,10 @@ async function greenhouseJobs(
   // The existing fourth cron shard includes the retired `neoris` board. Keep
   // that shard useful by attaching the early-career boards to it.
   if (effectiveBoards?.has("neoris")) {
-    for (const token of ["gusto", "waymo", "sigmacomputing", "nuro"]) {
+    for (const token of [
+      "gusto", "waymo", "sigmacomputing", "nuro", "okta",
+      "hubspotjobs", "alphasights", "feverup", "doordashusa",
+    ]) {
       effectiveBoards.add(token);
     }
   }
