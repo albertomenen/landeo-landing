@@ -695,6 +695,11 @@ function JobsView({
   const pendingApplications = useRef(new Set<string>());
   const didSwipe = useRef(false);
   useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 4_500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 320);
     return () => window.clearTimeout(timer);
   }, [query]);
@@ -1282,6 +1287,7 @@ function JobsView({
               <m.div
                 className="toast"
                 role="status"
+                aria-live="polite"
                 initial={{ opacity: 0, y: 12, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}

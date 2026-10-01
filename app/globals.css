@@ -11090,3 +11090,124 @@ h1 em:after {
   height: 6px;
   box-shadow: 0 0 0 2px rgba(216, 241, 105, 0.16);
 }
+
+/* Dashboard readability and non-blocking feedback */
+.app-frame {
+  font-size: 14px;
+}
+.app-frame .profile-mini small,
+.app-frame .profile-progress p,
+.app-frame .profile-progress a,
+.app-frame .lang-toggle,
+.app-frame .view-header p,
+.app-frame .filters-panel input,
+.app-frame .filters-panel select,
+.app-frame .filters-panel .radio-row,
+.app-frame .feed-top small,
+.app-frame .job-meta,
+.app-frame .salary-block strong,
+.app-frame .skill-row span,
+.app-frame .capability small,
+.app-frame .detail-bottom small,
+.app-frame .empty-state p {
+  font-size: 12px;
+}
+.app-frame .overline,
+.app-frame .filters-panel > label,
+.app-frame .filters-panel legend,
+.app-frame .filter-title,
+.app-frame .filter-title button,
+.app-frame .deck-count,
+.app-frame .fresh-badge,
+.app-frame .mode-badge,
+.app-frame .personal-match-badge,
+.app-frame .salary-block small,
+.app-frame .capability strong,
+.app-frame .job-details-cta,
+.app-frame .deck-actions span,
+.app-frame .automatic-empty-actions button {
+  font-size: 12px;
+}
+.app-frame .feed-card > p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.app-frame .filter-note p {
+  font-size: 11px;
+}
+.app-frame .filter-note strong {
+  font-size: 12px;
+}
+.app-frame .secure-note,
+.app-frame .deck-actions small {
+  font-size: 10px;
+}
+.app-frame .toast {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  bottom: auto;
+  left: auto;
+  width: min(420px, calc(100vw - 44px));
+  min-height: 48px;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 16px 38px rgba(13, 36, 26, 0.24);
+  font-size: 13px;
+  line-height: 1.4;
+  z-index: 75;
+}
+.app-frame .toast button {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 9px;
+  font-size: 17px;
+}
+.app-frame .toast button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 800px) {
+  .app-frame .view-header p,
+  .app-frame .feed-card > p,
+  .app-frame .capability small,
+  .app-frame .empty-state p {
+    font-size: 13px;
+  }
+  .app-frame .overline,
+  .app-frame .job-meta,
+  .app-frame .salary-block small,
+  .app-frame .skill-row span,
+  .app-frame .mode-badge,
+  .app-frame .personal-match-badge,
+  .app-frame .job-details-cta,
+  .app-frame .filters-panel .radio-row,
+  .app-frame .deck-actions span {
+    font-size: 11px !important;
+  }
+  .app-frame .mobile-bottom-nav a {
+    font-size: 10px;
+  }
+  .app-frame .mobile-bottom-nav a i {
+    font-size: 20px;
+  }
+  .app-frame .toast {
+    top: calc(70px + env(safe-area-inset-top));
+    right: 14px;
+    left: 14px;
+    width: auto;
+    min-height: 52px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 380px) {
+  .app-frame .mobile-bottom-nav a,
+  .app-frame .deck-actions span {
+    font-size: 9px !important;
+  }
+}
