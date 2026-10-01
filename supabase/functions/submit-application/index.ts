@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { coverLetterProfileFrom, generateCoverLetter } from "../_shared/cover-letter.ts";
+import { coverLetterLanguage } from "../_shared/cover-letter-language.ts";
 import { corsHeaders, json } from "../_shared/http.ts";
 import { sendApplicationPush } from "../_shared/push.ts";
 
@@ -239,6 +240,7 @@ Deno.serve(async (request) => {
         message: "La oferta ya no está disponible.",
       }, 404);
     }
+    const postingLanguage = coverLetterLanguage(job);
     if (body.intent === "preview") {
       if (!coverLetterProfileFrom(profile.universal_profile)) {
         return json({
@@ -265,6 +267,7 @@ Deno.serve(async (request) => {
         coverLetter: preview.text,
         generatedAt: preview.generatedAt,
         model: preview.model,
+        language: preview.language,
       });
     }
     const { data: rightSwipe } = await admin.from("swipes").select("id").eq(
@@ -336,6 +339,17 @@ Deno.serve(async (request) => {
     const reviewedText = typeof applicationAnswers.generatedCoverLetter === "string"
       ? applicationAnswers.generatedCoverLetter.replace(/\r\n/g, "\n").trim().slice(0, 5_000)
       : "";
+    if (
+      reviewedText.split(/\s+/).length >= 40 &&
+      coverLetterLanguage({ description: reviewedText }) !== postingLanguage
+    ) {
+      return json({
+        status: "failed",
+        message: postingLanguage === "en"
+          ? "Esta oferta está en inglés. Revisa la carta en inglés antes de enviarla."
+          : "Esta oferta está en español. Revisa la carta en español antes de enviarla.",
+      }, 422);
+    }
     const configuredForGeneration = Boolean(
       coverLetterProfileFrom(profile.universal_profile),
     );
@@ -344,6 +358,7 @@ Deno.serve(async (request) => {
         text: reviewedText,
         model: "user-reviewed",
         generatedAt: new Date().toISOString(),
+        language: postingLanguage,
       }
       : await generateCoverLetter({
         userId: userData.user.id,
@@ -361,6 +376,7 @@ Deno.serve(async (request) => {
       applicationAnswers.generatedCoverLetter = generatedCoverLetter.text;
       applicationAnswers.coverLetterModel = generatedCoverLetter.model;
       applicationAnswers.coverLetterGeneratedAt = generatedCoverLetter.generatedAt;
+      applicationAnswers.coverLetterLanguage = generatedCoverLetter.language;
       applicationAnswers.coverLetterGenerationStatus = "generated";
       applicationAnswers.coverLetterUsageStatus = "generated_not_sent";
       applicationAnswers.coverLetterReviewed = Boolean(reviewedText);
@@ -643,22 +659,33 @@ Deno.serve(async (request) => {
       const candidateName = safeDisplayName(profile.full_name);
       const from = `${candidateName} vía Landeo <${fromMailbox}>`;
       const phoneLine = profile.phone
-        ? `<br>Teléfono: ${escapeHtml(profile.phone)}`
+        ? `<br>${postingLanguage === "en" ? "Phone" : "Teléfono"}: ${escapeHtml(profile.phone)}`
         : "";
-      const introduction = internalIntake
-        ? `${escapeHtml(candidateName)} ha pedido a Landeo que gestione su candidatura para <strong>${escapeHtml(job.title)}</strong> en <strong>${escapeHtml(job.company)}</strong>.`
-        : `${escapeHtml(candidateName)} presenta su candidatura para <strong>${escapeHtml(job.title)}</strong> y ha autorizado este envío a través de Landeo.`;
-      const plainIntroduction = internalIntake
-        ? `${candidateName} ha pedido a Landeo que gestione su candidatura para ${job.title} en ${job.company}.`
-        : `${candidateName} presenta su candidatura para ${job.title} y ha autorizado este envío a través de Landeo.`;
+      const introduction = postingLanguage === "en"
+        ? internalIntake
+          ? `${escapeHtml(candidateName)} asked Landeo to manage their application for <strong>${escapeHtml(job.title)}</strong> at <strong>${escapeHtml(job.company)}</strong>.`
+          : `${escapeHtml(candidateName)} is applying for <strong>${escapeHtml(job.title)}</strong> and authorized this submission through Landeo.`
+        : internalIntake
+          ? `${escapeHtml(candidateName)} ha pedido a Landeo que gestione su candidatura para <strong>${escapeHtml(job.title)}</strong> en <strong>${escapeHtml(job.company)}</strong>.`
+          : `${escapeHtml(candidateName)} presenta su candidatura para <strong>${escapeHtml(job.title)}</strong> y ha autorizado este envío a través de Landeo.`;
+      const plainIntroduction = postingLanguage === "en"
+        ? internalIntake
+          ? `${candidateName} asked Landeo to manage their application for ${job.title} at ${job.company}.`
+          : `${candidateName} is applying for ${job.title} and authorized this submission through Landeo.`
+        : internalIntake
+          ? `${candidateName} ha pedido a Landeo que gestione su candidatura para ${job.title} en ${job.company}.`
+          : `${candidateName} presenta su candidatura para ${job.title} y ha autorizado este envío a través de Landeo.`;
       const coverLetterText = typeof applicationAnswers.generatedCoverLetter === "string"
         ? applicationAnswers.generatedCoverLetter.trim()
         : "";
+      const coverLetterHeading = postingLanguage === "en"
+        ? "Personalized cover letter"
+        : "Carta de presentación personalizada";
       const coverLetterHtml = coverLetterText
-        ? `<hr><p><strong>Carta de presentación personalizada:</strong></p>${coverLetterText.split(/\n{2,}/).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}`
+        ? `<hr><p><strong>${coverLetterHeading}:</strong></p>${coverLetterText.split(/\n{2,}/).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}`
         : "";
       const coverLetterPlain = coverLetterText
-        ? `\n\nCarta de presentación personalizada:\n\n${coverLetterText}`
+        ? `\n\n${coverLetterHeading}:\n\n${coverLetterText}`
         : "";
       const officialSubject = safeEmailSubject(
         target.metadata?.application_subject,
@@ -674,23 +701,31 @@ Deno.serve(async (request) => {
           to: [recipient],
           reply_to: candidateEmail,
           subject: internalIntake
-            ? `[Landeo · Por gestionar] ${job.company} — ${job.title} — ${profile.full_name}`
+            ? `[Landeo · ${postingLanguage === "en" ? "To manage" : "Por gestionar"}] ${job.company} — ${job.title} — ${profile.full_name}`
             : officialSubject ||
-              `Candidatura: ${job.title} — ${profile.full_name}`,
-          html: `<p>Hola,</p><p>${introduction}</p><p>Email: ${
+              `${postingLanguage === "en" ? "Application" : "Candidatura"}: ${job.title} — ${profile.full_name}`,
+          html: `<p>${postingLanguage === "en" ? "Hello" : "Hola"},</p><p>${introduction}</p><p>Email: ${
             escapeHtml(candidateEmail)
-          }${phoneLine}</p>${coverLetterHtml}<p>CV adjunto. ${
+          }${phoneLine}</p>${coverLetterHtml}<p>${postingLanguage === "en" ? "Résumé attached." : "CV adjunto."} ${
             internalIntake
-              ? "La candidatura todavía no consta como enviada a la empresa; debe tramitarse y confirmarse desde el canal oficial indicado."
-              : "Puedes responder directamente a este mensaje para contactar con el candidato."
+              ? postingLanguage === "en"
+                ? "This application has not yet been sent to the employer; it must be submitted and confirmed through the official channel."
+                : "La candidatura todavía no consta como enviada a la empresa; debe tramitarse y confirmarse desde el canal oficial indicado."
+              : postingLanguage === "en"
+                ? "You can reply directly to this message to contact the candidate."
+                : "Puedes responder directamente a este mensaje para contactar con el candidato."
           }</p>`,
           text:
-            `Hola,\n\n${plainIntroduction}\n\nEmail: ${candidateEmail}${
-              profile.phone ? `\nTeléfono: ${profile.phone}` : ""
-            }${coverLetterPlain}\n\nCV adjunto. ${
+            `${postingLanguage === "en" ? "Hello" : "Hola"},\n\n${plainIntroduction}\n\nEmail: ${candidateEmail}${
+              profile.phone ? `\n${postingLanguage === "en" ? "Phone" : "Teléfono"}: ${profile.phone}` : ""
+            }${coverLetterPlain}\n\n${postingLanguage === "en" ? "Résumé attached." : "CV adjunto."} ${
               internalIntake
-                ? "La candidatura todavía no consta como enviada a la empresa; debe tramitarse y confirmarse desde el canal oficial indicado."
-                : "Puedes responder directamente a este mensaje para contactar con el candidato."
+                ? postingLanguage === "en"
+                  ? "This application has not yet been sent to the employer; it must be submitted and confirmed through the official channel."
+                  : "La candidatura todavía no consta como enviada a la empresa; debe tramitarse y confirmarse desde el canal oficial indicado."
+                : postingLanguage === "en"
+                  ? "You can reply directly to this message to contact the candidate."
+                  : "Puedes responder directamente a este mensaje para contactar con el candidato."
             }`,
           headers: { "X-Entity-Ref-ID": application.id },
           attachments: [{

@@ -1,3 +1,5 @@
+import { coverLetterLanguage } from "./cover-letter-language.ts";
+
 export type CoverLetterProfile = {
   enabled?: boolean;
   motivation?: string;
@@ -12,6 +14,7 @@ type CoverLetterResult = {
   text: string;
   model: string;
   generatedAt: string;
+  language: "en" | "es";
 };
 
 function cleanText(value: unknown, maxLength: number) {
@@ -77,7 +80,9 @@ export async function generateCoverLetter(input: {
   const jobMetadata = input.job.metadata && typeof input.job.metadata === "object"
     ? input.job.metadata as Record<string, unknown>
     : {};
+  const language = coverLetterLanguage(input.job);
   const payload = {
+    writingLanguage: language === "en" ? "English" : "Spanish",
     candidate: {
       name: cleanText(input.profile.full_name, 120),
       currentRole: cleanText(input.profile.role, 160),
@@ -104,44 +109,55 @@ export async function generateCoverLetter(input: {
     },
   };
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
-  try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        store: false,
-        safety_identifier: await safetyIdentifier(input.userId),
-        max_output_tokens: 700,
-        instructions: [
-          "Write one tailored cover letter for the job application supplied as JSON.",
-          "Use the language of the job description; if unclear, use Spanish.",
-          "Use only facts present in the JSON. Never invent employers, dates, metrics, qualifications, skills, or personal claims.",
-          "Write 220-320 words in plain text, with short paragraphs, no markdown, no postal address, and no placeholders.",
-          "Open with a natural greeting to the hiring team and close with the candidate's real name.",
-          "Connect the candidate's stated motivation, value and achievement to the role and company without sounding generic.",
-          "Respect the doNotMention field. If a detail is missing, omit it rather than guessing.",
-        ].join(" "),
-        input: JSON.stringify(payload),
-      }),
-    });
-    const result = await response.json() as Record<string, unknown>;
-    if (!response.ok) {
-      console.error("OpenAI cover-letter request failed", response.status);
+  const instructions = [
+    "Write one tailored cover letter for the job application supplied as JSON.",
+    `Write the entire cover letter in ${language === "en" ? "English" : "Spanish"}, including the greeting and closing. The job posting determines this language; translate the candidate's answers if they are in another language. Do not switch languages to match the candidate's answers.`,
+    "Use only facts present in the JSON. Never invent employers, dates, metrics, qualifications, skills, or personal claims.",
+    "Write 220-320 words in plain text, with short paragraphs, no markdown, no postal address, and no placeholders.",
+    "Open with a natural greeting to the hiring team and close with the candidate's real name.",
+    "Connect the candidate's stated motivation, value and achievement to the role and company without sounding generic.",
+    "Respect the doNotMention field. If a detail is missing, omit it rather than guessing.",
+  ].join(" ");
+  const safetyId = await safetyIdentifier(input.userId);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          store: false,
+          safety_identifier: safetyId,
+          max_output_tokens: 700,
+          instructions: attempt === 0
+            ? instructions
+            : `${instructions} The previous draft used the wrong language. This time, every sentence must be in ${language === "en" ? "English" : "Spanish"}.`,
+          input: JSON.stringify(payload),
+        }),
+      });
+      const result = await response.json() as Record<string, unknown>;
+      if (!response.ok) {
+        console.error("OpenAI cover-letter request failed", response.status);
+        return null;
+      }
+      const text = outputText(result).slice(0, 5_000);
+      if (!text) return null;
+      if (coverLetterLanguage({ description: text }) === language) {
+        return { text, model, generatedAt: new Date().toISOString(), language };
+      }
+      console.error("Cover-letter language mismatch", { expected: language, attempt });
+    } catch (error) {
+      console.error("Cover-letter generation failed", error instanceof Error ? error.name : "unknown");
       return null;
+    } finally {
+      clearTimeout(timeout);
     }
-    const text = outputText(result).slice(0, 5_000);
-    return text ? { text, model, generatedAt: new Date().toISOString() } : null;
-  } catch (error) {
-    console.error("Cover-letter generation failed", error instanceof Error ? error.name : "unknown");
-    return null;
-  } finally {
-    clearTimeout(timeout);
   }
+  return null;
 }
