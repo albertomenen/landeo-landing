@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { generateCoverLetter } from "../_shared/cover-letter.ts";
+import { coverLetterProfileFrom, generateCoverLetter } from "../_shared/cover-letter.ts";
 import { corsHeaders, json } from "../_shared/http.ts";
 import { sendApplicationPush } from "../_shared/push.ts";
 
@@ -203,6 +203,7 @@ Deno.serve(async (request) => {
       jobId?: string;
       answers?: Record<string, unknown>;
       platform?: ApplicationPlatform;
+      intent?: "preview" | "submit";
     };
     if (!body.jobId) {
       return json({ status: "failed", message: "Falta la oferta." }, 400);
@@ -237,6 +238,34 @@ Deno.serve(async (request) => {
         status: "failed",
         message: "La oferta ya no está disponible.",
       }, 404);
+    }
+    if (body.intent === "preview") {
+      if (!coverLetterProfileFrom(profile.universal_profile)) {
+        return json({
+          status: "failed",
+          message:
+            "Completa y activa primero tu perfil de carta con IA.",
+        }, 422);
+      }
+      const preview = await generateCoverLetter({
+        userId: userData.user.id,
+        profile,
+        job,
+      });
+      if (!preview) {
+        return json({
+          status: "failed",
+          message:
+            "No pudimos generar la carta ahora mismo. Reinténtalo antes de enviar.",
+        }, 502);
+      }
+      return json({
+        status: "preview",
+        message: "Carta personalizada lista para revisar.",
+        coverLetter: preview.text,
+        generatedAt: preview.generatedAt,
+        model: preview.model,
+      });
     }
     const { data: rightSwipe } = await admin.from("swipes").select("id").eq(
       "user_id",
@@ -304,15 +333,39 @@ Deno.serve(async (request) => {
     }
 
     const applicationAnswers: Record<string, unknown> = { ...(body.answers ?? {}) };
-    const generatedCoverLetter = await generateCoverLetter({
-      userId: userData.user.id,
-      profile,
-      job,
-    });
+    const reviewedText = typeof applicationAnswers.generatedCoverLetter === "string"
+      ? applicationAnswers.generatedCoverLetter.replace(/\r\n/g, "\n").trim().slice(0, 5_000)
+      : "";
+    const configuredForGeneration = Boolean(
+      coverLetterProfileFrom(profile.universal_profile),
+    );
+    const generatedCoverLetter = reviewedText
+      ? {
+        text: reviewedText,
+        model: "user-reviewed",
+        generatedAt: new Date().toISOString(),
+      }
+      : await generateCoverLetter({
+        userId: userData.user.id,
+        profile,
+        job,
+      });
+    if (configuredForGeneration && !generatedCoverLetter) {
+      return json({
+        status: "failed",
+        message:
+          "La carta no se pudo generar y la candidatura no se ha enviado. Reinténtalo o desactiva la carta con IA.",
+      }, 502);
+    }
     if (generatedCoverLetter) {
       applicationAnswers.generatedCoverLetter = generatedCoverLetter.text;
       applicationAnswers.coverLetterModel = generatedCoverLetter.model;
       applicationAnswers.coverLetterGeneratedAt = generatedCoverLetter.generatedAt;
+      applicationAnswers.coverLetterGenerationStatus = "generated";
+      applicationAnswers.coverLetterUsageStatus = "generated_not_sent";
+      applicationAnswers.coverLetterReviewed = Boolean(reviewedText);
+    } else {
+      applicationAnswers.coverLetterGenerationStatus = "disabled";
     }
 
     const { data: application, error: applicationError } = await admin.from(
@@ -336,8 +389,27 @@ Deno.serve(async (request) => {
       applicationId: application.id,
       userId: userData.user.id,
     };
+    const markCoverLetterUsage = async (usage: string) => {
+      if (!generatedCoverLetter) return;
+      applicationAnswers.coverLetterUsageStatus = usage;
+      await admin.from("applications").update({
+        answers: applicationAnswers,
+        updated_at: new Date().toISOString(),
+      }).eq("id", application.id);
+    };
+    if (generatedCoverLetter) {
+      await addEvent(
+        admin,
+        application.id,
+        userData.user.id,
+        "cover_letter_generated",
+        "Tu carta personalizada está lista.",
+        { reviewed: Boolean(reviewedText) },
+      );
+    }
 
     if (target.mode === "external") {
+      await markCoverLetterUsage("generated_not_sent");
       const message = "Termina la candidatura en la web oficial de la empresa.";
       await setStatus(admin, application.id, "action_required", {
         action_url: target.apply_url,
@@ -362,6 +434,7 @@ Deno.serve(async (request) => {
       if (
         !target.apply_url || !["greenhouse", "lever"].includes(target.provider)
       ) {
+        await markCoverLetterUsage("generated_not_sent");
         await setStatus(admin, application.id, "action_required", {
           action_url: target.apply_url,
           error_message:
@@ -382,6 +455,7 @@ Deno.serve(async (request) => {
           actionUrl: target.apply_url,
         });
       }
+      await markCoverLetterUsage("queued_for_automation");
       await addEvent(
         admin,
         application.id,
@@ -634,6 +708,7 @@ Deno.serve(async (request) => {
           resend.message || `Resend respondió ${resendResponse.status}`,
         );
       }
+      await markCoverLetterUsage("included_in_email");
       if (internalIntake) {
         await setStatus(admin, application.id, "queued", {
           external_reference: resend.id,
@@ -809,6 +884,13 @@ Deno.serve(async (request) => {
       });
     }
 
+    const usedCoverLetter = questions.some((question) =>
+      question.kind === "text" &&
+      /carta|cover\s*letter|motivaci[oó]n|why.*you|por qu[eé]/i.test(question.label)
+    );
+    await markCoverLetterUsage(
+      usedCoverLetter ? "included_in_form" : "generated_not_required",
+    );
     await setStatus(admin, application.id, "sent", {
       external_reference: result.code,
     });

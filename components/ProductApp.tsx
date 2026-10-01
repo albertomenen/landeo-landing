@@ -31,6 +31,7 @@ import {
   loadJobs,
   loadProfile,
   loadSavedJobs,
+  prepareCoverLetter,
   profileReadiness,
   recordSwipe,
   saveCoverLetterProfile,
@@ -57,6 +58,14 @@ export type ProductView =
   | "profile"
   | "universal"
   | "cover-letter";
+type ApplicationFlowState = {
+  job: Job;
+  phase: "preparing" | "review" | "no_letter" | "submitting" | "result" | "error";
+  letter: string;
+  outcome?: ApplyOutcome;
+  usageStatus?: string | null;
+  error?: string;
+};
 const viewFromPath = (pathname: string): ProductView | null => {
   if (pathname === "/app/jobs") return "jobs";
   if (pathname === "/app/applications") return "applications";
@@ -688,6 +697,7 @@ function JobsView({
   const [showAutomaticArchive, setShowAutomaticArchive] = useState(false);
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
+  const [applicationFlow, setApplicationFlow] = useState<ApplicationFlowState | null>(null);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
   const [confettiBurst, setConfettiBurst] = useState(0);
   const [cardDirection, setCardDirection] = useState(1);
@@ -812,7 +822,50 @@ function JobsView({
       setNotice(error instanceof Error ? error.message : t.notices.saveError);
     }
   }, [job, demo, user, router, t.notices]);
-  const apply = useCallback(() => {
+  const finishApplication = useCallback(async (targetJob: Job, letter = "") => {
+    const jobId = targetJob.id;
+    if (pendingApplications.current.has(jobId)) return;
+    pendingApplications.current.add(jobId);
+    setApplicationFlow((current) => current ? { ...current, phase: "submitting", error: undefined } : {
+      job: targetJob,
+      phase: "submitting",
+      letter,
+    });
+    setNotice("");
+    try {
+      const result = await submitApplication(jobId, letter ? {
+        generatedCoverLetter: letter,
+        coverLetterReviewed: true,
+      } : {});
+      const application = (await loadApplications()).find((item) => item.jobId === jobId);
+      triggerConfetti();
+      removeCurrent(1);
+      setApplicationFlow((current) => ({
+        job: targetJob,
+        phase: "result",
+        letter: application?.coverLetter || current?.letter || letter,
+        outcome: result,
+        usageStatus: application?.coverLetterUsageStatus ?? null,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t.notices.applyError;
+      if (/Pro|suscripci|pago/i.test(message)) {
+        setApplicationFlow(null);
+        setPaywall(true);
+      } else {
+        setApplicationFlow((current) => current ? { ...current, phase: "error", error: message } : {
+          job: targetJob,
+          phase: "error",
+          letter,
+          error: message,
+        });
+      }
+      refresh();
+    } finally {
+      pendingApplications.current.delete(jobId);
+    }
+  }, [refresh, removeCurrent, t.notices.applyError, triggerConfetti]);
+  const apply = useCallback(async () => {
     if (!job) return;
     if (demo) {
       triggerConfetti();
@@ -835,40 +888,39 @@ function JobsView({
       router.push("/app/profile/universal");
       return;
     }
-    const jobId = job.id;
-    if (pendingApplications.current.has(jobId)) return;
-    pendingApplications.current.add(jobId);
-    setNotice("");
-    triggerConfetti();
-    removeCurrent(1);
-    void submitApplication(jobId)
-      .then((result) => {
-        if (result.status === "failed") {
-          setNotice(result.message || t.notices.applyError);
-          refresh();
-        } else if (result.status === "action_required") {
-          setNotice(result.message);
-        }
-      })
-      .catch((error) => {
-        const message =
-          error instanceof Error ? error.message : t.notices.applyError;
-        if (/Pro|suscripci|pago/i.test(message)) setPaywall(true);
-        else setNotice(message);
-        refresh();
-      })
-      .finally(() => pendingApplications.current.delete(jobId));
+    const letterReady = coverLetterReadiness(profile).ready;
+    if (!letterReady) {
+      setApplicationFlow({ job, phase: "no_letter", letter: "" });
+      return;
+    }
+    if (profile?.universal?.coverLetter?.reviewBeforeSending === false) {
+      await finishApplication(job);
+      return;
+    }
+    setApplicationFlow({ job, phase: "preparing", letter: "" });
+    try {
+      const preview = await prepareCoverLetter(job.id);
+      setApplicationFlow({ job, phase: "review", letter: preview.coverLetter });
+    } catch (error) {
+      setApplicationFlow({
+        job,
+        phase: "error",
+        letter: "",
+        error: error instanceof Error ? error.message : localized(locale, "No pudimos generar la carta.", "We couldn’t generate the cover letter."),
+      });
+    }
   }, [
     job,
     demo,
     user,
     pro,
     profile,
+    locale,
     router,
     removeCurrent,
     triggerConfetti,
-    refresh,
-    t.notices,
+    finishApplication,
+    t.notices.completeProfile,
   ]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1418,7 +1470,119 @@ function JobsView({
           <Paywall locale={locale} onClose={() => setPaywall(false)} />
         )}
       </AnimatePresence>{" "}
+      <AnimatePresence>
+        {applicationFlow && (
+          <ApplicationFlowModal
+            locale={locale}
+            flow={applicationFlow}
+            onClose={() => setApplicationFlow(null)}
+            onLetterChange={(letter) => setApplicationFlow((current) => current ? { ...current, letter } : current)}
+            onSubmit={() => finishApplication(applicationFlow.job, applicationFlow.letter)}
+            onContinueWithoutLetter={() => finishApplication(applicationFlow.job)}
+            onRegenerate={async () => {
+              const targetJob = applicationFlow.job;
+              setApplicationFlow({ job: targetJob, phase: "preparing", letter: "" });
+              try {
+                const preview = await prepareCoverLetter(targetJob.id);
+                setApplicationFlow({ job: targetJob, phase: "review", letter: preview.coverLetter });
+              } catch (error) {
+                setApplicationFlow({
+                  job: targetJob,
+                  phase: "error",
+                  letter: "",
+                  error: error instanceof Error ? error.message : localized(locale, "No pudimos generar la carta.", "We couldn’t generate the cover letter."),
+                });
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </>
+  );
+}
+
+function coverLetterUsageCopy(locale: DashboardLocale, value?: string | null) {
+  const copies: Record<string, [string, string]> = {
+    included_in_email: ["Incluida en el email enviado", "Included in the sent email"],
+    included_in_form: ["Incluida en el formulario enviado", "Included in the submitted form"],
+    queued_for_automation: ["Preparada para el envío automático", "Ready for automatic submission"],
+    generated_not_required: ["Generada; el portal no solicitó carta", "Generated; the portal did not request it"],
+    generated_not_sent: ["Generada, pendiente de envío", "Generated, awaiting submission"],
+  };
+  const pair = copies[value ?? ""] ?? copies.generated_not_sent;
+  return locale === "es" ? pair[0] : pair[1];
+}
+
+function ApplicationFlowModal({
+  locale,
+  flow,
+  onClose,
+  onLetterChange,
+  onSubmit,
+  onContinueWithoutLetter,
+  onRegenerate,
+}: {
+  locale: DashboardLocale;
+  flow: ApplicationFlowState;
+  onClose: () => void;
+  onLetterChange: (letter: string) => void;
+  onSubmit: () => void;
+  onContinueWithoutLetter: () => void;
+  onRegenerate: () => void;
+}) {
+  const busy = flow.phase === "preparing" || flow.phase === "submitting";
+  return (
+    <m.div className="modal-backdrop application-flow-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <button className="modal-scrim" aria-label={localized(locale, "Cerrar", "Close")} onClick={() => !busy && onClose()} />
+      <m.section className="application-flow-modal" role="dialog" aria-modal="true" aria-labelledby="application-flow-title" initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }}>
+        {!busy && <button className="modal-close" onClick={onClose} aria-label={localized(locale, "Cerrar", "Close")}>×</button>}
+        <div className="application-flow-job">
+          <span>{flow.job.company.slice(0, 1)}</span>
+          <div><small>{flow.job.company}</small><strong>{flow.job.title}</strong></div>
+        </div>
+        {(flow.phase === "preparing" || flow.phase === "submitting") && <div className="application-flow-progress">
+          <m.span animate={{ rotate: 360 }} transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}>✦</m.span>
+          <p className="overline">{localized(locale, "PREPARANDO TU CANDIDATURA", "PREPARING YOUR APPLICATION")}</p>
+          <h2 id="application-flow-title">{flow.phase === "preparing" ? localized(locale, "Generando una carta para esta oferta…", "Generating a letter for this role…") : localized(locale, "Enviando tu candidatura de forma segura…", "Submitting your application securely…")}</h2>
+          <ol>
+            <li className="done">✓ {localized(locale, "Oferta y perfil analizados", "Job and profile analyzed")}</li>
+            <li className={flow.phase === "submitting" ? "done" : "active"}>{flow.phase === "submitting" ? "✓" : "●"} {localized(locale, "Carta personalizada", "Personalized cover letter")}</li>
+            <li className={flow.phase === "submitting" ? "active" : ""}>● {localized(locale, "Comprobación del canal y envío", "Channel check and submission")}</li>
+          </ol>
+        </div>}
+        {flow.phase === "review" && <div className="application-flow-review">
+          <p className="overline">{localized(locale, "CARTA PERSONALIZADA LISTA", "PERSONALIZED LETTER READY")}</p>
+          <h2 id="application-flow-title">{localized(locale, "Revísala antes de enviarla.", "Review it before sending.")}</h2>
+          <p>{localized(locale, "Puedes corregir cualquier frase. Solo se enviará el texto que ves aquí.", "You can edit any sentence. Only the text shown here will be submitted.")}</p>
+          <textarea value={flow.letter} onChange={(event) => onLetterChange(event.target.value)} maxLength={5000} rows={13} aria-label={localized(locale, "Carta de presentación", "Cover letter")} />
+          <div className="application-flow-meta"><span>✦ {localized(locale, "Generada para esta oferta", "Generated for this role")}</span><span>{flow.letter.length} / 5000</span></div>
+          <div className="application-flow-actions"><button className="button button-ghost" type="button" onClick={onRegenerate}>{localized(locale, "Regenerar", "Regenerate")}</button><button className="button button-primary" type="button" disabled={!flow.letter.trim()} onClick={onSubmit}>{localized(locale, "Aplicar con esta carta →", "Apply with this letter →")}</button></div>
+        </div>}
+        {flow.phase === "no_letter" && <div className="application-flow-empty">
+          <span className="application-flow-symbol">✦</span>
+          <p className="overline">{localized(locale, "CARTA CON IA NO CONFIGURADA", "AI COVER LETTER NOT SET UP")}</p>
+          <h2 id="application-flow-title">{localized(locale, "Esta candidatura se enviará sin carta.", "This application will be submitted without a letter.")}</h2>
+          <p>{localized(locale, "Completa cuatro respuestas una sola vez para que Landeo adapte una carta a cada empleo.", "Answer four questions once and Landeo will tailor a letter to each job.")}</p>
+          <div className="application-flow-actions"><Link className="button button-ghost" href="/app/cover-letter" onClick={onClose}>{localized(locale, "Configurar carta", "Set up cover letter")}</Link><button className="button button-primary" type="button" onClick={onContinueWithoutLetter}>{localized(locale, "Continuar sin carta", "Continue without a letter")}</button></div>
+        </div>}
+        {flow.phase === "result" && flow.outcome && <div className="application-flow-result">
+          <span className={`application-flow-symbol ${flow.outcome.status}`}>{flow.outcome.status === "sent" ? "✓" : "↗"}</span>
+          <p className="overline">{localized(locale, "RESULTADO VERIFICADO", "VERIFIED RESULT")}</p>
+          <h2 id="application-flow-title">{flow.outcome.status === "sent" ? localized(locale, "Candidatura enviada.", "Application submitted.") : flow.outcome.status === "queued" ? localized(locale, "Candidatura en proceso.", "Application in progress.") : localized(locale, "Falta un último paso.", "One final step is required.")}</h2>
+          <p>{flow.outcome.message}</p>
+          <div className="application-flow-statuses">
+            <span className={flow.letter ? "done" : "muted"}><b>{flow.letter ? "✓" : "—"}</b><small>{localized(locale, "Carta", "Letter")}</small><strong>{flow.letter ? localized(locale, "Generada", "Generated") : localized(locale, "No utilizada", "Not used")}</strong></span>
+            <span className={flow.usageStatus?.startsWith("included") ? "done" : "pending"}><b>{flow.usageStatus?.startsWith("included") ? "✓" : "↗"}</b><small>{localized(locale, "Uso", "Usage")}</small><strong>{flow.letter ? coverLetterUsageCopy(locale, flow.usageStatus) : localized(locale, "Sin carta", "No letter")}</strong></span>
+            <span className={flow.outcome.status === "sent" ? "done" : "pending"}><b>{flow.outcome.status === "sent" ? "✓" : "●"}</b><small>{localized(locale, "Entrega", "Delivery")}</small><strong>{flow.outcome.status === "sent" ? localized(locale, "Confirmada", "Confirmed") : localized(locale, "Pendiente", "Pending")}</strong></span>
+          </div>
+          {flow.letter && <details className="application-flow-letter"><summary>{localized(locale, "Leer la carta generada", "Read generated letter")} <span>⌄</span></summary><p>{flow.letter}</p></details>}
+          <div className="application-flow-actions">{flow.outcome.actionUrl && <a className="button button-primary" href={flow.outcome.actionUrl} target="_blank" rel="noreferrer">{localized(locale, "Completar en la web oficial →", "Complete on official site →")}</a>}<Link className="button button-ghost" href="/app/applications" onClick={onClose}>{localized(locale, "Ver candidaturas", "View applications")}</Link><button className="button button-primary" type="button" onClick={onClose}>{localized(locale, "Seguir viendo empleos", "Keep browsing jobs")}</button></div>
+        </div>}
+        {flow.phase === "error" && <div className="application-flow-empty error">
+          <span className="application-flow-symbol">!</span><p className="overline">{localized(locale, "NO SE HA ENVIADO NADA", "NOTHING WAS SUBMITTED")}</p><h2 id="application-flow-title">{localized(locale, "No pudimos completar la candidatura.", "We couldn’t complete the application.")}</h2><p>{flow.error}</p><div className="application-flow-actions"><button className="button button-ghost" type="button" onClick={onClose}>{localized(locale, "Cerrar", "Close")}</button><button className="button button-primary" type="button" onClick={flow.letter ? onSubmit : onRegenerate}>{localized(locale, "Reintentar", "Try again")}</button></div>
+        </div>}
+      </m.section>
+    </m.div>
   );
 }
 
@@ -1997,9 +2161,9 @@ function ApplicationsView({
                           )}
                   </span>
                 </div>
-                {selected.coverLetter && (
-                  <details className="application-cover-letter">
-                    <summary>
+                {selected.coverLetter ? (
+                  <section className="application-cover-letter is-visible">
+                    <header>
                       <span>
                         <b>
                           ✦{" "}
@@ -2019,8 +2183,8 @@ function ApplicationsView({
                               )}
                         </small>
                       </span>
-                      <i>⌄</i>
-                    </summary>
+                      <em>{coverLetterUsageCopy(locale, selected.coverLetterUsageStatus)}</em>
+                    </header>
                     <div>
                       <p>{selected.coverLetter}</p>
                       <button
@@ -2037,7 +2201,14 @@ function ApplicationsView({
                           : localized(locale, "Copiar carta", "Copy letter")}
                       </button>
                     </div>
-                  </details>
+                  </section>
+                ) : (
+                  <section className="application-cover-letter is-empty">
+                    <header>
+                      <span><b>✦ {localized(locale, "Carta personalizada", "Personalized cover letter")}</b><small>{localized(locale, "No se generó una carta para esta candidatura.", "No letter was generated for this application.")}</small></span>
+                    </header>
+                    <Link href="/app/cover-letter">{localized(locale, "Configurar carta con IA →", "Set up AI cover letters →")}</Link>
+                  </section>
                 )}
                 <h3>{localized(locale, "Cronología", "Timeline")}</h3>
                 <ol className="timeline">
@@ -2669,6 +2840,7 @@ function CoverLetterView({
   const [doNotMention, setDoNotMention] = useState("");
   const [tone, setTone] = useState<CoverLetterProfile["tone"]>("professional");
   const [enabled, setEnabled] = useState(true);
+  const [reviewBeforeSending, setReviewBeforeSending] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -2681,6 +2853,7 @@ function CoverLetterView({
     setDoNotMention(cover.doNotMention);
     setTone(cover.tone);
     setEnabled(cover.enabled);
+    setReviewBeforeSending(cover.reviewBeforeSending !== false);
   }, [profile]);
   if (!user)
     return (
@@ -2716,6 +2889,7 @@ function CoverLetterView({
         companyPreferences,
         doNotMention,
         tone,
+        reviewBeforeSending,
       });
       await onSaved();
       setMessage(
@@ -2980,6 +3154,17 @@ function CoverLetterView({
               </small>
             </span>
           </label>
+          <fieldset className="cover-letter-delivery-choice">
+            <legend>{localized(locale, "Antes de enviar", "Before submitting")}</legend>
+            <button type="button" className={reviewBeforeSending ? "active" : ""} onClick={() => setReviewBeforeSending(true)}>
+              <b>{localized(locale, "Revisar siempre", "Always review")}</b>
+              <small>{localized(locale, "Ver, editar o regenerar cada carta antes de aplicar.", "Read, edit or regenerate each letter before applying.")}</small>
+            </button>
+            <button type="button" className={!reviewBeforeSending ? "active" : ""} onClick={() => setReviewBeforeSending(false)}>
+              <b>{localized(locale, "Generar y enviar", "Generate and submit")}</b>
+              <small>{localized(locale, "Más rápido. Verás la carta y su estado justo después.", "Faster. You’ll see the letter and its status immediately afterwards.")}</small>
+            </button>
+          </fieldset>
           {message && (
             <p
               className={

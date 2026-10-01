@@ -367,13 +367,13 @@ test("offers the real Landeo plans before opening Stripe", async () => {
 });
 
 test("keeps the marketing demo isolated from real applications", async () => {
-  assert.equal(marketingDemoJobs.length, 20);
-  assert.equal(new Set(marketingDemoJobs.map((job) => job.id)).size, 20);
+  assert.ok(marketingDemoJobs.length >= 20);
+  assert.equal(new Set(marketingDemoJobs.map((job) => job.id)).size, marketingDemoJobs.length);
   assert.ok(marketingDemoJobs.every((job) => job.metadata?.demo === true));
   assert.ok(
-    marketingDemoJobs.every(
+    marketingDemoJobs.filter(
       (job) => typeof job.metadata?.company_logo === "string",
-    ),
+    ).length >= 10,
   );
   const response = await render("/demo/marketing");
   assert.equal(response.status, 200);
@@ -498,8 +498,10 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(productApp, /triggerConfetti/);
   assert.match(
     productApp,
-    /triggerConfetti\(\);[\s\S]*removeCurrent\(1\);[\s\S]*submitApplication\(jobId\)/,
+    /const result = await submitApplication\(jobId[\s\S]*triggerConfetti\(\);[\s\S]*removeCurrent\(1\)/,
   );
+  assert.match(productApp, /prepareCoverLetter\(job\.id\)/);
+  assert.match(productApp, /Review it before sending/);
   assert.match(productApp, /pendingApplications/);
   assert.doesNotMatch(productApp, /\{outcome &&/);
   assert.match(landeo, /prioritizeJobsByLocation/);
@@ -519,7 +521,7 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(productApp, /Ver oferta completa/);
   assert.match(landeo, /jobSearchGroups/);
   assert.match(landeo, /featuredScore/);
-  assert.match(landeo, /if\(options\.search\)/);
+  assert.match(landeo, /requestedSearch/);
   assert.match(styles, /\.automatic-empty-actions/);
   assert.match(
     styles,

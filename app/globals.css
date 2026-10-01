@@ -5389,6 +5389,69 @@ h1 em:after {
   }
 }
 
+/* Application flow: visible AI generation, review and verified delivery. */
+.application-flow-backdrop { z-index: 120; }
+.application-flow-modal { position: relative; width: min(720px, calc(100vw - 32px)); max-height: min(860px, calc(100dvh - 32px)); overflow: auto; border: 1px solid rgba(21,61,45,.15); border-radius: 28px; background: #fbfcf8; color: #153d2d; box-shadow: 0 28px 80px rgba(9,35,25,.28); padding: 28px; }
+.application-flow-modal .modal-close { z-index: 2; }
+.application-flow-job { display: flex; align-items: center; gap: 12px; padding: 0 48px 20px 0; border-bottom: 1px solid #dde6dc; }
+.application-flow-job > span { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 14px; background: #153d2d; color: #d8fa5a; font-weight: 800; font-size: 20px; }
+.application-flow-job div { display: grid; gap: 2px; }
+.application-flow-job small { color: #6d7f76; font-size: 13px; }
+.application-flow-job strong { font-size: 16px; line-height: 1.25; }
+.application-flow-progress, .application-flow-review, .application-flow-empty, .application-flow-result { padding: 32px 4px 4px; }
+.application-flow-progress { text-align: center; }
+.application-flow-progress > span, .application-flow-symbol { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 20px; background: #d8fa5a; color: #153d2d; font-size: 28px; font-weight: 900; }
+.application-flow-progress h2, .application-flow-review h2, .application-flow-empty h2, .application-flow-result h2 { margin: 8px 0 10px; font-size: clamp(26px,4vw,38px); line-height: 1.08; letter-spacing: -.035em; }
+.application-flow-progress ol { display: grid; gap: 8px; max-width: 420px; padding: 20px 0 0; margin: 18px auto 0; text-align: left; list-style: none; border-top: 1px solid #dde6dc; }
+.application-flow-progress li { color: #91a098; font-weight: 700; }
+.application-flow-progress li.done { color: #2f855a; }
+.application-flow-progress li.active { color: #153d2d; }
+.application-flow-review > p:not(.overline), .application-flow-empty > p:not(.overline), .application-flow-result > p:not(.overline) { margin: 0 0 18px; color: #63766c; font-size: 16px; line-height: 1.55; }
+.application-flow-review textarea { width: 100%; min-height: 300px; resize: vertical; padding: 18px; border: 1px solid #cdd8cd; border-radius: 16px; background: #fff; color: #173b2e; font: inherit; font-size: 15px; line-height: 1.65; }
+.application-flow-review textarea:focus { outline: 3px solid rgba(70,146,103,.16); border-color: #3b8964; }
+.application-flow-meta { display: flex; justify-content: space-between; gap: 16px; margin-top: 8px; color: #708078; font-size: 12px; }
+.application-flow-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.application-flow-actions .button { min-height: 48px; }
+.application-flow-statuses { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 24px 0; }
+.application-flow-statuses > span { display: grid; align-content: start; gap: 4px; min-height: 118px; padding: 15px; border: 1px solid #dfe7dc; border-radius: 16px; background: #f4f7f1; }
+.application-flow-statuses b { display: grid; place-items: center; width: 26px; height: 26px; margin-bottom: 5px; border-radius: 50%; background: #dfe8dd; }
+.application-flow-statuses .done b { background: #c9f2d7; color: #17623e; }
+.application-flow-statuses small { color: #718078; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 800; }
+.application-flow-statuses strong { font-size: 13px; line-height: 1.3; }
+.application-flow-letter { margin-top: 12px; border: 1px solid #dbe4d9; border-radius: 16px; background: #fff; overflow: hidden; }
+.application-flow-letter summary { display: flex; justify-content: space-between; padding: 16px; cursor: pointer; font-weight: 800; }
+.application-flow-letter p { margin: 0; padding: 0 16px 18px; white-space: pre-wrap; color: #344f43; line-height: 1.65; }
+.application-flow-empty { text-align: center; }
+.application-flow-empty .application-flow-actions { justify-content: center; }
+.application-flow-empty.error .application-flow-symbol { background: #fde4df; color: #a83b2f; }
+.application-flow-result > .application-flow-symbol.sent { background: #c9f2d7; }
+.cover-letter-delivery-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0; border: 0; }
+.cover-letter-delivery-choice legend { grid-column: 1 / -1; margin-bottom: 4px; font-weight: 800; }
+.cover-letter-delivery-choice button { display: grid; gap: 5px; padding: 16px; text-align: left; border: 1px solid #d5dfd3; border-radius: 16px; background: #fff; color: #173b2e; }
+.cover-letter-delivery-choice button.active { border-color: #3b8964; background: #eef7ed; box-shadow: inset 0 0 0 1px #3b8964; }
+.cover-letter-delivery-choice small { color: #6c7c73; line-height: 1.4; }
+.application-cover-letter.is-visible, .application-cover-letter.is-empty { overflow: hidden; }
+.application-cover-letter.is-visible > header, .application-cover-letter.is-empty > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border-bottom: 1px solid #dbe5d9; }
+.application-cover-letter.is-visible > header span, .application-cover-letter.is-empty > header span { display: grid; gap: 3px; }
+.application-cover-letter.is-visible > header small, .application-cover-letter.is-empty > header small { color: #718078; }
+.application-cover-letter.is-visible > header em { padding: 7px 10px; border-radius: 999px; background: #e4f4e5; color: #236344; font-size: 11px; font-style: normal; font-weight: 800; }
+.application-cover-letter.is-visible > div { padding: 18px; }
+.application-cover-letter.is-visible > div p { max-height: 360px; overflow: auto; white-space: pre-wrap; }
+.application-cover-letter.is-empty { padding-bottom: 16px; }
+.application-cover-letter.is-empty > a { display: inline-block; margin: 14px 18px 0; color: #287354; font-weight: 800; }
+@media (max-width: 680px) {
+  .application-flow-modal { width: 100%; max-height: calc(100dvh - 8px); align-self: end; border-radius: 24px 24px 0 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .application-flow-progress, .application-flow-review, .application-flow-empty, .application-flow-result { padding-top: 24px; }
+  .application-flow-review textarea { min-height: 260px; }
+  .application-flow-statuses { grid-template-columns: 1fr; }
+  .application-flow-statuses > span { min-height: 0; grid-template-columns: 32px 76px 1fr; align-items: center; }
+  .application-flow-statuses b { grid-row: 1; margin: 0; }
+  .application-flow-actions { display: grid; grid-template-columns: 1fr; }
+  .application-flow-actions .button { width: 100%; }
+  .cover-letter-delivery-choice { grid-template-columns: 1fr; }
+  .application-cover-letter.is-visible > header { align-items: flex-start; flex-direction: column; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dashboard-tour-card,
   .dashboard-tour-spotlight,

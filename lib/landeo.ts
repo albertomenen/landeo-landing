@@ -9,9 +9,10 @@ export type ApplicationStatus="queued"|"processing"|"sent"|"action_required"|"vi
 export type TrackingStage="applied"|"screening"|"interview"|"offer"|"closed";
 export type ApplicationTracking={stage:TrackingStage;notes:string;nextAction:string;nextActionAt:string|null;updatedAt:string|null};
 export type ApplyOutcome={status:"queued"|"sent"|"action_required"|"failed";message:string;actionUrl?:string;externalReference?:string};
+export type CoverLetterPreview={status:"preview";message:string;coverLetter:string;generatedAt:string;model:string};
 export type CoverLetterProfile={
   enabled:boolean;motivation:string;valueProposition:string;achievement:string;companyPreferences:string;
-  doNotMention:string;tone:"professional"|"warm"|"direct";updatedAt:string;
+  doNotMention:string;tone:"professional"|"warm"|"direct";reviewBeforeSending:boolean;updatedAt:string;
 };
 export type UniversalProfile={
   version:1;firstName:string;lastName:string;addressLine:string;city:string;country:string;postalCode:string;
@@ -30,7 +31,7 @@ export type CandidateProfile={
 export type LiveApplication={
   id:string;jobId:string;status:ApplicationStatus;appliedAt:string;updatedAt:string;actionUrl:string|null;
   errorMessage:string|null;requiredFields:string[];deliveryStatus:string|null;coverLetter:string|null;
-  coverLetterGeneratedAt:string|null;tracking:ApplicationTracking;job:Job;events:ApplicationEvent[];
+  coverLetterGeneratedAt:string|null;coverLetterUsageStatus:string|null;tracking:ApplicationTracking;job:Job;events:ApplicationEvent[];
 };
 export type ApplicationEvent={id:string;applicationId:string;type:string;message:string;createdAt:string;readAt:string|null};
 
@@ -178,6 +179,15 @@ export async function submitApplication(jobId:string,answers:Record<string,unkno
   clearDashboardCaches();return data as ApplyOutcome;
 }
 
+export async function prepareCoverLetter(jobId:string):Promise<CoverLetterPreview>{
+  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para preparar tu carta.");
+  const{data,error}=await client.functions.invoke("submit-application",{body:{jobId,intent:"preview",platform:"web"}});
+  if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo generar la carta.")}
+  if(error)throw new Error(error.message||"No se pudo conectar con el generador de cartas.");
+  if(!data?.coverLetter)throw new Error(data?.message||"No se pudo generar la carta.");
+  return data as CoverLetterPreview;
+}
+
 export async function loadProfile():Promise<CandidateProfile|null>{
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)return null;
   const {data,error}=await client.from("profiles").select("id,full_name,email,phone,role,location,skills,work_modes,min_salary,max_salary,cv_path,universal_profile,privacy_consent_at,automatic_application_consent_at,onboarding_completed_at").eq("id",user.id).maybeSingle();
@@ -202,7 +212,7 @@ export function coverLetterReadiness(profile:CandidateProfile|null){
 export async function saveCoverLetterProfile(input:Omit<CoverLetterProfile,"updatedAt">){
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para guardar tu carta.");
   const current=await loadProfile();const clean=(value:string,max:number)=>value.replace(/\s+/g," ").trim().slice(0,max);
-  const coverLetter:CoverLetterProfile={enabled:input.enabled,motivation:clean(input.motivation,1500),valueProposition:clean(input.valueProposition,1500),achievement:clean(input.achievement,1500),companyPreferences:clean(input.companyPreferences,1000),doNotMention:clean(input.doNotMention,700),tone:input.tone,updatedAt:new Date().toISOString()};
+  const coverLetter:CoverLetterProfile={enabled:input.enabled,motivation:clean(input.motivation,1500),valueProposition:clean(input.valueProposition,1500),achievement:clean(input.achievement,1500),companyPreferences:clean(input.companyPreferences,1000),doNotMention:clean(input.doNotMention,700),tone:input.tone,reviewBeforeSending:input.reviewBeforeSending,updatedAt:new Date().toISOString()};
   if(!coverLetter.motivation||!coverLetter.valueProposition||!coverLetter.achievement||!coverLetter.companyPreferences)throw new Error("Responde las cuatro preguntas principales antes de guardar.");
   const universal:UniversalProfile={...(current?.universal??defaultUniversal(user)),coverLetter,version:1};
   const{error}=await client.from("profiles").upsert({id:user.id,email:current?.email||user.email||null,universal_profile:universal,updated_at:new Date().toISOString()},{onConflict:"id"});if(error)throw error;
@@ -244,7 +254,7 @@ async function loadApplicationsFresh():Promise<LiveApplication[]>{
   const byJob=new Map(((jobRows??[])as JobRow[]).map(row=>[row.id,mapJob(row)]));
   const events=((eventRows??[]) as Array<{id:string;application_id:string;event_type:string;message:string;created_at:string;read_at:string|null}>).map(row=>({id:row.id,applicationId:row.application_id,type:row.event_type,message:row.message,createdAt:row.created_at,readAt:row.read_at}));
   const stages=new Set<TrackingStage>(["applied","screening","interview","offer","closed"]);
-  return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);const letter=typeof row.answers?.generatedCoverLetter==="string"?row.answers.generatedCoverLetter:null;const generatedAt=typeof row.answers?.coverLetterGeneratedAt==="string"?row.answers.coverLetterGeneratedAt:null;const storedStage=row.answers?.trackingStage;const fallbackStage:TrackingStage=row.status==="interview"?"interview":row.status==="rejected"||row.status==="failed"?"closed":row.status==="viewed"?"screening":"applied";const tracking:ApplicationTracking={stage:typeof storedStage==="string"&&stages.has(storedStage as TrackingStage)?storedStage as TrackingStage:fallbackStage,notes:typeof row.answers?.trackingNotes==="string"?row.answers.trackingNotes:"",nextAction:typeof row.answers?.trackingNextAction==="string"?row.answers.trackingNextAction:"",nextActionAt:typeof row.answers?.trackingNextActionAt==="string"?row.answers.trackingNextActionAt:null,updatedAt:typeof row.answers?.trackingUpdatedAt==="string"?row.answers.trackingUpdatedAt:null};return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,coverLetter:letter,coverLetterGeneratedAt:generatedAt,tracking,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
+  return typedRows.flatMap(row=>{const job=byJob.get(row.job_id);const letter=typeof row.answers?.generatedCoverLetter==="string"?row.answers.generatedCoverLetter:null;const generatedAt=typeof row.answers?.coverLetterGeneratedAt==="string"?row.answers.coverLetterGeneratedAt:null;const usage=typeof row.answers?.coverLetterUsageStatus==="string"?row.answers.coverLetterUsageStatus:null;const storedStage=row.answers?.trackingStage;const fallbackStage:TrackingStage=row.status==="interview"?"interview":row.status==="rejected"||row.status==="failed"?"closed":row.status==="viewed"?"screening":"applied";const tracking:ApplicationTracking={stage:typeof storedStage==="string"&&stages.has(storedStage as TrackingStage)?storedStage as TrackingStage:fallbackStage,notes:typeof row.answers?.trackingNotes==="string"?row.answers.trackingNotes:"",nextAction:typeof row.answers?.trackingNextAction==="string"?row.answers.trackingNextAction:"",nextActionAt:typeof row.answers?.trackingNextActionAt==="string"?row.answers.trackingNextActionAt:null,updatedAt:typeof row.answers?.trackingUpdatedAt==="string"?row.answers.trackingUpdatedAt:null};return job?[{id:row.id,jobId:row.job_id,status:row.status as ApplicationStatus,appliedAt:row.applied_at,updatedAt:row.updated_at,actionUrl:row.action_url,errorMessage:row.error_message,requiredFields:Array.isArray(row.required_fields)?row.required_fields.filter((field):field is string=>typeof field==="string"):[],deliveryStatus:row.delivery_status,coverLetter:letter,coverLetterGeneratedAt:generatedAt,coverLetterUsageStatus:usage,tracking,job,events:events.filter(event=>event.applicationId===row.id)}]:[]});
 }
 
 export async function loadApplications():Promise<LiveApplication[]>{
