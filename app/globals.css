@@ -11672,6 +11672,7 @@ h1 em:after {
 @media (max-width: 800px) {
   .app-frame { grid-template-columns: minmax(0, 1fr); }
   .app-frame .jobs-layout { display: block; min-height: 0; }
+  .app-frame .applications-layout { grid-template-columns: minmax(0, 1fr); }
   /* Keep fixed action bars anchored to the viewport during view transitions. */
   .app-frame .dashboard-view-motion { transform: none !important; }
   .app-frame .app-main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
