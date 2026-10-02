@@ -190,6 +190,9 @@ test("keeps the owner-only marketing pipeline separate from real applications", 
   assert.match(demo, /value: 6/);
   assert.match(demo, /value: 1/);
   assert.match(demo, /setApplied\(\(count\) => count \+ 1\)/);
+  assert.match(demo, /window\.setInterval\(tick, 1000\)/);
+  assert.match(demo, /window\.clearInterval\(interval\)/);
+  assert.match(demo, /aria-pressed=\{running\}/);
   assert.doesNotMatch(demo, /submitApplication|updateApplicationTracking|\.from\(/);
 });
 

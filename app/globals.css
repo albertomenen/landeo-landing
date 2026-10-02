@@ -2899,25 +2899,30 @@ h1 em:after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 44px;
+  gap: 6px;
+  min-height: 40px;
   flex: 0 0 auto;
-  padding: 10px 15px;
-  border: 0;
-  border-radius: 11px;
-  background: var(--lime);
-  color: #163528;
-  font-size: 12px;
-  font-weight: 850;
+  padding: 7px 10px;
+  border: 1px solid rgba(218, 245, 171, 0.4);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #e7f3d3;
+  font-size: 10px;
+  font-weight: 750;
   cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease;
+  transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 .marketing-pipeline-head button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(8, 29, 19, 0.24);
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.13);
+  border-color: var(--lime);
 }
 .marketing-pipeline-head button:active {
-  transform: translateY(0) scale(0.98);
+  transform: translateY(0);
+}
+.marketing-pipeline-head button[aria-pressed="true"] {
+  border-color: rgba(218, 245, 171, 0.7);
+  color: var(--lime);
 }
 .marketing-pipeline-head button:focus-visible {
   outline: 2px solid white;
@@ -6243,7 +6248,8 @@ h1 em:after {
     flex-direction: column;
   }
   .marketing-pipeline-head button {
-    width: 100%;
+    align-self: flex-end;
+    width: auto;
   }
   .marketing-pipeline-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

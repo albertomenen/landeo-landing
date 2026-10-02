@@ -2374,17 +2374,27 @@ function ApplicationsView({
 
 function MarketingPipelineDemo({ locale }: { locale: DashboardLocale }) {
   const [applied, setApplied] = useState(100);
+  const [running, setRunning] = useState(false);
   const [pulseId, setPulseId] = useState<number | null>(null);
   const pulseSequence = useRef(0);
+  const tick = useCallback(() => {
+    setApplied((count) => count + 1);
+    pulseSequence.current += 1;
+    setPulseId(pulseSequence.current);
+  }, []);
+  useEffect(() => {
+    if (!running) return;
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [running, tick]);
   useEffect(() => {
     if (pulseId === null) return;
     const timer = window.setTimeout(() => setPulseId(null), 950);
     return () => window.clearTimeout(timer);
   }, [pulseId]);
   const triggerDemo = () => {
-    setApplied((count) => count + 1);
-    pulseSequence.current += 1;
-    setPulseId(pulseSequence.current);
+    if (!running) tick();
+    setRunning(!running);
   };
   const stats = [
     { key: "applied", label: localized(locale, "Solicitudes", "Applied"), value: applied },
@@ -2400,16 +2410,20 @@ function MarketingPipelineDemo({ locale }: { locale: DashboardLocale }) {
           <h2>{localized(locale, "Así avanza tu búsqueda", "See your search in motion")}</h2>
           <p>{localized(locale, "Cifras de ejemplo para la demo. No representan candidaturas reales.", "Sample numbers for the demo. These are not real applications.")}</p>
         </div>
-        <button type="button" onClick={triggerDemo} aria-label={localized(locale, "Simular una candidatura automática más", "Simulate one more automatic application")}>
-          <span aria-hidden="true">✦</span>
-          {localized(locale, "Simular candidatura +1", "Simulate application +1")}
+        <button type="button" onClick={triggerDemo} aria-pressed={running} aria-label={running
+          ? localized(locale, "Pausar simulación de candidaturas", "Pause application simulation")
+          : localized(locale, "Iniciar simulación de candidaturas automáticas", "Start automatic application simulation")}>
+          <span aria-hidden="true">{running ? "Ⅱ" : "↗"}</span>
+          {running
+            ? localized(locale, "Pausar · demo", "Pause · demo")
+            : localized(locale, "Empezar a postular · demo", "Start applying · demo")}
         </button>
       </div>
       <div className="marketing-pipeline-stats">
         {stats.map((stat, index) => (
           <div key={stat.key} className={`marketing-pipeline-stat ${stat.key}`}>
             <span>{stat.label}</span>
-            <strong aria-live={stat.key === "applied" ? "polite" : undefined}>{stat.value}</strong>
+            <strong>{stat.value}</strong>
             {stat.key === "applied" && (
               <AnimatePresence>
                 {pulseId !== null && (
@@ -2428,7 +2442,7 @@ function MarketingPipelineDemo({ locale }: { locale: DashboardLocale }) {
           </div>
         ))}
       </div>
-      <small>{localized(locale, "El botón solo anima estos números de muestra; no envía solicitudes ni modifica Supabase.", "The button only animates these sample numbers; it does not submit applications or change Supabase.")}</small>
+      <small>{localized(locale, "Simulación visual: +1 por segundo hasta pausarla. No envía solicitudes ni modifica Supabase.", "Visual simulation: +1 per second until paused. It does not submit applications or change Supabase.")}</small>
     </section>
   );
 }
