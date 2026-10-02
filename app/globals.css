@@ -11593,6 +11593,7 @@ h1 em:after {
   font-size: 1rem;
   min-height: 44px;
 }
+.app-frame input:is([type="checkbox"], [type="radio"]) { min-height: 0; flex-shrink: 0; }
 .app-frame .app-sidebar nav a {
   height: auto;
   min-height: 48px;
@@ -11613,4 +11614,88 @@ h1 em:after {
   .app-frame .application-guide-facts { grid-template-columns: 1fr; }
   .app-frame .deck-actions button { min-height: 56px; height: auto; }
   .app-frame .deck-actions span { white-space: normal; line-height: 1.3; }
+}
+
+/* Fluid dashboard layouts: content can grow without shrinking the reading scale. */
+.app-frame .dashboard-view-motion { will-change: opacity; }
+.app-frame .search-field input { width: 100%; min-width: 0; }
+.app-frame { grid-template-columns: 248px minmax(0, 1fr); }
+.app-frame :is(.app-main, .dashboard-view-motion, .jobs-layout, .applications-layout,
+  .deck-panel, .feed-card, .applications-list, .application-detail, .cover-letter-layout,
+  .cover-letter-form, .cover-letter-explainer, .profile-dashboard, .saved-grid,
+  .tracking-fields, .form-grid) { min-width: 0; }
+.app-frame .jobs-layout {
+  grid-template-columns: 210px minmax(0, 1.5fr) minmax(240px, 1fr);
+  height: auto;
+  min-height: calc(100dvh - 142px);
+}
+.app-frame .applications-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: auto;
+}
+.app-frame .cover-letter-layout { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+.app-frame .view-header { height: auto; min-height: 142px; flex-wrap: wrap; gap: 16px; }
+.app-frame .view-header > div { min-width: 0; }
+.app-frame :is(.view-header, .profile-hero, .notification-list, .saved-card, .feed-card,
+  .application-guide, .marketing-pipeline-stat) { overflow-wrap: anywhere; }
+.app-frame .profile-hero { flex-wrap: wrap; }
+.app-frame .profile-hero > div { min-width: min(200px, 100%); }
+.app-frame .application-title { min-width: 0; }
+.app-frame .application-row { flex-wrap: wrap; }
+.app-frame .application-row .application-title { flex: 1 1 140px; }
+.app-frame :is(.tracking-badge, .status-badge) { max-width: 100%; white-space: normal; }
+.app-frame .cover-letter-actions,
+.app-frame .application-flow-actions { flex-wrap: wrap; gap: 12px; }
+.app-frame :is(.cover-letter-actions, .application-flow-actions) > * { min-width: 0; }
+.app-frame .notification-list > a > span:first-child { flex-shrink: 0; }
+.app-frame .marketing-pipeline-head { flex-wrap: wrap; gap: 16px; }
+.app-frame .marketing-pipeline-head > div { min-width: 0; }
+.app-frame .marketing-pipeline-head button { white-space: normal; }
+.app-frame .marketing-pipeline-stat strong { font-size: clamp(2rem, 4vw, 3.5rem); }
+.app-frame :is(.application-flow-modal, .paywall-modal) {
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.universal-layout { grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); }
+.universal-layout > *, .form-grid > *, .block-nav button { min-width: 0; }
+@media (min-width: 801px) and (max-width: 1280px) {
+  .app-frame { grid-template-columns: 220px minmax(0, 1fr); }
+  .app-frame .jobs-layout { grid-template-columns: 180px minmax(0, 1fr); }
+  .app-frame .detail-panel { display: none; }
+  .app-frame .cover-letter-layout { grid-template-columns: minmax(0, 1fr); padding-inline: 24px; }
+  .app-frame .applications-layout { grid-template-columns: minmax(0, 1fr); }
+  .app-frame .application-detail { border-top: 1px solid var(--line); }
+  .app-frame .view-header { padding-inline: 24px; }
+}
+@media (max-width: 800px) {
+  .app-frame { grid-template-columns: minmax(0, 1fr); }
+  .app-frame .jobs-layout { display: block; min-height: 0; }
+  /* Keep fixed action bars anchored to the viewport during view transitions. */
+  .app-frame .dashboard-view-motion { transform: none !important; }
+  .app-frame .app-main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .app-frame .deck-panel { padding-bottom: calc(180px + env(safe-area-inset-bottom)); min-height: 0; }
+  .app-frame .deck-actions { bottom: calc(84px + env(safe-area-inset-bottom)); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-frame .deck-actions button { min-width: 0; padding-inline: 8px; }
+  .app-frame .mobile-bottom-nav { height: auto; min-height: 66px; }
+  .app-frame .mobile-bottom-nav a { padding: 6px 2px; overflow-wrap: anywhere; }
+  .app-frame .view-header { min-height: 0; }
+  .app-frame .cover-letter-layout { grid-template-columns: minmax(0, 1fr); padding: 0 14px 24px; }
+  .app-frame :is(.cover-letter-form, .cover-letter-explainer) { padding: 20px; }
+  .app-frame .cover-letter-score { width: min(240px, 100%); }
+  .app-frame .status-tabs { position: static; flex-wrap: wrap; overflow: visible; }
+  .universal-layout { grid-template-columns: minmax(0, 1fr); }
+  .block-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); position: static; }
+  .block-nav button { min-width: 0; height: auto; min-height: 48px; white-space: normal; }
+}
+@media (max-width: 480px) {
+  .app-frame .tone-picker,
+  .app-frame .tracking-fields { grid-template-columns: minmax(0, 1fr); }
+  .app-frame .application-flow-modal { padding: 20px 16px; border-radius: 20px; }
+  .app-frame .profile-hero { padding: 20px 16px; }
+  .app-frame .application-row .tracking-badge { margin-left: 0; }
+  .app-frame .application-flow-actions > button { flex: 1 1 100%; }
+  .app-frame .deck-actions button { flex-direction: column; gap: 4px; }
+  .app-frame .deck-actions span { font-size: 0.875rem !important; }
 }
