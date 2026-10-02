@@ -193,6 +193,8 @@ test("keeps the owner-only marketing pipeline separate from real applications", 
   assert.match(demo, /window\.setInterval\(tick, 1000\)/);
   assert.match(demo, /window\.clearInterval\(interval\)/);
   assert.match(demo, /aria-pressed=\{running\}/);
+  assert.match(demo, /"Autoapplying"/);
+  assert.match(demo, /"Pause autoapplying"/);
   assert.doesNotMatch(demo, /submitApplication|updateApplicationTracking|\.from\(/);
 });
 

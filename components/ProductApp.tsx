@@ -2403,20 +2403,18 @@ function MarketingPipelineDemo({ locale }: { locale: DashboardLocale }) {
     { key: "offer", label: localized(locale, "Ofertas", "Offers"), value: 1 },
   ];
   return (
-    <section className="marketing-pipeline-demo" aria-label={localized(locale, "Simulación de candidaturas para marketing", "Marketing application simulation")}>
+    <section className="marketing-pipeline-demo" aria-label={localized(locale, "Candidaturas automáticas", "Automatic applications")}>
       <div className="marketing-pipeline-head">
         <div>
-          <span className="marketing-pipeline-label">{localized(locale, "SIMULACIÓN · SOLO MARKETING", "SIMULATION · MARKETING ONLY")}</span>
           <h2>{localized(locale, "Así avanza tu búsqueda", "See your search in motion")}</h2>
-          <p>{localized(locale, "Cifras de ejemplo para la demo. No representan candidaturas reales.", "Sample numbers for the demo. These are not real applications.")}</p>
         </div>
         <button type="button" onClick={triggerDemo} aria-pressed={running} aria-label={running
-          ? localized(locale, "Pausar simulación de candidaturas", "Pause application simulation")
-          : localized(locale, "Iniciar simulación de candidaturas automáticas", "Start automatic application simulation")}>
+          ? localized(locale, "Pausar candidaturas automáticas", "Pause automatic applications")
+          : localized(locale, "Iniciar candidaturas automáticas", "Start automatic applications")}>
           <span aria-hidden="true">{running ? "Ⅱ" : "↗"}</span>
           {running
-            ? localized(locale, "Pausar · demo", "Pause · demo")
-            : localized(locale, "Empezar a postular · demo", "Start applying · demo")}
+            ? "Pause autoapplying"
+            : "Autoapplying"}
         </button>
       </div>
       <div className="marketing-pipeline-stats">
@@ -2442,7 +2440,6 @@ function MarketingPipelineDemo({ locale }: { locale: DashboardLocale }) {
           </div>
         ))}
       </div>
-      <small>{localized(locale, "Simulación visual: +1 por segundo hasta pausarla. No envía solicitudes ni modifica Supabase.", "Visual simulation: +1 per second until paused. It does not submit applications or change Supabase.")}</small>
     </section>
   );
 }
