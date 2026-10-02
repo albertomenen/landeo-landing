@@ -387,10 +387,15 @@ export default function ProductApp({
     document.documentElement.lang = nextLocale;
   }, []);
   useEffect(() => setActiveView(view), [view]);
+  const [applicationTargetId, setApplicationTargetId] = useState<string | null>(null);
+  useEffect(() => {
+    setApplicationTargetId(new URLSearchParams(window.location.search).get("application"));
+  }, []);
   useEffect(() => {
     const syncFromHistory = () => {
       const nextView = viewFromPath(window.location.pathname);
       if (nextView) setActiveView(nextView);
+      setApplicationTargetId(new URLSearchParams(window.location.search).get("application"));
     };
     window.addEventListener("popstate", syncFromHistory);
     return () => window.removeEventListener("popstate", syncFromHistory);
@@ -411,8 +416,26 @@ export default function ProductApp({
     setMobileNav(false);
     if (nextView === activeView) return;
     window.history.pushState({ landeoDashboard: true }, "", href);
+    setApplicationTargetId(null);
     setActiveView(nextView);
     window.scrollTo({ top: 0, behavior: "auto" });
+  };
+  const openApplication = (event: ReactMouseEvent<HTMLAnchorElement>, id: string) => {
+    if (
+      event.button !== 0 || event.metaKey || event.ctrlKey ||
+      event.shiftKey || event.altKey
+    ) return;
+    event.preventDefault();
+    const href = `/app/applications?application=${encodeURIComponent(id)}`;
+    window.history.pushState({ landeoDashboard: true }, "", href);
+    setApplicationTargetId(id);
+    setActiveView("applications");
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
+  const clearApplicationTarget = () => {
+    if (!applicationTargetId) return;
+    window.history.replaceState({ landeoDashboard: true }, "", "/app/applications");
+    setApplicationTargetId(null);
   };
   const changeLocale = (nextLocale: DashboardLocale) => {
     setLocale(nextLocale);
@@ -438,7 +461,7 @@ export default function ProductApp({
         tourReady={!identityLoading}
       />
     ) : activeView === "applications" ? (
-      <ApplicationsView user={user} locale={locale} />
+      <ApplicationsView user={user} locale={locale} targetId={applicationTargetId} onSelectApplication={clearApplicationTarget} />
     ) : activeView === "cover-letter" ? (
       <CoverLetterView
         user={user}
@@ -449,7 +472,7 @@ export default function ProductApp({
     ) : activeView === "saved" ? (
       <SavedView user={user} locale={locale} />
     ) : activeView === "notifications" ? (
-      <NotificationsView user={user} locale={locale} />
+      <NotificationsView user={user} locale={locale} onOpenApplication={openApplication} />
     ) : activeView === "universal" ? (
       <UniversalProfile
         user={user}
@@ -1761,9 +1784,13 @@ function OutcomeModal({
 function ApplicationsView({
   user,
   locale,
+  targetId,
+  onSelectApplication,
 }: {
   user: User | null;
   locale: DashboardLocale;
+  targetId: string | null;
+  onSelectApplication: () => void;
 }) {
   const t = dashboardCopy[locale];
   const [items, setItems] = useState<LiveApplication[]>([]);
@@ -1779,6 +1806,8 @@ function ApplicationsView({
   const [nextActionAt, setNextActionAt] = useState("");
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingSaved, setTrackingSaved] = useState(false);
+  const detailRef = useRef<HTMLElement | null>(null);
+  const scrolledTargetRef = useRef<string | null>(null);
   const refresh = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -1789,6 +1818,7 @@ function ApplicationsView({
       setItems(next);
       setSelected(
         (current) =>
+          next.find((item) => item.id === targetId) ??
           next.find((item) => item.id === current?.id) ?? next[0] ?? null,
       );
       setError("");
@@ -1805,7 +1835,7 @@ function ApplicationsView({
     } finally {
       setLoading(false);
     }
-  }, [user, locale]);
+  }, [user, locale, targetId]);
   useEffect(() => {
     refresh();
     const timer = setInterval(refresh, 15000);
@@ -1824,6 +1854,16 @@ function ApplicationsView({
       setSelected(filteredItems[0] ?? null);
     }
   }, [filteredItems, selected?.id]);
+  useEffect(() => {
+    if (
+      !loading && targetId && selected?.id === targetId &&
+      scrolledTargetRef.current !== targetId &&
+      window.matchMedia("(max-width: 760px)").matches
+    ) {
+      scrolledTargetRef.current = targetId;
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ block: "start" }));
+    }
+  }, [loading, selected?.id, targetId]);
   useEffect(() => {
     setTrackingNotes(selected?.tracking.notes ?? "");
     setNextAction(selected?.tracking.nextAction ?? "");
@@ -1988,6 +2028,7 @@ function ApplicationsView({
               whileHover={{ x: 3 }}
               whileTap={{ scale: 0.99 }}
               onClick={() => {
+                onSelectApplication();
                 setSelected(application);
                 setCopied(false);
               }}
@@ -2012,7 +2053,7 @@ function ApplicationsView({
             </m.button>
           ))}
         </section>
-        <aside className="application-detail">
+        <aside className="application-detail" ref={detailRef}>
           <AnimatePresence mode="wait" initial={false}>
             {selected ? (
               <m.div
@@ -2452,9 +2493,11 @@ function SavedView({
 function NotificationsView({
   user,
   locale,
+  onOpenApplication,
 }: {
   user: User | null;
   locale: DashboardLocale;
+  onOpenApplication: (event: ReactMouseEvent<HTMLAnchorElement>, id: string) => void;
 }) {
   const [applications, setApplications] = useState<LiveApplication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2480,7 +2523,11 @@ function NotificationsView({
     );
   const events = applications
     .flatMap((application) =>
-      application.events.map((event) => ({ ...event, job: application.job })),
+      application.events.map((event) => ({
+        ...event,
+        job: application.job,
+        stage: application.tracking.stage,
+      })),
     )
     .sort(
       (left, right) =>
@@ -2512,8 +2559,15 @@ function NotificationsView({
             </p>
           )}
           {events.map((event, position) => (
-            <m.article
+            <m.a
               key={event.id}
+              href={`/app/applications?application=${encodeURIComponent(event.applicationId)}`}
+              onClick={(clickEvent) => onOpenApplication(clickEvent, event.applicationId)}
+              aria-label={localized(
+                locale,
+                `Ver candidatura de ${event.job.title} en ${event.job.company}: ${trackingLabel(event.stage, locale)}`,
+                `View ${event.job.title} application at ${event.job.company}: ${trackingLabel(event.stage, locale)}`,
+              )}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: Math.min(position, 10) * 0.035 }}
@@ -2541,6 +2595,9 @@ function NotificationsView({
                   {event.job.title} · {event.job.company}
                 </strong>
                 <p>{event.message}</p>
+                <span className={`tracking-badge ${event.stage}`}>
+                  {trackingLabel(event.stage, locale)}
+                </span>
                 <small>
                   {new Intl.DateTimeFormat(locale, {
                     dateStyle: "medium",
@@ -2549,7 +2606,8 @@ function NotificationsView({
                 </small>
               </div>
               {!event.readAt && <i />}
-            </m.article>
+              <span className="notification-open" aria-hidden="true">↗</span>
+            </m.a>
           ))}
           {!loading && !events.length && (
             <div className="empty-state compact">

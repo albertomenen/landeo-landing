@@ -165,6 +165,19 @@ test("tracks each application with a persistent user-owned pipeline", async () =
   assert.match(styles, /\.tracking-notes/);
 });
 
+test("opens each notification in its matching application", async () => {
+  const productApp = await readFile(
+    new URL("components/ProductApp.tsx", root),
+    "utf8",
+  );
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(productApp, /app\/applications\?application=\$\{encodeURIComponent\(event\.applicationId\)\}/);
+  assert.match(productApp, /onOpenApplication\(clickEvent, event\.applicationId\)/);
+  assert.match(productApp, /next\.find\(\(item\) => item\.id === targetId\)/);
+  assert.match(productApp, /detailRef\.current\?\.scrollIntoView/);
+  assert.match(styles, /\.notification-list > a:focus-visible/);
+});
+
 test("deletes an account and its private data through an authenticated flow", async () => {
   const productApp = await readFile(
     new URL("components/ProductApp.tsx", root),
