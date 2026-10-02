@@ -2986,6 +2986,97 @@ h1 em:after {
   font-size: 10px;
   color: var(--muted);
 }
+.application-guide {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid #d7e4d9;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #eff7ef, #fff);
+  box-shadow: 0 10px 28px rgba(36, 92, 64, 0.07);
+}
+.application-guide.action {
+  border-color: #e7d6ae;
+  background: linear-gradient(145deg, #fff8e8, #fff);
+}
+.application-guide.closed {
+  border-color: #d9dfdb;
+  background: linear-gradient(145deg, #f2f4f2, #fff);
+}
+.application-detail .application-guide-intro h3 {
+  margin: 8px 0 7px;
+  font-size: clamp(20px, 1.8vw, 25px);
+  line-height: 1.16;
+  color: var(--text);
+}
+.application-guide-intro p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.application-guide-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+.application-guide-facts > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid rgba(36, 92, 64, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+}
+.application-guide-facts span,
+.application-guide-meta {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.application-guide-facts strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.application-guide-facts small {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+}
+.application-guide-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 16px;
+  border-radius: 11px;
+  background: var(--green);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.application-guide-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(36, 92, 64, 0.2);
+}
+.application-guide-action:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+.application-guide-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+}
 .tracking-panel {
   margin-top: 20px;
   padding: 18px;
@@ -6086,6 +6177,15 @@ h1 em:after {
   }
   .application-detail > p {
     font-size: 10px;
+  }
+  .application-guide {
+    padding: 18px;
+  }
+  .application-guide-facts {
+    grid-template-columns: 1fr;
+  }
+  .application-guide-action {
+    width: 100%;
   }
   .status-explain {
     padding: 14px;

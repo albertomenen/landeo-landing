@@ -49,6 +49,7 @@ import { Brand } from "./Brand";
 import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
 import { marketingDemoJobs } from "../lib/marketing-demo";
+import { applicationGuide } from "../lib/application-guidance";
 
 export type ProductView =
   | "jobs"
@@ -1916,6 +1917,7 @@ function ApplicationsView({
       setSavingTracking(false);
     }
   };
+  const guide = selected ? applicationGuide(selected, locale) : null;
   if (!user)
     return (
       <SignInState
@@ -2071,6 +2073,41 @@ function ApplicationsView({
                 <p>
                   {selected.job.company} · {selected.job.location}
                 </p>
+                {guide && (
+                  <section className={`application-guide ${guide.tone}`} aria-label={localized(locale, "Guía de la candidatura", "Application guide")}>
+                    <div className="application-guide-intro">
+                      <span className="overline">{localized(locale, "SITUACIÓN ACTUAL", "CURRENT SITUATION")}</span>
+                      <h3>{guide.title}</h3>
+                      <p>{guide.description}</p>
+                    </div>
+                    <div className="application-guide-facts">
+                      <div>
+                        <span>{localized(locale, "¿De quién depende ahora?", "Who is it waiting on?")}</span>
+                        <strong>{guide.waitingOn}</strong>
+                      </div>
+                      <div>
+                        <span>{selected.tracking.nextAction
+                          ? localized(locale, "Tu próximo paso guardado", "Your saved next step")
+                          : localized(locale, "Qué hacer ahora", "What to do now")}</span>
+                        <strong>{selected.tracking.nextAction || guide.nextStep}</strong>
+                        {selected.tracking.nextActionAt && (
+                          <small>{new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(`${selected.tracking.nextActionAt.slice(0, 10)}T12:00:00`))}</small>
+                        )}
+                      </div>
+                    </div>
+                    {selected.status === "action_required" && selected.actionUrl && (
+                      <a className="application-guide-action" href={selected.actionUrl} target="_blank" rel="noreferrer">
+                        {t.paywall.official}
+                      </a>
+                    )}
+                    <div className="application-guide-meta">
+                      <span>{localized(locale, "Envío", "Delivery")}: {t.status[selected.status as keyof typeof t.status] ?? selected.status}</span>
+                      <span>{guide.source === "personal"
+                        ? localized(locale, "Etapa indicada por ti", "Stage set by you")
+                        : localized(locale, "Según el estado registrado", "Based on recorded status")}</span>
+                    </div>
+                  </section>
+                )}
                 <section className="tracking-panel">
                   <div className="tracking-panel-heading">
                     <div>
@@ -2191,8 +2228,10 @@ function ApplicationsView({
                       selected.status}
                   </strong>
                   <span>
-                    {selected.errorMessage || selected.requiredFields.length
-                      ? `${localized(locale, "Necesitamos", "Required")}: ${selected.requiredFields.join(", ")}`
+                    {selected.errorMessage
+                      ? selected.errorMessage
+                      : selected.requiredFields.length
+                        ? `${localized(locale, "Necesitamos", "Required")}: ${selected.requiredFields.join(", ")}`
                       : selected.deliveryStatus
                         ? `${localized(locale, "Entrega", "Delivery")}: ${selected.deliveryStatus}`
                         : localized(
@@ -2295,17 +2334,6 @@ function ApplicationsView({
                     </li>
                   )}
                 </ol>
-                {selected.status === "action_required" &&
-                  selected.actionUrl && (
-                    <a
-                      className="button button-primary"
-                      href={selected.actionUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {t.paywall.official}
-                    </a>
-                  )}
                 <div className="application-trust">
                   <b>i</b>
                   <p>
