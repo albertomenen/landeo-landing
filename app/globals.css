@@ -11676,7 +11676,7 @@ h1 em:after {
   .app-frame .dashboard-view-motion { transform: none !important; }
   .app-frame .app-main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
   .app-frame .deck-panel { padding-bottom: calc(180px + env(safe-area-inset-bottom)); min-height: 0; }
-  .app-frame .deck-actions { bottom: calc(84px + env(safe-area-inset-bottom)); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-frame .deck-actions { bottom: calc(104px + env(safe-area-inset-bottom)); grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .app-frame .deck-actions button { min-width: 0; padding-inline: 8px; }
   .app-frame .mobile-bottom-nav { height: auto; min-height: 66px; }
   .app-frame .mobile-bottom-nav a { padding: 6px 2px; overflow-wrap: anywhere; }
