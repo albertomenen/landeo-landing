@@ -1485,7 +1485,7 @@ function JobsView({
       </div>
       <DashboardTour
         locale={locale}
-        enabled={!demo && tourReady && !loading && Boolean(job)}
+        enabled={!demo && Boolean(user?.id) && tourReady && !loading && Boolean(job)}
         identityKey={user?.id ?? "guest"}
       />
       {confettiBurst > 0 && <ConfettiBurst key={confettiBurst} />}{" "}

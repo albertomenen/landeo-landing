@@ -205,7 +205,7 @@ export function DashboardTour({
 }) {
   const copy = tourCopy[locale];
   const steps = copy.steps;
-  const storageKey = `${TOUR_VERSION}:${identityKey}`;
+  const storageKey = `landeo-dashboard-tour-seen:${identityKey}`;
   const mounted = useSyncExternalStore(
     subscribeToClient,
     getClientSnapshot,
@@ -221,20 +221,28 @@ export function DashboardTour({
   useEffect(() => {
     if (!mounted || !enabled || checkedKey.current === storageKey) return;
     checkedKey.current = storageKey;
-    if (window.localStorage.getItem(storageKey) === "complete") return;
+    try {
+      if (window.localStorage.getItem(storageKey) === "complete" ||
+          window.localStorage.getItem(`${TOUR_VERSION}:${identityKey}`) === "complete") return;
+    } catch { /* Account metadata also persists completion. */ }
     let cancelled = false;
     let timer: number | undefined;
     async function checkAccountCompletion() {
       if (identityKey !== "guest") {
-        const { data } = await createSupabaseBrowserClient().auth.getUser();
-        if (data.user?.user_metadata?.dashboard_tour_version === TOUR_VERSION) {
-          window.localStorage.setItem(storageKey, "complete");
+        const { data, error } = await createSupabaseBrowserClient().auth.getUser();
+        if (error || !data.user || data.user.id !== identityKey) return;
+        if (data.user.user_metadata?.dashboard_tour_seen_at || data.user.user_metadata?.dashboard_tour_version) {
+          try { window.localStorage.setItem(storageKey, "complete"); } catch { /* Optional cache. */ }
           return;
         }
       }
       if (!cancelled) timer = window.setTimeout(() => {
         setIndex(0);
         setOpen(true);
+        try { window.localStorage.setItem(storageKey, "complete"); } catch { /* Optional cache. */ }
+        if (identityKey !== "guest") void createSupabaseBrowserClient().auth.updateUser({
+          data: { dashboard_tour_seen_at: new Date().toISOString() },
+        }).catch(() => { /* Retry persistence when the guide is closed. */ });
       }, 550);
     }
     void checkAccountCompletion();
@@ -285,11 +293,11 @@ export function DashboardTour({
   }, [measure, open, step.selector]);
 
   const complete = useCallback(() => {
-    window.localStorage.setItem(storageKey, "complete");
+    try { window.localStorage.setItem(storageKey, "complete"); } catch { /* Optional cache. */ }
     if (identityKey !== "guest") {
       void createSupabaseBrowserClient().auth.updateUser({
-        data: { dashboard_tour_version: TOUR_VERSION },
-      });
+        data: { dashboard_tour_version: TOUR_VERSION, dashboard_tour_seen_at: new Date().toISOString() },
+      }).catch(() => { /* Local completion still prevents a repeat on this device. */ });
     }
     setOpen(false);
   }, [identityKey, storageKey]);

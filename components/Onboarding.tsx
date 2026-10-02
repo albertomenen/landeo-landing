@@ -10,7 +10,8 @@ import {
 } from "motion/react";
 import Link from "./SafeLink";
 import { Brand } from "./Brand";
-import { completeWebOnboarding, currentUser, loadProfile } from "../lib/landeo";
+import { completeWebOnboarding } from "../lib/landeo";
+import { createSupabaseBrowserClient } from "../lib/supabase/client";
 
 type Locale = "es" | "en";
 type Step =
@@ -626,7 +627,8 @@ export default function Onboarding() {
     [cityResults, setCityResults] = useState<WorldCity[]>([]),
     [cityLoading, setCityLoading] = useState(false),
     [draftReady, setDraftReady] = useState(false),
-    [completionChecked, setCompletionChecked] = useState(false);
+    [completionChecked, setCompletionChecked] = useState(false),
+    [completionError, setCompletionError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null),
     step = steps[index],
     t = copy[locale],
@@ -637,18 +639,25 @@ export default function Onboarding() {
     async function guardCompletedOnboarding() {
       let redirecting = false;
       try {
-        const user = await currentUser();
+        const client = createSupabaseBrowserClient();
+        const { data, error: sessionError } = await client.auth.getSession();
+        if (sessionError) throw sessionError;
+        const user = data.session?.user;
         if (user) {
-          const profile = await loadProfile();
-          if (profile?.onboardingCompletedAt) {
+          const { data: profile, error: profileError } = await client.from("profiles")
+            .select("onboarding_completed_at").eq("id", user.id).maybeSingle();
+          if (profileError) throw profileError;
+          if (!active) return;
+          if (profile?.onboarding_completed_at) {
             redirecting = true;
-            localStorage.removeItem("landeo-onboarding-draft");
+            try { localStorage.removeItem("landeo-onboarding-draft"); } catch { /* Optional local draft. */ }
             window.location.replace("/app/jobs");
             return;
           }
         }
-      } finally {
         if (active && !redirecting) setCompletionChecked(true);
+      } catch {
+        if (active) setCompletionError(true);
       }
     }
     void guardCompletedOnboarding();
@@ -1344,7 +1353,11 @@ export default function Onboarding() {
   if (!completionChecked) {
     return (
       <main className="onboarding-page onboarding-v2 onboarding-checking" role="status" aria-live="polite">
-        <div><span aria-hidden="true">↻</span><p>{locale === "es" ? "Preparando tu experiencia…" : "Preparing your experience…"}</p></div>
+        <div><span aria-hidden="true">↻</span><p>{completionError
+          ? locale === "es" ? "No hemos podido comprobar tu perfil. Tus respuestas guardadas siguen intactas." : "We couldn't check your profile. Your saved answers are unchanged."
+          : locale === "es" ? "Preparando tu experiencia…" : "Preparing your experience…"}</p>
+          {completionError && <button className="button button-primary" onClick={() => window.location.reload()}>{locale === "es" ? "Reintentar" : "Try again"}</button>}
+        </div>
       </main>
     );
   }

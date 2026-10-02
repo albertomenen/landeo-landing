@@ -11,8 +11,11 @@ export async function GET(request:NextRequest){
   const supabase=createServerClient(url,key,{cookies:{getAll:()=>request.cookies.getAll(),setAll(items){items.forEach(({name,value,options})=>response.cookies.set(name,value,options))}}});
   const{data,error}=await supabase.auth.exchangeCodeForSession(code);
   if(error)return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.code??"callback")}`,requestUrl.origin));
-  const{data:profile}=await supabase.from("profiles").select("onboarding_completed_at").eq("id",data.user.id).maybeSingle();
-  const destination=profile?.onboarding_completed_at?safeNext:"/onboarding";
+  const{data:profile,error:profileError}=await supabase.from("profiles").select("onboarding_completed_at").eq("id",data.user.id).maybeSingle();
+  // A returning account must not be sent back to signup's onboarding destination.
+  // On a transient profile failure, the dashboard remains available for retry.
+  const returningNext=/^\/onboarding(?:[/?#]|$)/.test(safeNext)?"/app/jobs":safeNext;
+  const destination=profileError?"/app/jobs":profile?.onboarding_completed_at?returningNext:"/onboarding";
   const redirect=NextResponse.redirect(new URL(destination,requestUrl.origin));
   response.cookies.getAll().forEach(cookie=>redirect.cookies.set(cookie));
   return redirect;
