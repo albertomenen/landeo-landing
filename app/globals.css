@@ -11617,6 +11617,44 @@ h1 em:after {
 }
 
 /* Fluid dashboard layouts: content can grow without shrinking the reading scale. */
+.guided-letter-form .letter-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 32px; }
+.letter-steps button { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; min-height: 72px; border: 0; background: transparent; color: var(--muted); padding: 6px 2px; cursor: pointer; }
+.letter-steps button > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--sage); color: var(--green); font-weight: 750; }
+.letter-steps button[aria-current="step"] { color: var(--green); font-weight: 750; }
+.letter-steps button[aria-current="step"] > span { background: var(--green); color: white; }
+.app-frame .letter-steps button small { font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
+.letter-question h2 { font-size: clamp(1.5rem, 2.4vw, 2rem); line-height: 1.2; margin: 12px 0; letter-spacing: -.035em; }
+.letter-question > p { margin-bottom: 20px; }
+.letter-prompts { padding-left: 22px; margin: 20px 0; line-height: 1.65; font-size: 1rem; }
+.letter-question > label { display: block; font-size: 1rem; font-weight: 650; margin: 20px 0 10px; }
+.app-frame .letter-question > textarea { width: 100%; min-height: 140px; padding: 16px; font-size: 1rem; line-height: 1.65; border: 1px solid var(--line); border-radius: 14px; resize: vertical; background: white; color: var(--text); }
+.letter-answer-count { display: block; text-align: right; margin-top: 6px; color: var(--muted); }
+.letter-example { padding: 16px; border: 1px solid var(--line); border-radius: 12px; margin: 20px 0; }
+.letter-example summary { cursor: pointer; font-size: 1rem; font-weight: 650; min-height: 28px; }
+.letter-example p { margin: 14px 0; }
+.letter-tip { padding: 16px; border-left: 3px solid var(--green); background: #f0f5ef; border-radius: 0 12px 12px 0; line-height: 1.6; }
+.letter-review { display: grid; gap: 12px; margin: 24px 0; }
+.letter-review section { padding: 18px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.letter-review section > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.letter-review h3 { font-size: 1rem; margin: 0; }
+.letter-review button { border: 0; background: transparent; color: var(--green); text-decoration: underline; font-size: .875rem; padding: 10px; min-height: 44px; cursor: pointer; }
+.letter-review p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; }
+.letter-wizard-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
+.letter-wizard-actions .button { min-height: 48px; white-space: normal; }
+.app-frame .letter-save-note { font-size: .875rem; color: var(--muted); margin: 16px 0 0; }
+.guided-letter-aside h2 { font-size: 1.5rem; line-height: 1.3; }
+.app-frame .guided-letter-aside ol li span { font-size: 1rem; line-height: 1.6; }
+.app-frame .guided-letter-aside ol li strong { font-size: 1rem; }
+.app-frame .guided-letter-aside .letter-tip { color: #173b2e; font-weight: 400; }
+.app-frame .guided-letter-aside > .overline { color: #d9f09c; }
+.guided-letter-form :is(button, summary, textarea):focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
+@media (max-width: 560px) {
+  .app-frame .guided-letter-form { padding: 20px 16px; }
+  .guided-letter-form .letter-steps { gap: 4px; margin-bottom: 24px; }
+  .app-frame .letter-steps button small { display: none; }
+  .app-frame .letter-steps button { min-height: 44px; }
+  .letter-wizard-actions .button { padding-inline: 16px; }
+}
 .app-frame .dashboard-view-motion { will-change: opacity; }
 .app-frame .search-field input { width: 100%; min-width: 0; }
 .app-frame { grid-template-columns: 248px minmax(0, 1fr); }
