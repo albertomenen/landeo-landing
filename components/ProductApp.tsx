@@ -1959,6 +1959,9 @@ function ApplicationsView({
             : localized(locale, "Actualizar ahora", "Refresh now")}
         </m.button>
       </header>
+      {user.email?.trim().toLowerCase() === "alberto.menendez89@gmail.com" && (
+        <MarketingPipelineDemo locale={locale} />
+      )}
       <div className="applications-layout">
         <section className="applications-list">
           <div className="status-tabs">
@@ -2366,6 +2369,67 @@ function ApplicationsView({
         </aside>
       </div>
     </>
+  );
+}
+
+function MarketingPipelineDemo({ locale }: { locale: DashboardLocale }) {
+  const [applied, setApplied] = useState(100);
+  const [pulseId, setPulseId] = useState<number | null>(null);
+  const pulseSequence = useRef(0);
+  useEffect(() => {
+    if (pulseId === null) return;
+    const timer = window.setTimeout(() => setPulseId(null), 950);
+    return () => window.clearTimeout(timer);
+  }, [pulseId]);
+  const triggerDemo = () => {
+    setApplied((count) => count + 1);
+    pulseSequence.current += 1;
+    setPulseId(pulseSequence.current);
+  };
+  const stats = [
+    { key: "applied", label: localized(locale, "Solicitudes", "Applied"), value: applied },
+    { key: "screening", label: localized(locale, "En revisión", "Screening"), value: 25 },
+    { key: "interview", label: localized(locale, "Entrevistas", "Interviews"), value: 6 },
+    { key: "offer", label: localized(locale, "Ofertas", "Offers"), value: 1 },
+  ];
+  return (
+    <section className="marketing-pipeline-demo" aria-label={localized(locale, "Simulación de candidaturas para marketing", "Marketing application simulation")}>
+      <div className="marketing-pipeline-head">
+        <div>
+          <span className="marketing-pipeline-label">{localized(locale, "SIMULACIÓN · SOLO MARKETING", "SIMULATION · MARKETING ONLY")}</span>
+          <h2>{localized(locale, "Así avanza tu búsqueda", "See your search in motion")}</h2>
+          <p>{localized(locale, "Cifras de ejemplo para la demo. No representan candidaturas reales.", "Sample numbers for the demo. These are not real applications.")}</p>
+        </div>
+        <button type="button" onClick={triggerDemo} aria-label={localized(locale, "Simular una candidatura automática más", "Simulate one more automatic application")}>
+          <span aria-hidden="true">✦</span>
+          {localized(locale, "Simular candidatura +1", "Simulate application +1")}
+        </button>
+      </div>
+      <div className="marketing-pipeline-stats">
+        {stats.map((stat, index) => (
+          <div key={stat.key} className={`marketing-pipeline-stat ${stat.key}`}>
+            <span>{stat.label}</span>
+            <strong aria-live={stat.key === "applied" ? "polite" : undefined}>{stat.value}</strong>
+            {stat.key === "applied" && (
+              <AnimatePresence>
+                {pulseId !== null && (
+                  <m.em
+                    key={pulseId}
+                    initial={{ opacity: 0, y: 12, scale: 0.8 }}
+                    animate={{ opacity: [0, 1, 1, 0], y: [12, 0, -9, -25], scale: [0.8, 1.1, 1, 1] }}
+                    exit={{ opacity: 0, y: -30 }}
+                    transition={{ duration: 0.9, ease: "easeOut" }}
+                    aria-hidden="true"
+                  >+1</m.em>
+                )}
+              </AnimatePresence>
+            )}
+            {index < stats.length - 1 && <i aria-hidden="true">→</i>}
+          </div>
+        ))}
+      </div>
+      <small>{localized(locale, "El botón solo anima estos números de muestra; no envía solicitudes ni modifica Supabase.", "The button only animates these sample numbers; it does not submit applications or change Supabase.")}</small>
+    </section>
   );
 }
 

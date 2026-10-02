@@ -2859,6 +2859,126 @@ h1 em:after {
   grid-template-columns: minmax(430px, 1.05fr) minmax(340px, 0.95fr);
   border-top: 1px solid var(--line);
 }
+.marketing-pipeline-demo {
+  margin: 0 30px 22px;
+  padding: 22px 25px 18px;
+  border-radius: 20px;
+  background: linear-gradient(120deg, #183b2c, #245d42);
+  color: #fff;
+  box-shadow: 0 14px 32px rgba(23, 67, 44, 0.16);
+}
+.marketing-pipeline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.marketing-pipeline-label {
+  display: inline-flex;
+  padding: 5px 8px;
+  border: 1px solid rgba(218, 245, 171, 0.45);
+  border-radius: 999px;
+  color: var(--lime);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.marketing-pipeline-head h2 {
+  margin: 9px 0 3px;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.1;
+}
+.marketing-pipeline-head p,
+.marketing-pipeline-demo > small {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.marketing-pipeline-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 10px 15px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--lime);
+  color: #163528;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.marketing-pipeline-head button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(8, 29, 19, 0.24);
+}
+.marketing-pipeline-head button:active {
+  transform: translateY(0) scale(0.98);
+}
+.marketing-pipeline-head button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+.marketing-pipeline-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0 12px;
+}
+.marketing-pipeline-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 17px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.marketing-pipeline-stat span {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  font-weight: 700;
+}
+.marketing-pipeline-stat strong {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.marketing-pipeline-stat.applied strong {
+  color: var(--lime);
+}
+.marketing-pipeline-stat em {
+  position: absolute;
+  right: 19px;
+  top: 25px;
+  color: var(--lime);
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 900;
+  pointer-events: none;
+}
+.marketing-pipeline-stat i {
+  position: absolute;
+  z-index: 1;
+  right: -15px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lime);
+  color: #163528;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
 .applications-list {
   background: white;
   border-right: 1px solid var(--line);
@@ -6113,6 +6233,23 @@ h1 em:after {
     flex-direction: column;
     min-height: calc(100svh - 148px);
     border-top: 0;
+  }
+  .marketing-pipeline-demo {
+    margin: 0 14px 18px;
+    padding: 18px;
+  }
+  .marketing-pipeline-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .marketing-pipeline-head button {
+    width: 100%;
+  }
+  .marketing-pipeline-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .marketing-pipeline-stat:nth-child(2) i {
+    display: none;
   }
   .applications-list {
     padding: 8px 14px 16px;

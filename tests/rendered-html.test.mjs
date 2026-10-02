@@ -178,6 +178,21 @@ test("opens each notification in its matching application", async () => {
   assert.match(styles, /\.notification-list > a:focus-visible/);
 });
 
+test("keeps the owner-only marketing pipeline separate from real applications", async () => {
+  const productApp = await readFile(
+    new URL("components/ProductApp.tsx", root),
+    "utf8",
+  );
+  const demo = productApp.split("function MarketingPipelineDemo")[1]?.split("function SavedView")[0];
+  assert.match(productApp, /user\.email\?\.trim\(\)\.toLowerCase\(\) === "alberto\.menendez89@gmail\.com"/);
+  assert.match(demo, /useState\(100\)/);
+  assert.match(demo, /value: 25/);
+  assert.match(demo, /value: 6/);
+  assert.match(demo, /value: 1/);
+  assert.match(demo, /setApplied\(\(count\) => count \+ 1\)/);
+  assert.doesNotMatch(demo, /submitApplication|updateApplicationTracking|\.from\(/);
+});
+
 test("deletes an account and its private data through an authenticated flow", async () => {
   const productApp = await readFile(
     new URL("components/ProductApp.tsx", root),
