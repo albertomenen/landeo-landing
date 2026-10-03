@@ -45,6 +45,7 @@ import {
 } from "../lib/landeo";
 import { Brand } from "./Brand";
 import { GuidedCoverLetter } from "./GuidedCoverLetter";
+import { SupportChat } from "./SupportChat";
 import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
 import { marketingDemoJobs } from "../lib/marketing-demo";
@@ -685,6 +686,7 @@ export default function ProductApp({
               </Link>
             ))}
           </nav>
+          {user && !demo && <SupportChat key={user.id} locale={locale} />}
         </div>
       </MotionConfig>
     </LazyMotion>
