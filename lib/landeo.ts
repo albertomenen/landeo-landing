@@ -1,7 +1,7 @@
 import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
-import {prioritizeJobsByLocation,resolveCountryCode} from "./job-location";
+import {prioritizeJobsByLocation,resolveCountryCode,cityLocationFilter} from "./job-location";
 import {calculateJobMatch,isJobProfessionallyRelevant,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -126,7 +126,13 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const requestedSearch=requestedFilter?client.from("jobs").select(select).eq("status","active").or(requestedFilter).order("published_at",{ascending:false}).limit(260):null;
   const earlyCareer=client.from("jobs").select(select).eq("status","active").or("seniority.ilike.%Entry%,title.ilike.%intern%,title.ilike.%internship%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%apprentice%,contract_type.ilike.%intern%").order("published_at",{ascending:false}).limit(260);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
+  const cityFilter=cityLocationFilter(candidateCity);
+  const localQueries=cityFilter?[
+    client.from("jobs").select(select).eq("status","active").or(cityFilter).order("published_at",{ascending:false}).limit(240),
+    ...(roleFilter?[client.from("jobs").select(select).eq("status","active").or(cityFilter).or(roleFilter).order("published_at",{ascending:false}).limit(220)]:[]),
+  ]:[];
   const focused=candidateMarket?[
+    client.from("jobs").select(select).eq("status","active").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(160),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(120),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country","REMOTE").order("published_at",{ascending:false}).limit(120),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(80),
@@ -134,7 +140,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").order("published_at",{ascending:false}).limit(180),
     client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").order("published_at",{ascending:false}).limit(100),
   ];
-  const results=await Promise.all([recent,topCompanies,automatic,earlyCareer,...focused,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
+  const results=await Promise.all([recent,topCompanies,automatic,earlyCareer,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];

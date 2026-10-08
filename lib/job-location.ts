@@ -49,6 +49,11 @@ const countryAliases: Record<string, string[]> = {
 };
 
 function countryCode(country: string, location: string) {
+  const explicit = normalizeLocation(country);
+  for (const [code, aliases] of Object.entries(countryAliases)) {
+    if (aliases.includes(explicit)) return code;
+  }
+  if (/\b(cdmx|ciudad de mexico|mexico city)\b/.test(normalizeLocation(location))) return "MX";
   const haystack = ` ${normalizeLocation(country)} ${normalizeLocation(location)} `;
   for (const [code, aliases] of Object.entries(countryAliases)) {
     if (
@@ -67,18 +72,30 @@ export function resolveCountryCode(country: string, location: string) {
   return countryCode(country, location);
 }
 
+// Shared by the database query and the final location filter.
+export function citySearchTerms(city: string) {
+  if (/\b(cdmx|ciudad de mexico|mexico city)\b/.test(normalizeLocation(city))) {
+    return ["Ciudad de México", "Ciudad de Mexico", "Mexico City", "CDMX"];
+  }
+  return [...new Set([city.split(",")[0].trim(), normalizeLocation(city.split(",")[0])])].filter(Boolean);
+}
+
+export function cityLocationFilter(city: string) {
+  return citySearchTerms(city).map(term => term.replace(/[%_(),.*]/g, " ").trim()).filter(Boolean).map(term => `location.ilike.%${term}%`).join(",");
+}
+
 function locationRelevance(job: Job, city: string, country: string) {
   const place = normalizeLocation(job.location);
   const cityName = normalizeLocation(city.split(",")[0] ?? "");
   const candidateCountry = countryCode(country, city);
   const jobCountry = String(job.market ?? "").toUpperCase();
   if (!cityName) return 0;
-  if (place.includes(cityName)) return 0;
+  if (citySearchTerms(city).some(term => ` ${place} `.includes(` ${normalizeLocation(term)} `))) return 0;
   const aliases =
     countryAliases[candidateCountry] ??
     [normalizeLocation(country)].filter(Boolean);
   const countryMatch =
-    jobCountry === candidateCountry ||
+    (Boolean(candidateCountry) && jobCountry === candidateCountry) ||
     aliases.some((alias) => alias.length > 2 && place.includes(alias));
   if (job.workMode !== "remote") {
     const genericCountry =
@@ -98,9 +115,11 @@ function locationRelevance(job: Job, city: string, country: string) {
     .trim();
   if (
     !remoteScope ||
-    /\b(global|worldwide|anywhere|europe|europa|emea)\b/.test(remoteScope)
+    /\b(global|worldwide|anywhere)\b/.test(remoteScope)
   )
     return 2;
+  if (/\b(latam|latin america|latinamerica|latinoamerica|america latina)\b/.test(remoteScope) && ["MX", "AR", "CO", "PE", "BR"].includes(candidateCountry)) return 2;
+  if (/\b(europe|europa|emea)\b/.test(remoteScope) && ["ES", "PT", "GB", "FR", "DE", "IT", "NL", "AT", "BE", "CH", "CZ", "DK", "EE", "FI", "IE", "NO", "PL", "SE", "RO"].includes(candidateCountry)) return 2;
   return null;
 }
 
