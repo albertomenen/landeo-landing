@@ -802,10 +802,17 @@ function JobsView({
     (direction: -1 | 1) => {
       if (!job) return;
       setCardDirection(direction);
-      setJobs((current) => current.filter((item) => item.id !== job.id));
+      setJobs((current) => {
+        const remaining=current.filter((item) => item.id !== job.id);
+        // Refill shortly before the current page runs out. Already handled
+        // jobs are excluded in Supabase, so this reveals the next catalogue
+        // page without downloading the complete database up front.
+        if(!demo&&remaining.length<=5)window.setTimeout(refresh,0);
+        return remaining;
+      });
       setIndex(0);
     },
-    [job],
+    [job,demo,refresh],
   );
   const triggerConfetti = useCallback(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;

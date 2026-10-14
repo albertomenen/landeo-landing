@@ -116,31 +116,33 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
     const universal=profile?.universal_profile as Partial<UniversalProfile>|null;candidateCity=universal?.city||profile?.location||"";candidateCountry=universal?.country||"";
     matchProfile={role:profile?.role||"",location:candidateCity,skills:Array.isArray(profile?.skills)?profile.skills:[],workModes:Array.isArray(profile?.work_modes)?profile.work_modes:[],minSalary:profile?.min_salary??null,maxSalary:profile?.max_salary??null,yearsExperience:Number(universal?.yearsExperience??0),country:candidateCountry};
   }
-  const select="id,external_id,source,company,title,summary,description,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider";
-  const recent=client.from("jobs").select(select).eq("status","active").order("published_at",{ascending:false}).limit(limit);
-  const topCompanies=client.from("jobs").select(select).eq("status","active").eq("metadata->>top_company","true").order("published_at",{ascending:false}).limit(240);
-  const automatic=client.from("jobs").select(select).eq("status","active").eq("application_capability","automatic").order("published_at",{ascending:false}).limit(160);
+  // The feed only needs card-sized data. Full descriptions are loaded by the
+  // job detail route when a person opens an offer. This keeps Supabase egress
+  // and Postgres work bounded even when the catalogue contains many jobs.
+  const select="id,external_id,source,company,title,summary,location,work_mode,salary_min,salary_max,contract_type,seniority,industry,apply_mode,published_at,metadata,application_capability,application_provider";
+  const excludedIds=[...hidden].filter(id=>UUID.test(id)).slice(-150);
+  const activeJobs=()=>{
+    const query=client.from("jobs").select(select).eq("status","active");
+    return excludedIds.length?query.not("id","in",`(${excludedIds.join(",")})`):query;
+  };
+  const recent=activeJobs().order("published_at",{ascending:false}).limit(Math.min(limit,60));
+  const automatic=activeJobs().eq("application_capability","automatic").order("published_at",{ascending:false}).limit(50);
   const roleFilter=matchProfile?.role?jobSearchFilter(matchProfile.role):"";
   const requestedFilter=options.search?jobSearchFilter(options.search):"";
-  const roleFocused=roleFilter?client.from("jobs").select(select).eq("status","active").or(roleFilter).order("published_at",{ascending:false}).limit(220):null;
-  const requestedSearch=requestedFilter?client.from("jobs").select(select).eq("status","active").or(requestedFilter).order("published_at",{ascending:false}).limit(260):null;
-  const earlyCareer=client.from("jobs").select(select).eq("status","active").or("seniority.ilike.%Entry%,title.ilike.%intern%,title.ilike.%internship%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%apprentice%,contract_type.ilike.%intern%").order("published_at",{ascending:false}).limit(260);
+  const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(80):null;
+  const requestedSearch=requestedFilter?activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(100):null;
+  const earlyCareer=activeJobs().or("seniority.ilike.%Entry%,title.ilike.%intern%,title.ilike.%internship%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%apprentice%,contract_type.ilike.%intern%").order("published_at",{ascending:false}).limit(60);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const cityFilter=cityLocationFilter(candidateCity);
   const localQueries=cityFilter?[
-    client.from("jobs").select(select).eq("status","active").or(cityFilter).order("published_at",{ascending:false}).limit(240),
-    ...(roleFilter?[client.from("jobs").select(select).eq("status","active").or(cityFilter).or(roleFilter).order("published_at",{ascending:false}).limit(220)]:[]),
+    activeJobs().or(cityFilter).order("published_at",{ascending:false}).limit(80),
   ]:[];
   const focused=candidateMarket?[
-    client.from("jobs").select(select).eq("status","active").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(160),
-    client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(120),
-    client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").eq("metadata->>market_country","REMOTE").order("published_at",{ascending:false}).limit(120),
-    client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").eq("metadata->>market_country",candidateMarket).order("published_at",{ascending:false}).limit(80),
+    activeJobs().in("metadata->>market_country",[candidateMarket,"REMOTE"]).order("published_at",{ascending:false}).limit(80),
   ]:[
-    client.from("jobs").select(select).eq("status","active").eq("work_mode","Remoto").order("published_at",{ascending:false}).limit(180),
-    client.from("jobs").select(select).eq("status","active").eq("work_mode","Híbrido").order("published_at",{ascending:false}).limit(100),
+    activeJobs().in("work_mode",["Remoto","Híbrido"]).order("published_at",{ascending:false}).limit(60),
   ];
-  const results=await Promise.all([recent,topCompanies,automatic,earlyCareer,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
+  const results=await Promise.all([recent,automatic,earlyCareer,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
@@ -154,11 +156,11 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
     const localFirst=prioritizeJobsByLocation(available,candidateCity,candidateCountry);
     if(options.includeWorldwide||options.search){
       const localIds=new Set(localFirst.map(job=>job.id));
-      return [...localFirst,...available.filter(job=>!localIds.has(job.id))];
+      return [...localFirst,...available.filter(job=>!localIds.has(job.id))].slice(0,limit);
     }
-    return localFirst;
+    return localFirst.slice(0,limit);
   }
-  return available;
+  return available.slice(0,limit);
 }
 
 export async function loadJobs(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
