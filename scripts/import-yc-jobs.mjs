@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { preserveExistingJobMetadata } from "./lib/preserve-job-metadata.mjs";
 
 const YC_BASE_URL = "https://www.ycombinator.com";
 const YC_FEEDS = [
@@ -170,6 +171,7 @@ async function upsertRows(rows) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase URL or service role key.");
   for (let index = 0; index < rows.length; index += 100) {
+    const batch = await preserveExistingJobMetadata(rows.slice(index, index + 100), { url, key, identity: "id" });
     const response = await fetch(`${url}/rest/v1/jobs?on_conflict=id`, {
       method: "POST",
       headers: {
@@ -178,7 +180,7 @@ async function upsertRows(rows) {
         "content-type": "application/json",
         prefer: "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify(rows.slice(index, index + 100)),
+      body: JSON.stringify(batch),
     });
     if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   }

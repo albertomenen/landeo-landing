@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { preserveExistingJobMetadata } from "./lib/preserve-job-metadata.mjs";
 
 const verifiedAt = new Date().toISOString();
 
@@ -364,6 +365,9 @@ async function upsert(table, rows, conflict) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase URL or service role key.");
+  const safeRows = table === "jobs"
+    ? await preserveExistingJobMetadata(rows, { url, key, identity: conflict === "id" ? "id" : "source_external_id" })
+    : rows;
   const response = await fetch(`${url}/rest/v1/${table}?on_conflict=${conflict}`, {
     method: "POST",
     headers: {
@@ -372,7 +376,7 @@ async function upsert(table, rows, conflict) {
       "content-type": "application/json",
       prefer: "resolution=merge-duplicates,return=minimal",
     },
-    body: JSON.stringify(rows),
+    body: JSON.stringify(safeRows),
   });
   if (!response.ok) throw new Error(`${table} ${response.status}: ${await response.text()}`);
 }

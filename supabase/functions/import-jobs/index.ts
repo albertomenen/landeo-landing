@@ -1491,7 +1491,27 @@ async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
   const batchSize = 200;
   for (let start = 0; start < jobs.length; start += batchSize) {
     const batch = jobs.slice(start, start + batchSize);
-    const rows = batch.map(({ target: _target, ...job }) => job);
+    const existingRows: Array<{source:string;external_id:string;metadata:Record<string,unknown>|null}> = [];
+    const bySource = new Map<string, string[]>();
+    for (const job of batch) {
+      const ids = bySource.get(job.source) ?? [];
+      ids.push(job.external_id);
+      bySource.set(job.source, ids);
+    }
+    for (const [source, externalIds] of bySource) {
+      const { data: current, error: currentError } = await supabase.from("jobs")
+        .select("source,external_id,metadata")
+        .eq("source", source)
+        .in("external_id", externalIds);
+      if (currentError) throw currentError;
+      existingRows.push(...(current ?? []));
+    }
+    const existingMetadata = new Map(existingRows.map((row) => [`${row.source}:${row.external_id}`, row.metadata ?? {}]));
+    const rows = batch.map(({ target: _target, ...job }) => {
+      const previous = existingMetadata.get(`${job.source}:${job.external_id}`) ?? {};
+      const protectedEntries = Object.entries(previous).filter(([key]) => key.startsWith("company_office_") || key.startsWith("company_address_"));
+      return { ...job, metadata: { ...job.metadata, ...Object.fromEntries(protectedEntries) } };
+    });
     const { data, error } = await supabase
       .from("jobs")
       .upsert(rows, {

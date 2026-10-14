@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { preserveExistingJobMetadata } from "./lib/preserve-job-metadata.mjs";
 
 const markets = [
   { endpoint: "es", code: "ES", currency: "EUR", fallback: "España" },
@@ -91,6 +92,7 @@ async function upsert(rows) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase URL or service role key.");
   for (let index = 0; index < rows.length; index += 150) {
+    const batch = await preserveExistingJobMetadata(rows.slice(index, index + 150), { url, key });
     const response = await fetch(`${url}/rest/v1/jobs?on_conflict=source,external_id`, {
       method: "POST",
       headers: {
@@ -99,7 +101,7 @@ async function upsert(rows) {
         "content-type": "application/json",
         prefer: "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify(rows.slice(index, index + 150)),
+      body: JSON.stringify(batch),
     });
     if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   }
