@@ -4833,6 +4833,42 @@ h1 em:after {
   background: #eef2eb;
   font-size: 9px;
 }
+.company-office-address {
+  display: grid;
+  gap: 5px;
+  margin: 20px 0;
+  padding: 16px 18px;
+  border: 1px solid #d8e6d8;
+  border-radius: 14px;
+  background: #f5f8f2;
+}
+.company-office-address > span {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.company-office-address > strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.company-office-address > small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.company-office-address > a {
+  width: fit-content;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.company-office-address > a:hover {
+  text-decoration: underline;
+}
 .detail-page hr {
   border: 0;
   border-top: 1px solid var(--line);
@@ -6824,6 +6860,16 @@ h1 em:after {
   .job-detail-meta {
     overflow-x: auto;
     white-space: nowrap;
+  }
+  .company-office-address {
+    padding: 14px;
+  }
+  .company-office-address > strong {
+    font-size: 15px;
+  }
+  .company-office-address > small,
+  .company-office-address > a {
+    font-size: 12px;
   }
   .sticky-apply {
     bottom: 0;
