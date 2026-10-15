@@ -1,7 +1,7 @@
 import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
-import {prioritizeJobsByLocation,resolveCountryCode,cityLocationFilter} from "./job-location";
+import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter} from "./job-location";
 import {calculateJobMatch,isJobProfessionallyRelevant,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -132,6 +132,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(80):null;
   const requestedSearch=requestedFilter?activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(100):null;
   const earlyCareer=activeJobs().or("seniority.ilike.%Entry%,title.ilike.%intern%,title.ilike.%internship%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%apprentice%,contract_type.ilike.%intern%").order("published_at",{ascending:false}).limit(60);
+  const remoteJobs=activeJobs().or("work_mode.ilike.%remot%,location.ilike.%remote%,location.ilike.%remoto%").order("published_at",{ascending:false}).limit(100);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const cityFilter=cityLocationFilter(candidateCity);
   const localQueries=cityFilter?[
@@ -142,7 +143,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   ]:[
     activeJobs().in("work_mode",["Remoto","Híbrido"]).order("published_at",{ascending:false}).limit(60),
   ];
-  const results=await Promise.all([recent,automatic,earlyCareer,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
+  const results=await Promise.all([recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
@@ -153,12 +154,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const seenFingerprints=new Set<string>();
   const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>Boolean(options.search)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity){
-    const localFirst=prioritizeJobsByLocation(available,candidateCity,candidateCountry);
-    if(options.includeWorldwide||options.search){
-      const localIds=new Set(localFirst.map(job=>job.id));
-      return [...localFirst,...available.filter(job=>!localIds.has(job.id))].slice(0,limit);
-    }
-    return localFirst.slice(0,limit);
+    return prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)).slice(0,limit);
   }
   return available.slice(0,limit);
 }

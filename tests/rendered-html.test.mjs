@@ -537,7 +537,7 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(productApp, /Review it before sending/);
   assert.match(productApp, /pendingApplications/);
   assert.doesNotMatch(productApp, /\{outcome &&/);
-  assert.match(landeo, /prioritizeJobsByLocation/);
+  assert.match(landeo, /prioritizeJobsWithRemoteFallback/);
   assert.match(landeo, /metadata->>market_country/);
   assert.match(landeo, /application_capability","automatic"/);
   assert.match(landeo, /includeDismissed/);

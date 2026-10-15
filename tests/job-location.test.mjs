@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prioritizeJobsByLocation, resolveCountryCode, cityLocationFilter } from '../lib/job-location.ts';
+import { prioritizeJobsByLocation, prioritizeJobsWithRemoteFallback, resolveCountryCode, cityLocationFilter } from '../lib/job-location.ts';
 const jobs = [
   {id:'city', location:'Mexico City, Mexico', market:'MX', workMode:'onsite'},
   {id:'district', location:'Álvaro Obregón, Ciudad de México', market:'MX', workMode:'hybrid'},
@@ -20,4 +20,22 @@ test('all Mexico City aliases produce the same eligible jobs', () => {
 test('explicit country is authoritative and unrelated cities stay excluded', () => {
   assert.equal(resolveCountryCode('US', 'New Mexico'), 'US');
   assert.deepEqual(prioritizeJobsByLocation(jobs, 'Madrid', 'España').map(j=>j.id), ['eu']);
+});
+
+test('uses remote jobs before broad location fallbacks when a city has no jobs', () => {
+  assert.deepEqual(
+    prioritizeJobsWithRemoteFallback(jobs, 'Madrid', 'España').map(job => job.id),
+    ['eu', 'latam', 'us', 'city', 'district', 'cdmx', 'other'],
+  );
+});
+
+test('keeps nearby jobs first and only expands globally when requested', () => {
+  assert.deepEqual(
+    prioritizeJobsWithRemoteFallback(jobs, 'CDMX', 'México').map(job => job.id),
+    ['city', 'district', 'cdmx', 'latam'],
+  );
+  assert.deepEqual(
+    prioritizeJobsWithRemoteFallback(jobs, 'CDMX', 'México', true).map(job => job.id),
+    ['city', 'district', 'cdmx', 'latam', 'eu', 'us', 'other'],
+  );
 });

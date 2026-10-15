@@ -137,3 +137,59 @@ export function prioritizeJobsByLocation(
     .sort((a, b) => a.relevance - b.relevance)
     .map((item) => item.job);
 }
+
+function isRemoteJob(job: Job) {
+  return (
+    job.workMode === "remote" ||
+    String(job.market ?? "").toUpperCase() === "REMOTE" ||
+    /\b(remote|remoto)\b/.test(normalizeLocation(job.location))
+  );
+}
+
+/**
+ * Keeps nearby offers first, but never leaves the feed empty just because a
+ * candidate's city has no active jobs. In that case compatible remote roles
+ * are promoted before country-wide and worldwide fallbacks.
+ */
+export function prioritizeJobsWithRemoteFallback(
+  jobs: Job[],
+  city: string,
+  country: string,
+  includeWorldwide = false,
+) {
+  const ranked = jobs.map((job, index) => ({
+    job,
+    index,
+    relevance: locationRelevance(job, city, country),
+  }));
+  const nearby = ranked.filter((item) => item.relevance === 0);
+  const compatibleRemote = ranked
+    .filter((item) => item.relevance !== null && item.relevance > 0 && isRemoteJob(item.job))
+    .sort((a, b) => Number(a.relevance) - Number(b.relevance) || a.index - b.index);
+  const sameCountry = ranked
+    .filter((item) => item.relevance === 1 && !isRemoteJob(item.job))
+    .sort((a, b) => a.index - b.index);
+  const selected = new Set(
+    [...nearby, ...compatibleRemote, ...sameCountry].map((item) => item.job.id),
+  );
+  const otherRemote = ranked.filter(
+    (item) => !selected.has(item.job.id) && isRemoteJob(item.job),
+  );
+  const remaining = ranked.filter(
+    (item) => !selected.has(item.job.id) && !isRemoteJob(item.job),
+  );
+
+  const ordered = nearby.length
+    ? [...nearby, ...sameCountry, ...compatibleRemote]
+    : [...compatibleRemote, ...otherRemote, ...sameCountry];
+  const orderedIds = new Set(ordered.map((item) => item.job.id));
+  const worldwideRemainder = [...otherRemote, ...remaining].filter(
+    (item) => !orderedIds.has(item.job.id),
+  );
+
+  // With no nearby result, remote jobs are the safe default even when their
+  // source did not provide a precise geographic scope. Explicit worldwide
+  // mode additionally includes the rest of the compatible catalogue.
+  if (!nearby.length || includeWorldwide) ordered.push(...worldwideRemainder);
+  return ordered.map((item) => item.job);
+}
