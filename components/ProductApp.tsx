@@ -182,11 +182,17 @@ function matchesJobQuery(job: Job, query: string) {
   return queryAliases.some((group) => group.match.test(value) && group.terms.test(haystack));
 }
 type EarlyCareerFilter = "all" | "internship" | "junior";
+type IndustryFilter = "all" | "pharmaceuticals";
 function jobCareerLevel(job: Job): Exclude<EarlyCareerFilter, "all"> | "experienced" {
   const value = `${job.title} ${job.seniority} ${job.contractType}`.toLowerCase();
   if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|stage\b/.test(value)) return "internship";
   if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate|emerging talent/.test(value)) return "junior";
   return "experienced";
+}
+function matchesIndustry(job: Job, industry: IndustryFilter) {
+  if (industry === "all") return true;
+  const value = `${job.industry} ${job.title} ${String(job.metadata?.industry ?? "")}`;
+  return /pharma|farmac|droguer|medicamento|biotech|life science/i.test(value);
 }
 const trackingStages: TrackingStage[] = [
   "applied",
@@ -719,6 +725,7 @@ function JobsView({
   const [workMode, setWorkMode] = useState("all");
   const [market, setMarket] = useState("all");
   const [careerLevel, setCareerLevel] = useState<EarlyCareerFilter>("all");
+  const [industry, setIndustry] = useState<IndustryFilter>("all");
   const [showAutomaticArchive, setShowAutomaticArchive] = useState(false);
   const [notice, setNotice] = useState("");
   const [paywall, setPaywall] = useState(false);
@@ -774,9 +781,10 @@ function JobsView({
               job.market || job.metadata?.market_country || "",
             ).toUpperCase() === market) &&
           (careerLevel === "all" || jobCareerLevel(job) === careerLevel) &&
+          matchesIndustry(job, industry) &&
           matchesJobQuery(job, query),
       ),
-    [jobs, mode, workMode, market, careerLevel, query],
+    [jobs, mode, workMode, market, careerLevel, industry, query],
   );
   const markets = useMemo(
     () =>
@@ -1023,6 +1031,7 @@ function JobsView({
                 setWorkMode("all");
                 setMarket("all");
                 setCareerLevel("all");
+                setIndustry("all");
                 setQuery("");
                 setShowAutomaticArchive(false);
               }}
@@ -1061,6 +1070,23 @@ function JobsView({
                         : value}
                 </option>
               ))}
+            </select>
+          </label>
+          <label>
+            {localized(locale, "Sector", "Industry")}
+            <select
+              value={industry}
+              onChange={(event) => {
+                setIndustry(event.target.value as IndustryFilter);
+                setIndex(0);
+              }}
+            >
+              <option value="all">
+                {localized(locale, "Todos los sectores", "All industries")}
+              </option>
+              <option value="pharmaceuticals">
+                {localized(locale, "Farmacéutica y farmacia", "Pharmaceuticals & pharmacy")}
+              </option>
             </select>
           </label>
           <fieldset className="career-level-filter">
