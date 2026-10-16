@@ -4,7 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
-import { calculateJobMatch } from "../lib/job-match.ts";
+import { calculateJobMatch, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -371,6 +371,46 @@ test("understands adjacent marketing role names when calculating relevance", () 
   }, profile);
   assert.ok(growthRole.score >= 80);
   assert.ok(growthRole.reasons.includes("role"));
+});
+
+test("uses work authorization without hiding jobs whose sponsorship data is unknown", () => {
+  const baseJob = {
+    title: "Product Designer",
+    summary: "Design a global product.",
+    description: "Work with a distributed product team.",
+    work_mode: "Presencial",
+    salary_min: null,
+    salary_max: null,
+    seniority: "Mid level",
+  };
+  const authorizedInSpain = {
+    role: "Product Designer",
+    location: "Madrid",
+    country: "España",
+    skills: ["Product design"],
+    workModes: ["Híbrido"],
+    minSalary: null,
+    maxSalary: null,
+    yearsExperience: 3,
+    workAuthorizationCountries: ["España"],
+    visaRequirement: "No sponsorship required",
+  };
+  const madrid = { ...baseJob, location: "Madrid, Spain", metadata: { market_country: "ES" } };
+  const newYork = { ...baseJob, location: "New York, United States", metadata: { market_country: "US" } };
+  const globalRemote = { ...baseJob, location: "Remote · Worldwide", work_mode: "Remote", metadata: { market_country: "REMOTE" } };
+  assert.equal(isJobWorkAuthorizationCompatible(madrid, authorizedInSpain), true);
+  assert.equal(isJobWorkAuthorizationCompatible(newYork, authorizedInSpain), false);
+  assert.equal(isJobWorkAuthorizationCompatible(globalRemote, authorizedInSpain), true);
+  assert.ok(calculateJobMatch(madrid, authorizedInSpain).reasons.includes("authorization"));
+
+  const needsSponsorship = {
+    ...authorizedInSpain,
+    workAuthorizationCountries: [],
+    visaRequirement: "Requires sponsorship",
+  };
+  assert.equal(isJobWorkAuthorizationCompatible(newYork, needsSponsorship), true);
+  assert.equal(isJobWorkAuthorizationCompatible({ ...newYork, metadata: { market_country: "US", visa_sponsorship: false } }, needsSponsorship), false);
+  assert.equal(isJobWorkAuthorizationCompatible({ ...newYork, metadata: { market_country: "US", visa_sponsorship: true } }, needsSponsorship), true);
 });
 
 test("offers the real Landeo plans before opening Stripe", async () => {

@@ -1,3 +1,5 @@
+import { resolveCountryCode } from "./job-location.ts";
+
 export type MatchProfile = {
   role: string;
   location: string;
@@ -7,6 +9,8 @@ export type MatchProfile = {
   maxSalary: number | null;
   yearsExperience: number;
   country: string;
+  workAuthorizationCountries?: string[];
+  visaRequirement?: string;
 };
 
 export type MatchableJob = {
@@ -107,6 +111,60 @@ function workMode(value: string | null) {
   return "onsite";
 }
 
+function metadataBoolean(metadata: Record<string, unknown> | null, keys: string[]) {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "yes", "available", "supported", "1"].includes(normalized)) return true;
+      if (["false", "no", "unavailable", "not supported", "0"].includes(normalized)) return false;
+    }
+  }
+  return null;
+}
+
+function authorizationContext(row: MatchableJob, profile: MatchProfile | null) {
+  const requirement = profile?.visaRequirement?.trim().toLowerCase() ?? "";
+  const explicitlyNoSponsorship = /\b(no|without|sin)\b/.test(requirement);
+  const requiresSponsorship = !explicitlyNoSponsorship && (requirement.includes("sponsor") || requirement.includes("patrocin"));
+  const unknown = !requirement || requirement.includes("unknown") || requirement.includes("desconoc");
+  const sponsorship = metadataBoolean(row.metadata, [
+    "visa_sponsorship",
+    "sponsorship_available",
+    "sponsors_visa",
+    "work_visa_sponsorship",
+  ]);
+  const authorizedCountries = new Set(
+    (profile?.workAuthorizationCountries ?? [])
+      .map((country) => resolveCountryCode(country, country))
+      .filter(Boolean),
+  );
+  const market = String(row.metadata?.market_country ?? "").toUpperCase();
+  const jobCountry = market && market !== "REMOTE"
+    ? market
+    : resolveCountryCode("", row.location ?? "");
+  const remoteGlobal = workMode(row.work_mode) === "remote" && (
+    market === "REMOTE" ||
+    /\b(global|worldwide|anywhere|latam|latin america|emea|europe)\b/i.test(row.location ?? "")
+  );
+  return { requirement, requiresSponsorship, unknown, sponsorship, authorizedCountries, jobCountry, remoteGlobal };
+}
+
+/**
+ * Only removes a job when the source gives us enough information to know the
+ * candidate cannot legally work there. Unknown sponsorship data stays visible
+ * and is handled as a ranking signal instead of emptying the feed.
+ */
+export function isJobWorkAuthorizationCompatible(row: MatchableJob, profile: MatchProfile | null) {
+  if (!profile) return true;
+  const context = authorizationContext(row, profile);
+  if (context.unknown) return true;
+  if (context.requiresSponsorship) return context.sponsorship !== false;
+  if (!context.authorizedCountries.size || !context.jobCountry || context.remoteGlobal) return true;
+  return context.authorizedCountries.has(context.jobCountry);
+}
+
 export function calculateJobMatch(row: MatchableJob, profile: MatchProfile | null) {
   if (!profile) return { score: 68, reasons: ["profile"] };
   let score = 42;
@@ -126,6 +184,20 @@ export function calculateJobMatch(row: MatchableJob, profile: MatchProfile | nul
   if (profile.minSalary && row.salary_max) {
     if (row.salary_max >= profile.minSalary) { score += 8; reasons.push("salary"); }
     else score -= 8;
+  }
+  const authorization = authorizationContext(row, profile);
+  if (!authorization.unknown) {
+    if (authorization.requiresSponsorship) {
+      if (authorization.sponsorship === true) { score += 12; reasons.unshift("authorization"); }
+      else if (authorization.sponsorship === false) score -= 35;
+      else score -= 4;
+    } else if (
+      authorization.remoteGlobal ||
+      (authorization.jobCountry && authorization.authorizedCountries.has(authorization.jobCountry))
+    ) {
+      score += 10;
+      reasons.unshift("authorization");
+    } else if (authorization.jobCountry && authorization.authorizedCountries.size) score -= 30;
   }
   const [minYears, maxYears] = expectedExperience(row.seniority, row.title);
   if (profile.yearsExperience >= minYears && profile.yearsExperience <= maxYears + 2) { score += 10; reasons.push("experience"); }

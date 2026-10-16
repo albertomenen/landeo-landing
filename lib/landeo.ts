@@ -2,7 +2,7 @@ import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
 import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter} from "./job-location";
-import {calculateJobMatch,isJobProfessionallyRelevant,type MatchProfile} from "./job-match";
+import {calculateJobMatch,isJobProfessionallyRelevant,isJobWorkAuthorizationCompatible,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
 export type ApplicationStatus="queued"|"processing"|"sent"|"action_required"|"viewed"|"interview"|"rejected"|"failed";
@@ -114,7 +114,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
       hiddenFingerprints=new Set(hiddenResults.flatMap(result=>(result.data??[])as Array<Pick<JobRow,"company"|"title"|"location">>).map(jobFingerprint));
     }
     const universal=profile?.universal_profile as Partial<UniversalProfile>|null;candidateCity=universal?.city||profile?.location||"";candidateCountry=universal?.country||"";
-    matchProfile={role:profile?.role||"",location:candidateCity,skills:Array.isArray(profile?.skills)?profile.skills:[],workModes:Array.isArray(profile?.work_modes)?profile.work_modes:[],minSalary:profile?.min_salary??null,maxSalary:profile?.max_salary??null,yearsExperience:Number(universal?.yearsExperience??0),country:candidateCountry};
+    matchProfile={role:profile?.role||"",location:candidateCity,skills:Array.isArray(profile?.skills)?profile.skills:[],workModes:Array.isArray(profile?.work_modes)?profile.work_modes:[],minSalary:profile?.min_salary??null,maxSalary:profile?.max_salary??null,yearsExperience:Number(universal?.yearsExperience??0),country:candidateCountry,workAuthorizationCountries:Array.isArray(universal?.workAuthorizationCountries)?universal.workAuthorizationCountries:[],visaRequirement:universal?.visaRequirement||""};
   }
   // The feed only needs card-sized data. Full descriptions are loaded by the
   // job detail route when a person opens an offer. This keeps Supabase egress
@@ -152,7 +152,7 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const targetIds=new Set(targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[]);
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
-  const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>Boolean(options.search)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
+  const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile)).filter(row=>Boolean(options.search)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity){
     return prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)).slice(0,limit);
   }
