@@ -1,5 +1,5 @@
 import {FunctionsHttpError,type User} from "@supabase/supabase-js";
-import {createSupabaseBrowserClient} from "./supabase/client";
+import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
 import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter} from "./job-location";
 import {calculateJobMatch,isJobProfessionallyRelevant,type MatchProfile} from "./job-match";
@@ -91,7 +91,7 @@ function featuredScore(job:Job){
   return job.match+brandBoost+feedBoost+(job.applyCapability==="automatic"?3:0);
 }
 
-export async function currentUser(){const {data,error}=await createSupabaseBrowserClient().auth.getUser();if(error)return null;return data.user}
+export async function currentUser(){try{return(await getResilientSession())?.user??null}catch{return null}}
 
 export async function deleteCurrentAccount(){const client=createSupabaseBrowserClient();const{data:session}=await client.auth.getSession();if(session.session){const supportRemoval=await fetch("/api/support",{method:"DELETE",headers:{authorization:`Bearer ${session.session.access_token}`}});if(!supportRemoval.ok)throw new Error("No pudimos eliminar el historial de soporte. Reintenta la eliminación de la cuenta.");}const{data,error}=await client.functions.invoke("delete-account",{body:{confirmation:"delete"}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo eliminar la cuenta.")}if(error)throw new Error(error.message||"No se pudo eliminar la cuenta.");if(!data?.deleted)throw new Error(data?.message||"No se pudo confirmar la eliminación.");clearDashboardCaches();await client.auth.signOut({scope:"local"}).catch(()=>undefined)}
 
@@ -229,7 +229,10 @@ export type WebOnboardingAnswers={
 };
 
 export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en"}){
-  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
+  const client=createSupabaseBrowserClient();
+  let session:Awaited<ReturnType<typeof getResilientSession>>;
+  try{session=await getResilientSession(600)}catch{throw new Error(input.locale==="es"?"No hemos podido verificar tu sesión ahora mismo. Tus respuestas siguen guardadas; espera unos segundos y vuelve a intentarlo.":"We couldn't verify your session right now. Your answers are still saved; wait a few seconds and try again.")}
+  const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
   if(input.resume.size>10*1024*1024)throw new Error(input.locale==="es"?"El CV no puede superar 10 MB.":"Your résumé must be 10 MB or smaller.");
   const lower=input.resume.name.toLowerCase();const extension=lower.endsWith(".docx")?"docx":lower.endsWith(".doc")?"doc":"pdf";
   const allowed=["pdf","doc","docx"];if(!allowed.includes(extension))throw new Error(input.locale==="es"?"El CV debe ser PDF, DOC o DOCX.":"Your résumé must be a PDF, DOC or DOCX file.");

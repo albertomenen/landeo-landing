@@ -441,6 +441,8 @@ test("animates onboarding interactions and exposes issue reporting", async () =>
   assert.match(onboarding, /PRIORITIZED OPPORTUNITIES/);
   assert.match(onboarding, /Target range/);
   assert.match(onboarding, /company-logos\/openai\.png/);
+  assert.match(onboarding, /getResilientSession/);
+  assert.match(onboarding, /login\?next=\/onboarding/);
   assert.match(landeo, /workAuthorizationCountries/);
   assert.match(landeo, /Requires sponsorship/);
   assert.match(styles, /\.route-connector/);

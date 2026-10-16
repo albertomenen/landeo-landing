@@ -11,7 +11,7 @@ import {
 import Link from "./SafeLink";
 import { Brand } from "./Brand";
 import { completeWebOnboarding } from "../lib/landeo";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
 
 type Locale = "es" | "en";
 type Step =
@@ -628,7 +628,8 @@ export default function Onboarding() {
     [cityLoading, setCityLoading] = useState(false),
     [draftReady, setDraftReady] = useState(false),
     [completionChecked, setCompletionChecked] = useState(false),
-    [completionError, setCompletionError] = useState(false);
+    [completionError, setCompletionError] = useState(false),
+    [sessionMissing, setSessionMissing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null),
     step = steps[index],
     t = copy[locale],
@@ -640,9 +641,15 @@ export default function Onboarding() {
       let redirecting = false;
       try {
         const client = createSupabaseBrowserClient();
-        const { data, error: sessionError } = await client.auth.getSession();
-        if (sessionError) throw sessionError;
-        const user = data.session?.user;
+        const session = await getResilientSession();
+        const user = session?.user;
+        if (!user) {
+          if (active) {
+            setSessionMissing(true);
+            setCompletionChecked(true);
+          }
+          return;
+        }
         if (user) {
           const { data: profile, error: profileError } = await client.from("profiles")
             .select("onboarding_completed_at").eq("id", user.id).maybeSingle();
@@ -1350,6 +1357,17 @@ export default function Onboarding() {
     );
   else body = <Welcome locale={locale} />;
   const supportHref = `mailto:careers@haired.app?subject=${encodeURIComponent(locale === "es" ? "Problema durante el onboarding de Landeo" : "Problem during Landeo onboarding")}&body=${encodeURIComponent(locale === "es" ? `Hola, he encontrado un problema en el paso ${index + 1} del onboarding. Descripción:` : `Hi, I found a problem on step ${index + 1} of onboarding. Description:`)}`;
+  if (sessionMissing) {
+    return (
+      <main className="onboarding-page onboarding-v2 onboarding-checking" role="alert" aria-live="polite">
+        <div><span aria-hidden="true">↗</span>
+          <h1>{locale === "es" ? "Vuelve a entrar para continuar" : "Sign in again to continue"}</h1>
+          <p>{locale === "es" ? "Hemos guardado tus respuestas en este dispositivo. Inicia sesión y volverás al onboarding sin empezar de cero." : "Your answers are saved on this device. Sign in and you’ll return to onboarding without starting over."}</p>
+          <Link className="button button-primary" href="/login?next=/onboarding">{locale === "es" ? "Iniciar sesión" : "Sign in"} →</Link>
+        </div>
+      </main>
+    );
+  }
   if (!completionChecked) {
     return (
       <main className="onboarding-page onboarding-v2 onboarding-checking" role="status" aria-live="polite">
