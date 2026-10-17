@@ -5,6 +5,8 @@ export async function GET(request:NextRequest){
   const requestUrl=new URL(request.url);const code=requestUrl.searchParams.get("code");const next=requestUrl.searchParams.get("next")||"/app/jobs";
   const safeNext=next.startsWith("/")&&!next.startsWith("//")?next:"/app/jobs";
   const response=NextResponse.next();
+  const providerError=requestUrl.searchParams.get("error_code")||requestUrl.searchParams.get("error");
+  if(providerError)return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(providerError)}`,requestUrl.origin));
   if(!code)return NextResponse.redirect(new URL("/login?error=missing_code",requestUrl.origin));
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if(!url||!key)return NextResponse.redirect(new URL("/login?error=configuration",requestUrl.origin));

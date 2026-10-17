@@ -7,11 +7,24 @@ import {createSupabaseBrowserClient} from "../lib/supabase/client";
 
 const OAUTH_REDIRECT_TIMEOUT_MS=10_000;
 
+function readableAuthError(code:string){
+  const normalized=code.toLowerCase();
+  if(normalized.includes("otp_expired")||normalized.includes("expired"))return "El enlace ha caducado o ya se ha utilizado. Solicita uno nuevo para continuar.";
+  if(normalized.includes("bad_code_verifier")||normalized.includes("pkce"))return "Este acceso se abrió en otro navegador o dispositivo. Solicita un enlace nuevo y ábrelo en este mismo navegador.";
+  if(normalized.includes("flow_state")||normalized.includes("invalid_request"))return "La solicitud de acceso ya no es válida. Introduce tu email para recibir un enlace nuevo.";
+  if(normalized.includes("access_denied"))return "El acceso fue cancelado. Puedes intentarlo de nuevo.";
+  if(normalized.includes("missing_code"))return "No se pudo validar este enlace. Solicita uno nuevo para continuar.";
+  if(normalized.includes("configuration"))return "El acceso no está disponible temporalmente. Inténtalo de nuevo en unos minutos.";
+  return "No hemos podido completar el acceso. Solicita un enlace nuevo e inténtalo de nuevo.";
+}
+
 export default function AuthCard({mode}:{mode:"login"|"signup"}){
   const[email,setEmail]=useState("");const[sent,setSent]=useState(false);const[loading,setLoading]=useState(false);const[error,setError]=useState("");
   const redirectTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   useEffect(()=>{
     let active=true;
+    const authError=new URLSearchParams(window.location.search).get("error");
+    if(authError)setError(readableAuthError(authError));
     try{
       void createSupabaseBrowserClient().auth.getSession().then(({data})=>{
         if(active&&data.session)window.location.replace("/app/jobs");

@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect,useState} from "react";
+import {useEffect,useState,type MouseEvent} from "react";
 import Link from "../components/SafeLink";
 import type {LandingLocale} from "../lib/locale";
 
@@ -212,6 +212,15 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
     window.localStorage.setItem("landeo-locale",next);
   }
 
+  function showHowItWorks(event:MouseEvent<HTMLAnchorElement>){
+    event.preventDefault();
+    const section=document.getElementById("how-it-works");
+    if(!section)return;
+    window.history.replaceState(null,"","#how-it-works");
+    section.scrollIntoView({behavior:"auto",block:"start"});
+    section.focus({preventScroll:true});
+  }
+
   return (
     <main className="landing-page">
       <header className="site-header">
@@ -219,7 +228,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
           <span className="brand-mark" aria-hidden="true">L</span><span>Landeo</span>
         </Link>
         <nav aria-label={t.nav.label}>
-          <a href="#how-it-works">{t.nav.how}</a>
+          <a href="#how-it-works" data-no-transition="true" onClick={showHowItWorks}>{t.nav.how}</a>
           <Link href="/pricing">{t.nav.pricing}</Link>
           <Link href="/login">{t.nav.login}</Link>
           <div className="language-switcher" role="group" aria-label={t.language}>
@@ -239,7 +248,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
           <p className="hero-lead">{t.hero.lead}</p>
           <div className="hero-actions">
             <Link className="button button-primary" href="/signup">{t.hero.primary} <span>→</span></Link>
-            <a className="button button-ghost" href="#how-it-works">{t.hero.secondary} <span>↓</span></a>
+            <a className="button button-ghost" href="#how-it-works" data-no-transition="true" onClick={showHowItWorks}>{t.hero.secondary} <span>↓</span></a>
           </div>
           <div className="trust-row">
             {t.hero.trust.map(item=><span key={item}>✓ {item}</span>)}
@@ -333,7 +342,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
         </div>
       </section>
 
-      <section className="steps-section" id="how-it-works">
+      <section className="steps-section" id="how-it-works" tabIndex={-1}>
         <div className="section-shell">
           <div className="section-heading light">
             <span className="section-kicker">{t.steps.kicker}</span>

@@ -29,6 +29,12 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    // Keep one canonical origin so PKCE cookies and callback state are created on
+    // the same host. Existing www callbacks remain valid while old email links expire.
+    if (url.hostname === "www.getlandeo.com" && url.pathname !== "/auth/callback") {
+      url.hostname = "getlandeo.com";
+      return Response.redirect(url.toString(), 308);
+    }
     if (url.pathname === "/api/support" || url.pathname === "/api/support/telegram") return support(request, env);
 
     if (url.pathname === "/_vinext/image") {
