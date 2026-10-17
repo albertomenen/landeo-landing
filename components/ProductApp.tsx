@@ -21,7 +21,7 @@ import {
   m,
 } from "motion/react";
 import { statusCopy, type Job } from "../lib/fixtures";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
 import {
   coverLetterReadiness,
   currentUser,
@@ -67,6 +67,12 @@ type ApplicationFlowState = {
   outcome?: ApplyOutcome;
   usageStatus?: string | null;
   error?: string;
+};
+type IdentitySnapshot = {
+  user: User | null;
+  profile: CandidateProfile | null;
+  pro: boolean;
+  confirmed: boolean;
 };
 const viewFromPath = (pathname: string): ProductView | null => {
   if (pathname === "/app/jobs") return "jobs";
@@ -353,35 +359,75 @@ export default function ProductApp({
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [pro, setPro] = useState(false);
   const [identityLoading, setIdentityLoading] = useState(true);
-  const refreshIdentity = useCallback(async () => {
+  const identityPromise = useRef<Promise<IdentitySnapshot> | null>(null);
+  const refreshIdentity = useCallback((source = "dashboard") => {
     if (demo) {
       setIdentityLoading(false);
-      return;
+      return Promise.resolve({ user: null, profile: null, pro: true, confirmed: true });
     }
-    const nextUser = await currentUser();
-    setUser(nextUser);
-    if (nextUser) {
-      const [nextProfile, nextPro] = await Promise.all([
-        loadProfile(),
-        hasWebPro(),
-      ]);
-      setProfile(nextProfile);
-      setPro(nextPro);
-    } else {
-      setProfile(null);
-      setPro(false);
-    }
-    setIdentityLoading(false);
+    if (identityPromise.current) return identityPromise.current;
+    setIdentityLoading(true);
+    const run = async (): Promise<IdentitySnapshot> => {
+      const load = async () => {
+        const session = await getResilientSession();
+        if (!session?.user) return { user: null, profile: null, pro: false, confirmed: true } satisfies IdentitySnapshot;
+        const [nextProfile, nextPro] = await Promise.all([loadProfile(session.user), hasWebPro(session.user)]);
+        return { user: session.user, profile: nextProfile, pro: nextPro, confirmed: true } satisfies IdentitySnapshot;
+      };
+      try {
+        let snapshot: IdentitySnapshot;
+        try {
+          snapshot = await load();
+        } catch {
+          await new Promise((resolve) => window.setTimeout(resolve, 700));
+          snapshot = await load();
+        }
+        setUser(snapshot.user);
+        setProfile(snapshot.profile);
+        setPro(snapshot.pro);
+        if (source === "after_stripe" && snapshot.user) {
+          trackProductEvent("auth_session_recovered", { source });
+        } else if (source === "after_stripe" && !snapshot.user) {
+          trackProductEvent("auth_session_missing_after_stripe", { source });
+        }
+        return snapshot;
+      } catch {
+        trackProductEvent("auth_session_check_failed", { source });
+        // Keep the last known identity. A temporary Supabase failure is not a
+        // confirmed logout and must never send the user back to /login.
+        return { user: null, profile: null, pro: false, confirmed: false };
+      }
+    };
+    const pending = run().finally(() => {
+      identityPromise.current = null;
+      setIdentityLoading(false);
+    });
+    identityPromise.current = pending;
+    return pending;
   }, [demo]);
   useEffect(() => {
-    refreshIdentity();
+    let stripeReturn = false;
+    try {
+      const raw = window.sessionStorage.getItem("landeo-stripe-return-pending");
+      const marker = raw ? JSON.parse(raw) as { at?: number } : null;
+      stripeReturn = Boolean(marker?.at && Date.now() - marker.at < 2 * 60 * 60 * 1000);
+      if (raw) window.sessionStorage.removeItem("landeo-stripe-return-pending");
+    } catch { /* Optional recovery marker. */ }
+    void refreshIdentity(stripeReturn ? "after_stripe" : "initial");
     if (demo) return;
     const { data } = createSupabaseBrowserClient().auth.onAuthStateChange(
       (event) => {
-        if (event !== "INITIAL_SESSION") refreshIdentity();
+        if (event !== "INITIAL_SESSION") void refreshIdentity(`auth_${event.toLowerCase()}`);
       },
     );
-    return () => data.subscription.unsubscribe();
+    const refreshAfterExternalPage = (event: PageTransitionEvent) => {
+      if (event.persisted) void refreshIdentity("page_restore");
+    };
+    window.addEventListener("pageshow", refreshAfterExternalPage);
+    return () => {
+      data.subscription.unsubscribe();
+      window.removeEventListener("pageshow", refreshAfterExternalPage);
+    };
   }, [refreshIdentity]);
   useEffect(() => {
     const stored = window.localStorage.getItem("landeo-locale");
@@ -481,6 +527,8 @@ export default function ProductApp({
         locale={locale}
         demo={demo}
         tourReady={!identityLoading}
+        identityLoading={identityLoading}
+        ensureIdentity={refreshIdentity}
       />
     ) : activeView === "applications" ? (
       <ApplicationsView user={user} locale={locale} targetId={applicationTargetId} onSelectApplication={clearApplicationTarget} />
@@ -721,6 +769,8 @@ function JobsView({
   locale,
   demo,
   tourReady,
+  identityLoading,
+  ensureIdentity,
 }: {
   user: User | null;
   profile: CandidateProfile | null;
@@ -728,6 +778,8 @@ function JobsView({
   locale: DashboardLocale;
   demo: boolean;
   tourReady: boolean;
+  identityLoading: boolean;
+  ensureIdentity: (source?: string) => Promise<IdentitySnapshot>;
 }) {
   const t = dashboardCopy[locale];
   const router = useRouter();
@@ -841,16 +893,28 @@ function JobsView({
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     setConfettiBurst((value) => value + 1);
   }, []);
+  const verifiedIdentity = useCallback(async (source: string) => {
+    if (user) return { user, profile, pro, confirmed: true } satisfies IdentitySnapshot;
+    if (identityLoading) setNotice(localized(locale, "Comprobando tu sesión…", "Checking your session…"));
+    const snapshot = await ensureIdentity(source);
+    if (!snapshot.confirmed) {
+      setNotice(localized(locale, "No pudimos comprobar tu sesión todavía. Espera un momento y vuelve a intentarlo.", "We couldn’t verify your session yet. Wait a moment and try again."));
+      return null;
+    }
+    if (!snapshot.user) {
+      trackProductEvent("application_login_required", { source });
+      router.push(`/login?next=/app/jobs`);
+      return null;
+    }
+    return snapshot;
+  }, [ensureIdentity, identityLoading, locale, pro, profile, router, user]);
   const pass = useCallback(async () => {
     if (!job) return;
     if (demo) {
       removeCurrent(-1);
       return;
     }
-    if (!user) {
-      router.push("/login");
-      return;
-    }
+    if (!await verifiedIdentity("job_pass")) return;
     try {
       await recordSwipe(job.id, "left");
       removeCurrent(-1);
@@ -858,17 +922,14 @@ function JobsView({
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.swipeError);
     }
-  }, [job, demo, user, router, removeCurrent, t.notices]);
+  }, [job, demo, removeCurrent, t.notices, verifiedIdentity]);
   const save = useCallback(async () => {
     if (!job) return;
     if (demo) {
       setSavedJobIds((current) => new Set(current).add(job.id));
       return;
     }
-    if (!user) {
-      router.push("/login");
-      return;
-    }
+    if (!await verifiedIdentity("job_save")) return;
     try {
       await recordSwipe(job.id, "save");
       setSavedJobIds((current) => new Set(current).add(job.id));
@@ -876,7 +937,7 @@ function JobsView({
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.saveError);
     }
-  }, [job, demo, user, router, t.notices]);
+  }, [job, demo, t.notices, verifiedIdentity]);
   const finishApplication = useCallback(async (targetJob: Job, letter = "") => {
     const jobId = targetJob.id;
     if (pendingApplications.current.has(jobId)) return;
@@ -931,17 +992,15 @@ function JobsView({
       removeCurrent(1);
       return;
     }
-    if (!user) {
-      trackProductEvent("application_login_required",{capability:job.applyCapability});
-      router.push(`/login?next=/app/jobs`);
-      return;
-    }
-    if (!pro) {
+    const identity = await verifiedIdentity("job_apply");
+    if (!identity) return;
+    if (!identity.pro) {
       setPaywall(true);
       trackProductEvent("paywall_opened",{source:"apply",capability:job.applyCapability});
       return;
     }
-    const readiness = profileReadiness(profile);
+    const activeProfile = identity.profile;
+    const readiness = profileReadiness(activeProfile);
     if (!readiness.ready) {
       trackProductEvent("application_profile_incomplete",{missing_count:readiness.missing.length});
       setNotice(
@@ -950,12 +1009,12 @@ function JobsView({
       router.push("/app/profile/universal");
       return;
     }
-    const letterReady = coverLetterReadiness(profile).ready;
+    const letterReady = coverLetterReadiness(activeProfile).ready;
     if (!letterReady) {
       setApplicationFlow({ job, phase: "no_letter", letter: "" });
       return;
     }
-    if (profile?.universal?.coverLetter?.reviewBeforeSending === false) {
+    if (activeProfile?.universal?.coverLetter?.reviewBeforeSending === false) {
       await finishApplication(job);
       return;
     }
@@ -974,15 +1033,13 @@ function JobsView({
   }, [
     job,
     demo,
-    user,
-    pro,
-    profile,
     locale,
     router,
     removeCurrent,
     triggerConfetti,
     finishApplication,
     t.notices.completeProfile,
+    verifiedIdentity,
   ]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
