@@ -74,6 +74,10 @@ type IdentitySnapshot = {
   pro: boolean;
   confirmed: boolean;
 };
+type PaywallContext = {
+  source: "apply" | "application_error";
+  capability?: Job["applyCapability"];
+};
 const viewFromPath = (pathname: string): ProductView | null => {
   if (pathname === "/app/jobs") return "jobs";
   if (pathname === "/app/applications") return "applications";
@@ -408,12 +412,15 @@ export default function ProductApp({
   useEffect(() => {
     let stripeReturn = false;
     try {
-      const raw = window.sessionStorage.getItem("landeo-stripe-return-pending");
+      const raw = window.sessionStorage.getItem("landeo-stripe-return-pending") ?? window.localStorage.getItem("landeo-stripe-return-pending");
       const marker = raw ? JSON.parse(raw) as { at?: number } : null;
       stripeReturn = Boolean(marker?.at && Date.now() - marker.at < 2 * 60 * 60 * 1000);
-      if (raw) window.sessionStorage.removeItem("landeo-stripe-return-pending");
     } catch { /* Optional recovery marker. */ }
-    void refreshIdentity(stripeReturn ? "after_stripe" : "initial");
+    void refreshIdentity(stripeReturn ? "after_stripe" : "initial").then(snapshot=>{
+      if(!stripeReturn||!snapshot.user)return;
+      window.sessionStorage.removeItem("landeo-stripe-return-pending");
+      window.localStorage.removeItem("landeo-stripe-return-pending");
+    });
     if (demo) return;
     const { data } = createSupabaseBrowserClient().auth.onAuthStateChange(
       (event) => {
@@ -795,7 +802,7 @@ function JobsView({
   const [industry, setIndustry] = useState<IndustryFilter>("all");
   const [showAutomaticArchive, setShowAutomaticArchive] = useState(false);
   const [notice, setNotice] = useState("");
-  const [paywall, setPaywall] = useState(false);
+  const [paywall, setPaywall] = useState<PaywallContext | null>(null);
   const [applicationFlow, setApplicationFlow] = useState<ApplicationFlowState | null>(null);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(() => new Set());
   const [confettiBurst, setConfettiBurst] = useState(0);
@@ -970,8 +977,7 @@ function JobsView({
       const message = error instanceof Error ? error.message : t.notices.applyError;
       if (/Pro|suscripci|pago/i.test(message)) {
         setApplicationFlow(null);
-        setPaywall(true);
-        trackProductEvent("paywall_opened",{source:"application_error"});
+        setPaywall({source:"application_error",capability:targetJob.applyCapability});
       } else {
         setApplicationFlow((current) => current ? { ...current, phase: "error", error: message } : {
           job: targetJob,
@@ -996,8 +1002,7 @@ function JobsView({
     const identity = await verifiedIdentity("job_apply");
     if (!identity) return;
     if (!identity.pro) {
-      setPaywall(true);
-      trackProductEvent("paywall_opened",{source:"apply",capability:job.applyCapability});
+      setPaywall({source:"apply",capability:job.applyCapability});
       return;
     }
     const activeProfile = identity.profile;
@@ -1634,7 +1639,7 @@ function JobsView({
       {confettiBurst > 0 && <ConfettiBurst key={confettiBurst} />}{" "}
       <AnimatePresence>
         {paywall && (
-          <Paywall locale={locale} onClose={() => setPaywall(false)} />
+          <Paywall locale={locale} context={paywall} onClose={() => setPaywall(null)} />
         )}
       </AnimatePresence>{" "}
       <AnimatePresence>
@@ -1755,15 +1760,20 @@ function ApplicationFlowModal({
 
 function Paywall({
   locale,
+  context,
   onClose,
 }: {
   locale: DashboardLocale;
+  context: PaywallContext;
   onClose: () => void;
 }) {
   const t = dashboardCopy[locale].paywall;
   const [selectedPlan, setSelectedPlan] = useState<"starter" | "pro" | "sprint">("pro");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  useEffect(()=>{
+    trackProductEvent("paywall_opened",{source:context.source,capability:context.capability??"unknown"});
+  },[context.capability,context.source]);
   const plans: Array<{id:"starter"|"pro"|"sprint";name:string;price:string;period:string;detail:string;popular?:string;extra?:string}> = locale === "es" ? [
     { id: "starter" as const, name: "Starter", price: "14,99 €", period: "/ mes", detail: "50 candidaturas al mes" },
     { id: "pro" as const, name: "Pro", price: "34,99 €", period: "/ mes", detail: "200 candidaturas al mes", popular: "Más elegido" },
@@ -1779,6 +1789,7 @@ function Paywall({
     setError("");
     try {
       window.localStorage.setItem("landeo-selected-plan", selectedPlan);
+      trackProductEvent("paywall_checkout_clicked",{plan:selectedPlan,source:context.source});
       trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"paywall"});
       await startStripe("checkout", selectedPlan);
     } catch (value) {
@@ -1787,6 +1798,10 @@ function Paywall({
       setLoading(false);
     }
   }
+  function closePaywall(reason:"close_button"|"backdrop"){
+    trackProductEvent("paywall_closed",{plan:selectedPlan,source:context.source,reason});
+    onClose();
+  }
   return (
     <m.div
       className="modal-backdrop"
@@ -1794,7 +1809,7 @@ function Paywall({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <button className="modal-scrim" aria-label={t.close} onClick={onClose} />
+      <button className="modal-scrim" aria-label={t.close} onClick={()=>closePaywall("backdrop")} />
       <m.section
         className="paywall-modal plan-picker-modal"
         role="dialog"
@@ -1804,7 +1819,7 @@ function Paywall({
         exit={{ opacity: 0, y: 14, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 230, damping: 24 }}
       >
-        <button className="modal-close plan-picker-close" onClick={onClose} aria-label={t.close}>
+        <button className="modal-close plan-picker-close" onClick={()=>closePaywall("close_button")} aria-label={t.close}>
           ×
         </button>
         <div className="plan-picker-main">
@@ -1817,7 +1832,7 @@ function Paywall({
             {plans.map((plan) => {
               const active = plan.id === selectedPlan;
               return <m.label key={plan.id} className={active ? "selected" : ""} whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }}>
-                <input type="radio" name="landeo-plan" value={plan.id} checked={active} onChange={() => setSelectedPlan(plan.id)} />
+                <input type="radio" name="landeo-plan" value={plan.id} checked={active} onChange={() => {setSelectedPlan(plan.id);trackProductEvent("paywall_plan_selected",{plan:plan.id,source:context.source})}} />
                 <span className="plan-picker-radio">{active ? "✓" : ""}</span>
                 <span className="plan-picker-name"><strong>{plan.name}</strong><small>{plan.detail}{plan.extra ? ` · ${plan.extra}` : ""}</small></span>
                 <span className="plan-picker-price"><strong>{plan.price}</strong><small>{plan.period}</small></span>
