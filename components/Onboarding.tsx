@@ -12,6 +12,7 @@ import Link from "./SafeLink";
 import { Brand } from "./Brand";
 import { completeWebOnboarding } from "../lib/landeo";
 import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
+import { trackProductEvent } from "../lib/analytics";
 
 type Locale = "es" | "en";
 type Step =
@@ -671,6 +672,14 @@ export default function Onboarding() {
     return () => { active = false; };
   }, []);
   useEffect(() => {
+    if (!completionChecked || sessionMissing) return;
+    trackProductEvent("onboarding_step_viewed", {
+      step,
+      step_number: index + 1,
+      total_steps: steps.length,
+    });
+  }, [completionChecked, index, sessionMissing, step]);
+  useEffect(() => {
     const saved = localStorage.getItem("landeo-locale"),
       draft = localStorage.getItem("landeo-onboarding-draft");
     queueMicrotask(() => {
@@ -845,11 +854,20 @@ export default function Onboarding() {
     setIndex(nextIndex);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const next = () => canContinue && moveTo(index + 1);
+  const next = () => {
+    if (!canContinue) return;
+    trackProductEvent("onboarding_step_completed", {
+      step,
+      step_number: index + 1,
+      total_steps: steps.length,
+    });
+    moveTo(index + 1);
+  };
   const finish = async () => {
     if (!resume) return;
     setSaving(true);
     setError("");
+    trackProductEvent("onboarding_completion_started", { total_steps: steps.length });
     try {
       const category = choices.categories.find(
         (x) => x.id === answers.category,
@@ -866,9 +884,14 @@ export default function Onboarding() {
         locale,
       });
       localStorage.removeItem("landeo-onboarding-draft");
+      trackProductEvent("onboarding_completed", { total_steps: steps.length });
       window.location.assign("/app/jobs?welcome=1");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t.error);
+      const message=reason instanceof Error ? reason.message : t.error;
+      const sessionError=/sesión|session|caduc|expired/i.test(message);
+      trackProductEvent("onboarding_completion_failed", { reason: sessionError ? "session" : "save" });
+      if(sessionError)setSessionMissing(true);
+      else setError(message);
       setSaving(false);
     }
   };
@@ -1330,6 +1353,7 @@ export default function Onboarding() {
             }
             setError("");
             setResume(file);
+            if(file)trackProductEvent("onboarding_resume_selected",{file_type:file.name.toLowerCase().split(".").pop()||"unknown"});
           }}
         />
         <m.button

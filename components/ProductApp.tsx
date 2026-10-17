@@ -50,6 +50,7 @@ import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
 import { marketingDemoJobs } from "../lib/marketing-demo";
 import { applicationGuide } from "../lib/application-guidance";
+import { trackProductEvent } from "../lib/analytics";
 
 export type ProductView =
   | "jobs"
@@ -394,6 +395,20 @@ export default function ProductApp({
     document.documentElement.lang = nextLocale;
   }, []);
   useEffect(() => setActiveView(view), [view]);
+  useEffect(() => {
+    if (demo) return;
+    trackProductEvent("dashboard_viewed", { view: activeView });
+  }, [activeView, demo]);
+  useEffect(() => {
+    if (demo) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("checkout") !== "success") return;
+    trackProductEvent("stripe_checkout_returned", {
+      plan: window.localStorage.getItem("landeo-selected-plan") || "unknown",
+    });
+    url.searchParams.delete("checkout");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [demo]);
   const [applicationTargetId, setApplicationTargetId] = useState<string | null>(null);
   useEffect(() => {
     setApplicationTargetId(new URLSearchParams(window.location.search).get("application"));
@@ -872,6 +887,7 @@ function JobsView({
       letter,
     });
     setNotice("");
+    trackProductEvent("application_submission_started",{capability:targetJob.applyCapability,with_letter:Boolean(letter)});
     try {
       const result = await submitApplication(jobId, letter ? {
         generatedCoverLetter: letter,
@@ -887,11 +903,13 @@ function JobsView({
         outcome: result,
         usageStatus: application?.coverLetterUsageStatus ?? null,
       }));
+      trackProductEvent("application_submission_finished",{status:result.status,capability:targetJob.applyCapability});
     } catch (error) {
       const message = error instanceof Error ? error.message : t.notices.applyError;
       if (/Pro|suscripci|pago/i.test(message)) {
         setApplicationFlow(null);
         setPaywall(true);
+        trackProductEvent("paywall_opened",{source:"application_error"});
       } else {
         setApplicationFlow((current) => current ? { ...current, phase: "error", error: message } : {
           job: targetJob,
@@ -900,6 +918,7 @@ function JobsView({
           error: message,
         });
       }
+      trackProductEvent("application_submission_failed",{reason:/Pro|suscripci|pago/i.test(message)?"subscription":"submission",capability:targetJob.applyCapability});
       refresh();
     } finally {
       pendingApplications.current.delete(jobId);
@@ -913,15 +932,18 @@ function JobsView({
       return;
     }
     if (!user) {
+      trackProductEvent("application_login_required",{capability:job.applyCapability});
       router.push(`/login?next=/app/jobs`);
       return;
     }
     if (!pro) {
       setPaywall(true);
+      trackProductEvent("paywall_opened",{source:"apply",capability:job.applyCapability});
       return;
     }
     const readiness = profileReadiness(profile);
     if (!readiness.ready) {
+      trackProductEvent("application_profile_incomplete",{missing_count:readiness.missing.length});
       setNotice(
         `${t.notices.completeProfile}: ${readiness.missing.join(", ")}.`,
       );
@@ -1670,8 +1692,10 @@ function Paywall({
     setError("");
     try {
       window.localStorage.setItem("landeo-selected-plan", selectedPlan);
+      trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"paywall"});
       await startStripe("checkout", selectedPlan);
     } catch (value) {
+      trackProductEvent("stripe_checkout_failed",{plan:selectedPlan,source:"paywall"});
       setError(value instanceof Error ? value.message : t.error);
       setLoading(false);
     }

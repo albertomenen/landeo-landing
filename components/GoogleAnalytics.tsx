@@ -3,9 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  PRODUCT_EVENT_NAME,
+  type ProductEventProperties,
+} from "../lib/analytics";
 
 type AnalyticsConsent = "granted" | "denied";
 type ClarityFunction = ((...args: unknown[]) => void) & { q?: unknown[][] };
+type ProductEventDetail = {
+  name: string;
+  properties?: ProductEventProperties;
+};
 
 declare global {
   interface Window {
@@ -134,6 +142,35 @@ export default function GoogleAnalytics({
       window.clarity?.("event", "page_view");
     }
   }, [clarityId, consent, locale, measurementId, pathname]);
+
+  useEffect(() => {
+    if (consent !== "granted") return;
+    const onProductEvent = (event: Event) => {
+      const detail = (event as CustomEvent<ProductEventDetail>).detail;
+      if (!detail?.name) return;
+      const properties = Object.fromEntries(
+        Object.entries(detail.properties ?? {}).filter(([, value]) => value !== undefined),
+      );
+      if (measurementId) window.gtag?.("event", detail.name, properties);
+      if (clarityId) {
+        for (const [key, value] of Object.entries(properties)) {
+          window.clarity?.("set", `event_${key}`, String(value));
+        }
+        window.clarity?.("event", detail.name);
+      }
+    };
+    window.addEventListener(PRODUCT_EVENT_NAME, onProductEvent);
+    window.__landeoAnalyticsReady = true;
+    const queued = window.__landeoProductEvents ?? [];
+    window.__landeoProductEvents = [];
+    for (const detail of queued) {
+      window.dispatchEvent(new CustomEvent(PRODUCT_EVENT_NAME, { detail }));
+    }
+    return () => {
+      window.__landeoAnalyticsReady = false;
+      window.removeEventListener(PRODUCT_EVENT_NAME, onProductEvent);
+    };
+  }, [clarityId, consent, measurementId]);
 
   if (!measurementId && !clarityId) return null;
 

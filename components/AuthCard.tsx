@@ -4,6 +4,7 @@ import Link from "./SafeLink";
 import {useEffect,useRef,useState} from "react";
 import {Brand} from "./Brand";
 import {createSupabaseBrowserClient} from "../lib/supabase/client";
+import {trackProductEvent} from "../lib/analytics";
 
 const OAUTH_REDIRECT_TIMEOUT_MS=10_000;
 
@@ -18,42 +19,56 @@ function readableAuthError(code:string){
   return "No hemos podido completar el acceso. Solicita un enlace nuevo e inténtalo de nuevo.";
 }
 
+function authErrorCategory(value:unknown){
+  const normalized=(value instanceof Error?value.message:String(value)).toLowerCase();
+  if(normalized.includes("expired")||normalized.includes("otp_expired"))return "expired";
+  if(normalized.includes("pkce")||normalized.includes("code_verifier"))return "pkce";
+  if(normalized.includes("rate")||normalized.includes("limit"))return "rate_limited";
+  if(normalized.includes("network")||normalized.includes("fetch"))return "network";
+  return "other";
+}
+
 export default function AuthCard({mode}:{mode:"login"|"signup"}){
-  const[email,setEmail]=useState("");const[sent,setSent]=useState(false);const[loading,setLoading]=useState(false);const[error,setError]=useState("");
+  const[email,setEmail]=useState("");const[sent,setSent]=useState(false);const[loading,setLoading]=useState(false);const[error,setError]=useState("");const[resendIn,setResendIn]=useState(0);
   const redirectTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   useEffect(()=>{
     let active=true;
     const authError=new URLSearchParams(window.location.search).get("error");
-    if(authError)setError(readableAuthError(authError));
+    trackProductEvent("auth_viewed",{mode,has_error:Boolean(authError)});
+    if(authError){setError(readableAuthError(authError));trackProductEvent("auth_error_shown",{mode,reason:authErrorCategory(authError)})}
     try{
       void createSupabaseBrowserClient().auth.getSession().then(({data})=>{
-        if(active&&data.session)window.location.replace("/app/jobs");
+        if(active&&data.session){trackProductEvent("auth_existing_session",{mode});window.location.replace("/app/jobs")}
       }).catch(()=>{/* The form below will surface any actionable auth error. */});
     }catch{/* Missing configuration is handled when the user submits. */}
     return()=>{active=false;if(redirectTimer.current)clearTimeout(redirectTimer.current)};
-  },[]);
+  },[mode]);
+  useEffect(()=>{if(resendIn<=0)return;const timer=window.setInterval(()=>setResendIn(value=>Math.max(0,value-1)),1000);return()=>window.clearInterval(timer)},[resendIn]);
   const nextPath=()=>{
     const requested=new URLSearchParams(window.location.search).get("next");
     if(requested?.startsWith("/")&&!requested.startsWith("//"))return requested;
     return mode==="signup"?"/onboarding":"/app/jobs";
   };
   const callback=()=>`${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath())}`;
-  async function emailLogin(event:React.FormEvent){
-    event.preventDefault();
+  async function sendEmailLink(){
     if(loading)return;
     setLoading(true);setError("");
+    trackProductEvent("auth_email_submitted",{mode});
     try{
       const{error:authError}=await createSupabaseBrowserClient().auth.signInWithOtp({email,options:{emailRedirectTo:callback(),shouldCreateUser:mode==="signup"}});
       if(authError)throw authError;
-      setSent(true);
+      setSent(true);setResendIn(30);trackProductEvent("auth_link_sent",{mode});
     }catch(authError){
-      setError(authError instanceof Error?authError.message:"No hemos podido iniciar sesión. Inténtalo de nuevo.");
+      trackProductEvent("auth_submit_failed",{mode,reason:authErrorCategory(authError)});
+      setError(readableAuthError(authError instanceof Error?authError.message:"other"));
     }finally{setLoading(false)}
   }
+  async function emailLogin(event:React.FormEvent){event.preventDefault();await sendEmailLink()}
   async function oauth(provider:"google"|"apple"){
     if(loading)return;
     setLoading(true);setError("");
     try{
+      trackProductEvent("auth_oauth_started",{mode,provider});
       const{data,error:authError}=await createSupabaseBrowserClient().auth.signInWithOAuth({provider,options:{redirectTo:callback(),skipBrowserRedirect:true}});
       if(authError)throw authError;
       if(!data.url)throw new Error("No hemos podido abrir el proveedor de acceso.");
@@ -63,9 +78,10 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
       },OAUTH_REDIRECT_TIMEOUT_MS);
       window.location.assign(data.url);
     }catch(authError){
+      trackProductEvent("auth_oauth_failed",{mode,provider,reason:authErrorCategory(authError)});
       setLoading(false);
-      setError(authError instanceof Error?authError.message:"No hemos podido abrir el acceso seguro. Inténtalo de nuevo.");
+      setError(readableAuthError(authError instanceof Error?authError.message:"other"));
     }
   }
-  return <main className="auth-page"><header><Brand/><Link href="/">Volver a inicio</Link></header><section className="auth-card"><span className="auth-icon">{mode==="login"?"↗":"✦"}</span><p className="overline">{mode==="login"?"TE DAMOS LA BIENVENIDA":"EMPIEZA GRATIS"}</p><h1>{mode==="login"?"Vuelve a tus oportunidades.":"Crea tu perfil universal."}</h1><p>{mode==="login"?"Accede para continuar donde lo dejaste.":"Explora y guarda empleos gratis. Solo pagarás si decides postularte."}</p>{sent?<div className="magic-sent" role="status"><b>✓</b><h2>Revisa tu correo</h2><p>Te hemos enviado un enlace seguro. Ábrelo en este dispositivo para continuar.</p><button className="text-button" onClick={()=>setSent(false)}>Usar otro email</button></div>:<form onSubmit={emailLogin}><label>Email<input type="email" required autoComplete="email" value={email} onChange={event=>setEmail(event.target.value)} placeholder="tu@email.com"/></label><button className="button button-primary" type="submit" disabled={loading}>{loading?"Conectando…":"Continuar con email →"}</button></form>}{error&&<p className="form-error" role="alert">{error}</p>}<div className="or"><span/>o<span/></div><button className="social-button" disabled={loading} onClick={()=>oauth("google")}><b>G</b>Continuar con Google</button><button className="social-button" disabled={loading} onClick={()=>oauth("apple")}><b></b>Continuar con Apple</button><small>Al continuar aceptas los <Link href="/terms">Términos</Link> y la <Link href="/privacy">Política de privacidad</Link>.</small><p className="auth-switch">{mode==="login"?"¿Aún no tienes cuenta?":"¿Ya tienes cuenta?"} <Link href={mode==="login"?"/signup":"/login"}>{mode==="login"?"Crear perfil":"Entrar"}</Link></p></section></main>
+  return <main className="auth-page"><header><Brand/><Link href="/">Volver a inicio</Link></header><section className="auth-card"><span className="auth-icon">{mode==="login"?"↗":"✦"}</span><p className="overline">{mode==="login"?"TE DAMOS LA BIENVENIDA":"EMPIEZA GRATIS"}</p><h1>{mode==="login"?"Vuelve a tus oportunidades.":"Crea tu perfil universal."}</h1><p>{mode==="login"?"Accede para continuar donde lo dejaste.":"Explora y guarda empleos gratis. Solo pagarás si decides postularte."}</p>{sent?<div className="magic-sent" role="status"><b>✓</b><h2>Revisa tu correo</h2><p>Te hemos enviado un enlace seguro. Déjalo abierto y usa el enlace en este mismo navegador y dispositivo.</p><button className="button button-ghost" type="button" disabled={loading||resendIn>0} onClick={sendEmailLink}>{loading?"Enviando…":resendIn>0?`Podrás reenviarlo en ${resendIn}s`:"Reenviar enlace"}</button><button className="text-button" type="button" onClick={()=>{setSent(false);setError("")}}>Usar otro email</button></div>:<form onSubmit={emailLogin}><label>Email<input type="email" required autoComplete="email" value={email} onChange={event=>setEmail(event.target.value)} placeholder="tu@email.com"/></label><button className="button button-primary" type="submit" disabled={loading}>{loading?"Conectando…":"Continuar con email →"}</button></form>}{error&&<p className="form-error" role="alert">{error}</p>}<div className="or"><span/>o<span/></div><button className="social-button" disabled={loading} onClick={()=>oauth("google")}><b>G</b>Continuar con Google</button><button className="social-button" disabled={loading} onClick={()=>oauth("apple")}><b></b>Continuar con Apple</button><small>Al continuar aceptas los <Link href="/terms">Términos</Link> y la <Link href="/privacy">Política de privacidad</Link>.</small><p className="auth-switch">{mode==="login"?"¿Aún no tienes cuenta?":"¿Ya tienes cuenta?"} <Link href={mode==="login"?"/signup":"/login"}>{mode==="login"?"Crear perfil":"Entrar"}</Link></p></section></main>
 }
