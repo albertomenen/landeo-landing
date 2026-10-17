@@ -22,10 +22,10 @@ export async function getOAuthProviderAvailability():Promise<OAuthProviderAvaila
     if(!response.ok)return{google:false,apple:false};
     const settings=await response.json() as {external?:Record<string,boolean>};
     // Supabase may report a provider as enabled even when its OAuth secret is
-    // missing. Only expose providers that are both healthy in Supabase and
-    // explicitly enabled in this deployment.
+    // missing. Google is already verified in this project; Apple remains
+    // behind an explicit flag until its Services ID and secret are complete.
     return{
-      google:settings.external?.google===true&&process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED==="true",
+      google:settings.external?.google===true,
       apple:settings.external?.apple===true&&process.env.NEXT_PUBLIC_APPLE_OAUTH_ENABLED==="true",
     };
   }catch{return{google:false,apple:false}}
