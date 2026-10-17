@@ -49,8 +49,9 @@ type TimedPromise<T>={expiresAt:number;value:Promise<T>};
 const jobsCache=new Map<string,TimedPromise<Job[]>>();
 const applicationsCache=new Map<string,TimedPromise<LiveApplication[]>>();
 const savedJobsCache=new Map<string,TimedPromise<Job[]>>();
-function cacheKey(limit:number,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}){
-  return JSON.stringify({limit,includeDismissed:Boolean(options.includeDismissed),includeWorldwide:Boolean(options.includeWorldwide),search:options.search?.trim().toLowerCase()??""});
+type JobLoadOptions={includeDismissed?:boolean;includeWorldwide?:boolean;search?:string;careerLevel?:"internship"|"junior"};
+function cacheKey(limit:number,options:JobLoadOptions){
+  return JSON.stringify({limit,includeDismissed:Boolean(options.includeDismissed),includeWorldwide:Boolean(options.includeWorldwide),search:options.search?.trim().toLowerCase()??"",careerLevel:options.careerLevel??"all"});
 }
 function clearDashboardCaches(){jobsCache.clear();applicationsCache.clear();savedJobsCache.clear()}
 const defaultUniversal=(user?:User|null):UniversalProfile=>({version:1,firstName:String(user?.user_metadata?.full_name??"").split(/\s+/)[0]??"",lastName:String(user?.user_metadata?.full_name??"").split(/\s+/).slice(1).join(" "),addressLine:"",city:"",country:"España",postalCode:"",githubUrl:"",websiteUrl:"",salaryCurrency:"EUR",availability:"",noticePeriod:"",workAuthorizationCountries:["España"],visaRequirement:"No necesito visado",willingToRelocate:false,languages:[],lastCompany:"",lastTitle:"",yearsExperience:0,generalMotivation:"",openToInternship:false,universityAgreement:"No aplica",privacyConsent:false,automaticApplicationConsent:false});
@@ -95,7 +96,7 @@ export async function currentUser(){try{return(await getResilientSession())?.use
 
 export async function deleteCurrentAccount(){const client=createSupabaseBrowserClient();const{data:session}=await client.auth.getSession();if(session.session){const supportRemoval=await fetch("/api/support",{method:"DELETE",headers:{authorization:`Bearer ${session.session.access_token}`}});if(!supportRemoval.ok)throw new Error("No pudimos eliminar el historial de soporte. Reintenta la eliminación de la cuenta.");}const{data,error}=await client.functions.invoke("delete-account",{body:{confirmation:"delete"}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo eliminar la cuenta.")}if(error)throw new Error(error.message||"No se pudo eliminar la cuenta.");if(!data?.deleted)throw new Error(data?.message||"No se pudo confirmar la eliminación.");clearDashboardCaches();await client.auth.signOut({scope:"local"}).catch(()=>undefined)}
 
-async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
+async function loadJobsFresh(limit=120,options:JobLoadOptions={}){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();
   let hidden=new Set<string>();let hiddenFingerprints=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
@@ -131,7 +132,12 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const requestedFilter=options.search?jobSearchFilter(options.search):"";
   const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(80):null;
   const requestedSearch=requestedFilter?activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(100):null;
-  const earlyCareer=activeJobs().or("seniority.ilike.%Entry%,title.ilike.%intern%,title.ilike.%internship%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%apprentice%,contract_type.ilike.%intern%").order("published_at",{ascending:false}).limit(60);
+  const internshipFilter="seniority.ilike.%Internship%,title.ilike.%intern%,title.ilike.%práctic%,title.ilike.%practicante%,title.ilike.%beca%,title.ilike.%trainee%,title.ilike.%apprentice%,title.ilike.%working student%,title.ilike.%co-op%,title.ilike.%placement%,contract_type.ilike.%intern%";
+  const juniorFilter="seniority.ilike.%Entry%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%entry level%,title.ilike.%emerging talent%";
+  const earlyCareer=activeJobs().or(`${internshipFilter},${juniorFilter}`).order("published_at",{ascending:false}).limit(80);
+  const careerFocused=options.careerLevel
+    ? activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(180)
+    : null;
   const remoteJobs=activeJobs().or("work_mode.ilike.%remot%,location.ilike.%remote%,location.ilike.%remoto%").order("published_at",{ascending:false}).limit(100);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const cityFilter=cityLocationFilter(candidateCity);
@@ -143,7 +149,8 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   ]:[
     activeJobs().in("work_mode",["Remoto","Híbrido"]).order("published_at",{ascending:false}).limit(60),
   ];
-  const results=await Promise.all([recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])]);
+  const defaultQueries=[recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])];
+  const results=await Promise.all(careerFocused?[careerFocused]:defaultQueries);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
@@ -152,14 +159,14 @@ async function loadJobsFresh(limit=120,options:{includeDismissed?:boolean;includ
   const targetIds=new Set(targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[]);
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
-  const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile)).filter(row=>Boolean(options.search)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
+  const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile)).filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity){
     return prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)).slice(0,limit);
   }
   return available.slice(0,limit);
 }
 
-export async function loadJobs(limit=120,options:{includeDismissed?:boolean;includeWorldwide?:boolean;search?:string}={}){
+export async function loadJobs(limit=120,options:JobLoadOptions={}){
   const{data}=await createSupabaseBrowserClient().auth.getSession();
   const key=`${data.session?.user.id??"anonymous"}:${cacheKey(limit,options)}`;const cached=jobsCache.get(key);
   if(cached&&cached.expiresAt>Date.now())return cached.value;

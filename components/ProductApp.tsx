@@ -192,7 +192,7 @@ type EarlyCareerFilter = "all" | "internship" | "junior";
 type IndustryFilter = "all" | "pharmaceuticals";
 function jobCareerLevel(job: Job): Exclude<EarlyCareerFilter, "all"> | "experienced" {
   const value = `${job.title} ${job.seniority} ${job.contractType}`.toLowerCase();
-  if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|stage\b/.test(value)) return "internship";
+  if (/internship|\bintern\b|práctic|practicante|beca|trainee|apprentice|working student|co-op|placement|stage\b/.test(value)) return "internship";
   if (/junior|jr\.?\b|entry.?level|graduate|new grad|associate|emerging talent/.test(value)) return "junior";
   return "experienced";
 }
@@ -826,6 +826,7 @@ function JobsView({
           includeDismissed: showAutomaticArchive,
           includeWorldwide: true,
           search: debouncedQuery,
+          careerLevel: careerLevel === "all" ? undefined : careerLevel,
         }),
       );
     } catch (error) {
@@ -833,7 +834,7 @@ function JobsView({
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, demo, showAutomaticArchive, t.notices.loadError]);
+  }, [careerLevel, debouncedQuery, demo, showAutomaticArchive, t.notices.loadError]);
   useEffect(() => {
     refresh();
   }, [refresh]);

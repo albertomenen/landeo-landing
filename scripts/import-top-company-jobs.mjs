@@ -147,7 +147,7 @@ function countryCode(country = "", location = "") {
 
 function earlyCareerRows(rows) {
   return earlyCareerOnly
-    ? rows.filter((row) => row.seniority === "Entry level")
+    ? rows.filter((row) => row.seniority === "Entry level" || row.seniority === "Internship")
     : rows;
 }
 
@@ -165,7 +165,8 @@ function workMode(workplaceType, isRemote, location) {
 function seniority(title) {
   if (/\b(chief|vp|vice president|head|director)\b/i.test(title)) return "Leadership";
   if (/\b(principal|staff|lead|senior|sr\.?)\b/i.test(title)) return "Senior";
-  if (/\b(junior|jr\.?|graduate|intern|entry level|emerging talent)\b/i.test(title)) return "Entry level";
+  if (/\b(internship|intern|trainee|apprentice|working student|co-op|placement)\b|práctic|practicante|beca/i.test(title)) return "Internship";
+  if (/\b(junior|jr\.?|graduate|entry level|emerging talent|new grad)\b/i.test(title)) return "Entry level";
   return null;
 }
 
@@ -193,7 +194,7 @@ function rowBase({ source, board, externalId, company, title, description, locat
     work_mode: mode,
     salary_min: null,
     salary_max: null,
-    contract_type: "Full time",
+    contract_type: seniority(title) === "Internship" ? "Internship" : "Full time",
     seniority: seniority(title),
     industry: industry || "Technology",
     apply_mode: "external",

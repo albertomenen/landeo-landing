@@ -11635,6 +11635,36 @@ h1 em:after {
   font-size: 0.875rem;
   line-height: 1.5;
 }
+.app-frame .profile-hero p,
+.app-frame .completion-card p,
+.app-frame .completion-card b,
+.app-frame .cover-letter-shortcut p,
+.app-frame .settings-card > :is(button, a) {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.app-frame .profile-edit,
+.app-frame .cover-letter-shortcut small {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.app-frame .cover-letter-shortcut strong {
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+.app-frame .settings-card h3 {
+  margin-bottom: 14px;
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+.app-frame .settings-card > :is(button, a) {
+  min-height: 56px;
+  padding-inline: 14px;
+  text-align: left;
+}
+.app-frame .settings-card > :is(button, a) b {
+  font-size: 1.25rem;
+}
 .app-frame :is(input, select, textarea) {
   font-size: 1rem;
   min-height: 44px;
