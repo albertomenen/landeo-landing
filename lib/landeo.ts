@@ -126,11 +126,11 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={}){
     const query=client.from("jobs").select(select).eq("status","active");
     return excludedIds.length?query.not("id","in",`(${excludedIds.join(",")})`):query;
   };
-  const recent=activeJobs().order("published_at",{ascending:false}).limit(Math.min(limit,60));
+  const recent=activeJobs().order("published_at",{ascending:false}).limit(Math.min(limit,80));
   const automatic=activeJobs().eq("application_capability","automatic").order("published_at",{ascending:false}).limit(50);
   const roleFilter=matchProfile?.role?jobSearchFilter(matchProfile.role):"";
   const requestedFilter=options.search?jobSearchFilter(options.search):"";
-  const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(80):null;
+  const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(160):null;
   const requestedSearch=requestedFilter?activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(100):null;
   const internshipFilter="seniority.ilike.%Internship%,title.ilike.%intern%,title.ilike.%práctic%,title.ilike.%practicante%,title.ilike.%beca%,title.ilike.%trainee%,title.ilike.%apprentice%,title.ilike.%working student%,title.ilike.%co-op%,title.ilike.%placement%,contract_type.ilike.%intern%";
   const juniorFilter="seniority.ilike.%Entry%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%entry level%,title.ilike.%emerging talent%";
@@ -138,9 +138,22 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={}){
   const careerFocused=options.careerLevel
     ? activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(180)
     : null;
-  const remoteJobs=activeJobs().or("work_mode.ilike.%remot%,location.ilike.%remote%,location.ilike.%remoto%").order("published_at",{ascending:false}).limit(100);
+  const remoteFilter="work_mode.ilike.%remot%,location.ilike.%remote%,location.ilike.%remoto%";
+  const remoteJobs=activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(120);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const cityFilter=cityLocationFilter(candidateCity);
+  // A general recent sample can contain hundreds of jobs while still leaving
+  // only a handful after role and location filters. Query those intersections
+  // explicitly so Barcelona, CDMX and other large markets do not look empty.
+  const localRoleFocused=roleFilter&&cityFilter
+    ? activeJobs().or(roleFilter).or(cityFilter).order("published_at",{ascending:false}).limit(160)
+    : null;
+  const marketRoleFocused=roleFilter&&candidateMarket
+    ? activeJobs().or(roleFilter).in("metadata->>market_country",[candidateMarket,"REMOTE"]).order("published_at",{ascending:false}).limit(180)
+    : null;
+  const remoteRoleFocused=roleFilter
+    ? activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(140)
+    : null;
   const localQueries=cityFilter?[
     activeJobs().or(cityFilter).order("published_at",{ascending:false}).limit(80),
   ]:[];
@@ -149,7 +162,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={}){
   ]:[
     activeJobs().in("work_mode",["Remoto","Híbrido"]).order("published_at",{ascending:false}).limit(60),
   ];
-  const defaultQueries=[recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(requestedSearch?[requestedSearch]:[])];
+  const defaultQueries=[recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(localRoleFocused?[localRoleFocused]:[]),...(marketRoleFocused?[marketRoleFocused]:[]),...(remoteRoleFocused?[remoteRoleFocused]:[]),...(requestedSearch?[requestedSearch]:[])];
   const results=await Promise.all(careerFocused?[careerFocused]:defaultQueries);
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;

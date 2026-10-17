@@ -1469,6 +1469,35 @@ function JobsView({
                     </button>
                   </div>
                 )}
+                {mode !== "automatic" && (
+                  <div className="automatic-empty-actions">
+                    {!showAutomaticArchive && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAutomaticArchive(true);
+                          setIndex(0);
+                        }}
+                      >
+                        {localized(locale, "Mostrar ofertas descartadas", "Show dismissed jobs")}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        setWorkMode("all");
+                        setMarket("all");
+                        setCareerLevel("all");
+                        setIndustry("all");
+                        setIndex(0);
+                        refresh();
+                      }}
+                    >
+                      {localized(locale, "Ampliar y actualizar búsqueda", "Broaden and refresh search")} →
+                    </button>
+                  </div>
+                )}
               </m.div>
             )}
           </AnimatePresence>
