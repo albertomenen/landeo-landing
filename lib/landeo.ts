@@ -28,6 +28,14 @@ export type CandidateProfile={
   minSalary:number|null;maxSalary:number|null;cvPath:string|null;universal:UniversalProfile|null;
   privacyConsentAt:string|null;automaticConsentAt:string|null;onboardingCompletedAt:string|null;
 };
+export type AutoApplySettings={
+  enabled:boolean;roles:string[];locations:string[];workModes:string[];industries:string[];seniorityLevels:string[];
+  excludedCompanies:string[];minimumMatch:number;dailyLimit:number;lastRunAt:string|null;nextRunAt:string|null;
+};
+export type AutoApplyDashboard={
+  settings:AutoApplySettings;stats:{matched:number;queued:number;sent:number;delivered:number;actionRequired:number;failed:number};
+  lastRun:{status:string;startedAt:string;completedAt:string|null;errorMessage:string|null}|null;
+};
 export type LiveApplication={
   id:string;jobId:string;status:ApplicationStatus;appliedAt:string;updatedAt:string;actionUrl:string|null;
   errorMessage:string|null;requiredFields:string[];deliveryStatus:string|null;coverLetter:string|null;
@@ -313,3 +321,42 @@ export async function loadSavedJobs(){
 export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){const client=createSupabaseBrowserClient();let promotionCode="";const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";if(action==="checkout"){const user=await currentUser();if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}}const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}window.location.assign(data.url)}
 
 export async function hasWebPro(knownUser?:User|null){const user=knownUser??await currentUser();if(!user)return false;const{data}=await createSupabaseBrowserClient().from("stripe_subscriptions").select("status,current_period_end").eq("user_id",user.id).in("status",["active","trialing"]).maybeSingle();return Boolean(data&&(!data.current_period_end||new Date(data.current_period_end).getTime()>Date.now()))}
+
+const defaultAutoApplySettings=(profile?:CandidateProfile|null):AutoApplySettings=>({
+  enabled:false,
+  roles:profile?.role?profile.role.split(",").map(value=>value.trim()).filter(Boolean):[],
+  locations:profile?.universal?.city?[profile.universal.city]:profile?.location?[profile.location]:[],
+  workModes:profile?.workModes??[],industries:[],seniorityLevels:[],excludedCompanies:[],minimumMatch:75,dailyLimit:3,
+  lastRunAt:null,nextRunAt:null,
+});
+
+export async function loadAutoApplyDashboard(profile?:CandidateProfile|null):Promise<AutoApplyDashboard>{
+  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para usar Auto Apply.");
+  const[{data:settings,error:settingsError},{data:applications,error:applicationsError},{data:runs,error:runsError}]=await Promise.all([
+    client.from("auto_apply_settings").select("*").eq("user_id",user.id).maybeSingle(),
+    client.from("applications").select("status,delivery_status,answers").eq("user_id",user.id).contains("answers",{autoApply:true}),
+    client.from("auto_apply_runs").select("status,matched_count,started_at,completed_at,error_message").eq("user_id",user.id).order("started_at",{ascending:false}).limit(1),
+  ]);
+  if(settingsError)throw settingsError;if(applicationsError)throw applicationsError;if(runsError)throw runsError;
+  const fallback=defaultAutoApplySettings(profile);const row=settings as Record<string,unknown>|null;
+  const mapped:AutoApplySettings=row?{
+    enabled:Boolean(row.enabled),roles:Array.isArray(row.roles)?row.roles as string[]:fallback.roles,locations:Array.isArray(row.locations)?row.locations as string[]:fallback.locations,
+    workModes:Array.isArray(row.work_modes)?row.work_modes as string[]:[],industries:Array.isArray(row.industries)?row.industries as string[]:[],seniorityLevels:Array.isArray(row.seniority_levels)?row.seniority_levels as string[]:[],
+    excludedCompanies:Array.isArray(row.excluded_companies)?row.excluded_companies as string[]:[],minimumMatch:Number(row.minimum_match??75),dailyLimit:Number(row.daily_limit??3),
+    lastRunAt:typeof row.last_run_at==="string"?row.last_run_at:null,nextRunAt:typeof row.next_run_at==="string"?row.next_run_at:null,
+  }:fallback;
+  const rows=(applications??[]) as Array<{status:string;delivery_status:string|null}>;const latest=(runs??[])[0] as Record<string,unknown>|undefined;
+  return{settings:mapped,stats:{matched:Number(latest?.matched_count??0),queued:rows.filter(item=>item.status==="queued"||item.status==="processing").length,sent:rows.filter(item=>item.status==="sent").length,delivered:rows.filter(item=>item.delivery_status==="delivered").length,actionRequired:rows.filter(item=>item.status==="action_required").length,failed:rows.filter(item=>item.status==="failed").length},lastRun:latest?{status:String(latest.status),startedAt:String(latest.started_at),completedAt:typeof latest.completed_at==="string"?latest.completed_at:null,errorMessage:typeof latest.error_message==="string"?latest.error_message:null}:null};
+}
+
+export async function saveAutoApplySettings(input:AutoApplySettings){
+  const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para configurar Auto Apply.");
+  if(!input.roles.length)throw new Error("Añade al menos un puesto objetivo.");
+  const clean=(values:string[])=>Array.from(new Set(values.map(value=>value.trim()).filter(Boolean))).slice(0,20);
+  const now=new Date().toISOString();const{error}=await client.from("auto_apply_settings").upsert({user_id:user.id,enabled:input.enabled,roles:clean(input.roles),locations:clean(input.locations),work_modes:clean(input.workModes),industries:clean(input.industries),seniority_levels:clean(input.seniorityLevels),excluded_companies:clean(input.excludedCompanies),minimum_match:Math.max(50,Math.min(100,Math.round(input.minimumMatch))),daily_limit:Math.max(1,Math.min(10,Math.round(input.dailyLimit))),next_run_at:input.enabled?now:null,updated_at:now},{onConflict:"user_id"});if(error)throw error;
+  if(input.enabled){const{error:runError}=await client.functions.invoke("auto-apply-runner",{body:{source:"dashboard"}});if(runError instanceof FunctionsHttpError){const payload=await runError.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"Auto Apply se activó, pero no pudo ejecutar la primera búsqueda.")}if(runError)throw runError;}
+}
+
+export async function runAutoApplyNow(){
+  const client=createSupabaseBrowserClient();const{data,error}=await client.functions.invoke("auto-apply-runner",{body:{source:"manual"}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo ejecutar Auto Apply.")}if(error)throw error;return data as{processed:number};
+}

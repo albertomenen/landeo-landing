@@ -52,6 +52,16 @@ function senderMailbox(value: string) {
   return email;
 }
 
+function secureEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(left);
+  const b = encoder.encode(right);
+  if (a.length !== b.length) return false;
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
+  return difference === 0;
+}
+
 function safeDisplayName(value: unknown) {
   return String(value ?? "")
     .replace(/[\r\n<>]/g, " ")
@@ -185,27 +195,48 @@ Deno.serve(async (request) => {
     | null = null;
   try {
     const authorization = request.headers.get("Authorization");
-    if (!authorization) {
-      return json({ status: "failed", message: "Sesión no válida." }, 401);
-    }
-
     const url = required("SUPABASE_URL");
     const anonKey = required("SUPABASE_ANON_KEY");
-    const userClient = createClient(url, anonKey, {
-      global: { headers: { Authorization: authorization } },
-    });
     const admin = createClient(url, required("SUPABASE_SERVICE_ROLE_KEY"));
-    const { data: userData, error: userError } = await userClient.auth
-      .getUser();
-    if (userError || !userData.user) {
-      return json({ status: "failed", message: "Sesión no válida." }, 401);
-    }
     const body = await request.json() as {
       jobId?: string;
+      userId?: string;
+      autoApply?: boolean;
       answers?: Record<string, unknown>;
       platform?: ApplicationPlatform;
       intent?: "preview" | "submit";
     };
+    const suppliedAutoApplySecret = request.headers.get("x-auto-apply-secret") ?? "";
+    const expectedAutoApplySecret = Deno.env.get("AUTO_APPLY_CRON_SECRET") ?? "";
+    const isScheduledAutoApply = Boolean(
+      body.autoApply && body.userId && expectedAutoApplySecret &&
+      secureEqual(suppliedAutoApplySecret, expectedAutoApplySecret),
+    );
+    let userData: { user: any | null };
+    if (isScheduledAutoApply) {
+      const { data, error } = await admin.auth.admin.getUserById(body.userId!);
+      if (error || !data.user) {
+        return json({ status: "failed", message: "Usuario de Auto Apply no válido." }, 401);
+      }
+      userData = { user: data.user };
+      const { data: settings } = await admin.from("auto_apply_settings")
+        .select("enabled").eq("user_id", data.user.id).eq("enabled", true).maybeSingle();
+      if (!settings) {
+        return json({ status: "failed", message: "Auto Apply está pausado." }, 409);
+      }
+    } else {
+      if (!authorization) {
+        return json({ status: "failed", message: "Sesión no válida." }, 401);
+      }
+      const userClient = createClient(url, anonKey, {
+        global: { headers: { Authorization: authorization } },
+      });
+      const { data, error } = await userClient.auth.getUser();
+      if (error || !data.user) {
+        return json({ status: "failed", message: "Sesión no válida." }, 401);
+      }
+      userData = data;
+    }
     if (!body.jobId) {
       return json({ status: "failed", message: "Falta la oferta." }, 400);
     }
@@ -274,7 +305,7 @@ Deno.serve(async (request) => {
       "user_id",
       userData.user.id,
     ).eq("job_id", job.id).eq("direction", "right").maybeSingle();
-    if (!rightSwipe) {
+    if (!rightSwipe && !isScheduledAutoApply) {
       return json({
         status: "failed",
         message: "Confirma la candidatura deslizando la oferta a la derecha.",

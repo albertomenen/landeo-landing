@@ -4,6 +4,7 @@ export const dashboardCopy = {
   es: {
     nav: {
       jobs: "Empleos",
+      autoApply: "Auto Apply",
       applications: "Candidaturas",
       coverLetter: "Carta con IA",
       saved: "Guardados",
@@ -138,6 +139,7 @@ export const dashboardCopy = {
   en: {
     nav: {
       jobs: "Jobs",
+      autoApply: "Auto Apply",
       applications: "Applications",
       coverLetter: "AI cover letter",
       saved: "Saved",

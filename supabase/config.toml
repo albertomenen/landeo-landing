@@ -1,0 +1,4 @@
+project_id = "Landeo-web"
+
+[functions.auto-apply-runner]
+verify_jwt = false
