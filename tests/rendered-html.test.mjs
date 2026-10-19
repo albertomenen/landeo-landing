@@ -96,7 +96,9 @@ test("renders the main product route", async () => {
   assert.match(html, /Empleos para ti/);
   assert.match(html, /Postularme/);
   assert.match(html, /Navegación móvil/);
-  assert.match(html, /Consultando el catálogo de Supabase/);
+  assert.match(html, /Buscamos ofertas que encajen contigo/);
+  assert.match(html, /jobs-loading-orbit/);
+  assert.match(html, /aria-busy="true"/);
 });
 
 test("ships a persistent bilingual dashboard and accessible job actions", async () => {

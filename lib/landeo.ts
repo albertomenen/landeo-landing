@@ -54,7 +54,8 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const JOB_CACHE_MS=60_000;
 const DASHBOARD_CACHE_MS=30_000;
 type TimedPromise<T>={expiresAt:number;value:Promise<T>};
-const jobsCache=new Map<string,TimedPromise<Job[]>>();
+type JobCacheEntry=TimedPromise<Job[]>&{initialJobs?:Job[];listeners:Set<(jobs:Job[])=>void>};
+const jobsCache=new Map<string,JobCacheEntry>();
 const applicationsCache=new Map<string,TimedPromise<LiveApplication[]>>();
 const savedJobsCache=new Map<string,TimedPromise<Job[]>>();
 type JobLoadOptions={includeDismissed?:boolean;includeWorldwide?:boolean;search?:string;careerLevel?:"internship"|"junior"};
@@ -104,7 +105,7 @@ export async function currentUser(){try{return(await getResilientSession())?.use
 
 export async function deleteCurrentAccount(){const client=createSupabaseBrowserClient();const{data:session}=await client.auth.getSession();if(session.session){const supportRemoval=await fetch("/api/support",{method:"DELETE",headers:{authorization:`Bearer ${session.session.access_token}`}});if(!supportRemoval.ok)throw new Error("No pudimos eliminar el historial de soporte. Reintenta la eliminación de la cuenta.");}const{data,error}=await client.functions.invoke("delete-account",{body:{confirmation:"delete"}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo eliminar la cuenta.")}if(error)throw new Error(error.message||"No se pudo eliminar la cuenta.");if(!data?.deleted)throw new Error(data?.message||"No se pudo confirmar la eliminación.");clearDashboardCaches();await client.auth.signOut({scope:"local"}).catch(()=>undefined)}
 
-async function loadJobsFresh(limit=120,options:JobLoadOptions={}){
+async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:(jobs:Job[])=>void){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();
   let hidden=new Set<string>();let hiddenFingerprints=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
@@ -171,28 +172,55 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={}){
     activeJobs().in("work_mode",["Remoto","Híbrido"]).order("published_at",{ascending:false}).limit(60),
   ];
   const defaultQueries=[recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(localRoleFocused?[localRoleFocused]:[]),...(marketRoleFocused?[marketRoleFocused]:[]),...(remoteRoleFocused?[remoteRoleFocused]:[]),...(requestedSearch?[requestedSearch]:[])];
-  const results=await Promise.all(careerFocused?[careerFocused]:defaultQueries);
+  const primaryQueries=careerFocused?[careerFocused.limit(36)]:requestedFilter?[
+    activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(36),
+  ]:roleFilter?[
+    ...(cityFilter?[activeJobs().or(roleFilter).or(cityFilter).order("published_at",{ascending:false}).limit(24)]:[]),
+    activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(24),
+  ]:[activeJobs().order("published_at",{ascending:false}).limit(24),activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(24)];
+  const primaryResults=await Promise.all(primaryQueries);
+  const prepareJobs=async(results:typeof primaryResults)=>{
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
-  const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()];
+  const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()]
+    .filter(row=>!hidden.has(row.id)&&!hiddenFingerprints.has(jobFingerprint(row)))
+    .filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile))
+    .filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile));
   const targetResults=await Promise.all(chunks(rows.map(row=>row.id)).map(ids=>client.functions.invoke("available-job-targets",{body:{jobIds:ids}})));
   const targetError=targetResults.find(result=>result.error)?.error;if(targetError)throw targetError;
   const targetIds=new Set(targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[]);
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
-  const available=rows.filter(row=>targetIds.has(row.id)).filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile)).filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile)).map(row=>mapJobForProfile(row,matchProfile)).filter(job=>!hidden.has(job.id)&&!hiddenFingerprints.has(jobFingerprint(job))).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
+  const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity){
     return prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)).slice(0,limit);
   }
   return available.slice(0,limit);
+  };
+  const initialJobs=await prepareJobs(primaryResults);
+  if(initialJobs.length)onInitialJobs?.(initialJobs);
+  // Expand only after the first cards are ready, so broad catalogue queries
+  // cannot hold up the first useful result on a slower connection.
+  try{
+    const results=await Promise.all(careerFocused?[
+      activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(180),
+    ]:defaultQueries);
+    return await prepareJobs([...primaryResults,...results]);
+  }catch(error){if(initialJobs.length)return initialJobs;throw error}
 }
 
-export async function loadJobs(limit=120,options:JobLoadOptions={}){
+export async function loadJobs(limit=120,options:JobLoadOptions={},onInitialJobs?:(jobs:Job[])=>void){
   const{data}=await createSupabaseBrowserClient().auth.getSession();
   const key=`${data.session?.user.id??"anonymous"}:${cacheKey(limit,options)}`;const cached=jobsCache.get(key);
-  if(cached&&cached.expiresAt>Date.now())return cached.value;
-  const value=loadJobsFresh(limit,options).catch(error=>{jobsCache.delete(key);throw error});
-  jobsCache.set(key,{expiresAt:Date.now()+JOB_CACHE_MS,value});return value;
+  if(cached&&cached.expiresAt>Date.now()){
+    if(onInitialJobs){if(cached.initialJobs)onInitialJobs(cached.initialJobs);else cached.listeners.add(onInitialJobs)}
+    return cached.value;
+  }
+  const listeners=new Set<(jobs:Job[])=>void>(onInitialJobs?[onInitialJobs]:[]);
+  const entry:JobCacheEntry={expiresAt:Date.now()+JOB_CACHE_MS,listeners,value:loadJobsFresh(limit,options,jobs=>{
+    entry.initialJobs=jobs;for(const listener of listeners)listener(jobs);listeners.clear();
+  }).catch(error=>{if(jobsCache.get(key)===entry)jobsCache.delete(key);throw error}).finally(()=>listeners.clear())};
+  jobsCache.set(key,entry);return entry.value;
 }
 
 export async function recordSwipe(jobId:string,direction:SwipeDirection){

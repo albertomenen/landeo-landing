@@ -11877,3 +11877,17 @@ h1 em:after {
   .app-frame .deck-actions button { flex-direction: column; gap: 4px; }
   .app-frame .deck-actions span { font-size: 0.875rem !important; }
 }
+.jobs-loading-state { min-height: 420px; padding: 48px 24px; }
+.jobs-loading-orbit { display: grid; place-items: center; position: relative; width: 76px; height: 76px; margin: 0 auto 24px; border-radius: 50%; background: #edf4eb; color: #357e59; }
+.jobs-loading-orbit::after { content: ""; position: absolute; inset: -5px; border: 3px solid #dce9dc; border-top-color: #357e59; border-radius: inherit; animation: jobs-orbit 1.2s linear infinite; }
+.jobs-loading-orbit > span { font-size: 38px; line-height: 1; }
+.jobs-loading-state > p { max-width: 340px; margin-inline: auto; line-height: 1.6; }
+.jobs-loading-preview { display: grid; gap: 12px; width: min(280px, 100%); margin: 28px auto 0; }
+.jobs-loading-preview i { height: 12px; border-radius: 8px; background: linear-gradient(100deg, #e6eee4 20%, #f7faf5 45%, #e6eee4 70%); background-size: 240% 100%; animation: jobs-shimmer 1.7s ease-in-out infinite; }
+.jobs-loading-preview i:nth-child(2) { width: 85%; animation-delay: .12s; }
+.jobs-loading-preview i:nth-child(3) { width: 60%; animation-delay: .24s; }
+.jobs-refresh-status { display: inline-flex; align-items: center; gap: 7px; margin-left: 12px; font-size: .875rem; color: #537362; }
+.jobs-refresh-status i { width: 12px; height: 12px; border: 2px solid #dce9dc; border-top-color: #357e59; border-radius: 50%; animation: jobs-orbit 1s linear infinite; }
+@keyframes jobs-orbit { to { transform: rotate(360deg); } }
+@keyframes jobs-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .jobs-loading-orbit::after, .jobs-loading-preview i, .jobs-refresh-status i { animation: none; } }

@@ -801,6 +801,9 @@ function JobsView({
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const feedRequest = useRef(0);
+  const handledJobs = useRef(new Set<string>());
   const [index, setIndex] = useState(0);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -829,30 +832,47 @@ function JobsView({
     return () => window.clearTimeout(timer);
   }, [query]);
   const refresh = useCallback(async () => {
+    const request = ++feedRequest.current;
     setLoading(true);
+    setRefreshing(true);
     if (demo) {
       setJobs([...marketingDemoJobs]);
       setIndex(0);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
     try {
-      setJobs(
-        await loadJobs(120, {
+      let published = false;
+      const publish = (items: Job[]) => {
+        if (request !== feedRequest.current) return;
+        const available = items.filter(item => !handledJobs.current.has(item.id));
+        const append = published;
+        published = true;
+        setJobs(current => {
+          if (!append) return available;
+          const byId = new Map(available.map(item => [item.id, item]));
+          const kept = current.filter(item => byId.has(item.id)).map(item => byId.get(item.id)!);
+          const keptIds = new Set(kept.map(item => item.id));
+          return [...kept, ...available.filter(item => !keptIds.has(item.id))];
+        });
+        setLoading(false);
+      };
+      publish(await loadJobs(120, {
           includeDismissed: showAutomaticArchive,
           includeWorldwide: true,
           search: debouncedQuery,
           careerLevel: careerLevel === "all" ? undefined : careerLevel,
-        }),
-      );
+        }, publish));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : t.notices.loadError);
+      if(request === feedRequest.current)setNotice(error instanceof Error ? error.message : t.notices.loadError);
     } finally {
-      setLoading(false);
+      if(request === feedRequest.current){setLoading(false);setRefreshing(false);}
     }
   }, [careerLevel, debouncedQuery, demo, showAutomaticArchive, t.notices.loadError]);
   useEffect(() => {
     refresh();
+    return () => { feedRequest.current += 1; };
   }, [refresh]);
   const filtered = useMemo(
     () =>
@@ -894,6 +914,7 @@ function JobsView({
     (direction: -1 | 1) => {
       if (!job) return;
       setCardDirection(direction);
+      handledJobs.current.add(job.id);
       setJobs((current) => {
         const remaining=current.filter((item) => item.id !== job.id);
         // Refill shortly before the current page runs out. Already handled
@@ -1094,10 +1115,10 @@ function JobsView({
           <m.button
             className="saas-icon-button"
             aria-label={t.jobs.refresh}
-            aria-busy={loading}
-            disabled={loading}
-            animate={loading ? { rotate: 360 } : { rotate: 0 }}
-            transition={loading ? { duration: 0.75, repeat: Infinity, ease: "linear" } : { duration: 0.16 }}
+            aria-busy={refreshing}
+            disabled={refreshing}
+            animate={refreshing ? { rotate: 360 } : { rotate: 0 }}
+            transition={refreshing ? { duration: 0.75, repeat: Infinity, ease: "linear" } : { duration: 0.16 }}
             whileHover={loading ? undefined : { y: -1, scale: 1.03 }}
             whileTap={loading ? undefined : { scale: 0.94 }}
             onClick={refresh}
@@ -1265,6 +1286,7 @@ function JobsView({
                 : filtered.length
                   ? `${index + 1} / ${filtered.length}`
                   : `0 ${t.jobs.offers}`}
+              {!loading && refreshing && <span className="jobs-refresh-status" role="status"><i aria-hidden="true" />{localized(locale, "Buscando más ofertas…", "Finding more jobs…")}</span>}
             </span>
             <div>
               {filtered.slice(0, 8).map((_, itemIndex) => (
@@ -1284,17 +1306,21 @@ function JobsView({
             initial={false}
             custom={cardDirection}
           >
-            {loading ? (
+            {loading && !job ? (
               <m.div
                 key="loading"
-                className="empty-state"
+                className="empty-state jobs-loading-state"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <span>↻</span>
+                <div className="jobs-loading-orbit" aria-hidden="true"><span>⌕</span></div>
                 <h2>{t.jobs.loadingTitle}</h2>
                 <p>{t.jobs.loadingDetail}</p>
+                <div className="jobs-loading-preview" aria-hidden="true"><i /><i /><i /></div>
               </m.div>
             ) : job ? (
               <m.div
