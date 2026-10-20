@@ -4541,6 +4541,14 @@ h1 em:after {
   font-size: 9px;
   padding: 11px;
 }
+.auth-card > p, .magic-sent p { font-size: 15px; line-height: 1.6; }
+.auth-card form label { font-size: 14px; margin-bottom: 8px; }
+.auth-card form > input { width: 100%; min-height: 48px; font-size: 16px; }
+.auth-card .social-button, .magic-sent .button { font-size: 15px; min-height: 46px; }
+.auth-card > small { font-size: 12px; }
+.magic-sent strong { overflow-wrap: anywhere; }
+.auth-card form .auth-code-input { font-size: 24px; font-variant-numeric: tabular-nums; letter-spacing: .15em; text-align: center; }
+.auth-card .auth-browser-hint { background: #f1f6ee; border: 1px solid var(--line); padding: 12px; border-radius: 12px; text-align: left; }
 .onboarding-page > header > span {
   font-size: 9px;
   color: var(--muted);

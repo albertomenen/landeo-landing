@@ -279,7 +279,7 @@ test("keeps authentication redirects recoverable and preserves the requested rou
   assert.match(authCard, /window\.location\.assign\(data\.url\)/);
   assert.match(authCard, /OAUTH_REDIRECT_TIMEOUT_MS/);
   assert.match(authCard, /new URLSearchParams\(window\.location\.search\)\.get\("next"\)/);
-  assert.match(authCard, /window\.location\.replace\("\/app\/jobs"\)/);
+  assert.match(authCard, /window\.location\.replace\(authDestination/);
 });
 
 test("guides first-time dashboard visitors through every job action", async () => {
