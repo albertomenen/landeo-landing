@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Supabase Edge Function rows are runtime-shaped. */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/http.ts";
+import { autoApplyGeographyCompatible } from "../_shared/auto-apply-geography.ts";
 
 const required = (name: string) => {
   const value = Deno.env.get(name);
@@ -44,6 +45,7 @@ function chunks<T>(values: T[], size = 80) {
 }
 
 function jobScore(job: any, profile: any, settings: any) {
+  if (!autoApplyGeographyCompatible(job, profile)) return -1;
   const title = normalized(job.title);
   const description = normalized(job.summary);
   const company = normalized(job.company);
@@ -140,7 +142,7 @@ async function processUser(admin: any, settings: any) {
     }
 
     const jobResults = await Promise.all(chunks(targetIds).map((ids) => admin.from("jobs")
-      .select("id,company,title,summary,location,work_mode,seniority,industry,published_at")
+      .select("id,company,title,summary,location,work_mode,seniority,industry,published_at,metadata")
       .in("id", ids)
       .eq("status", "active")
       .eq("application_capability", "automatic")
