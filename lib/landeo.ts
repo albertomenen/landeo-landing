@@ -415,10 +415,20 @@ export async function loadAutoApplyDashboard(profile?:CandidateProfile|null):Pro
 
 export async function saveAutoApplySettings(input:AutoApplySettings){
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para configurar Auto Apply.");
-  if(!input.roles.length)throw new Error("Añade al menos un puesto objetivo.");
   const clean=(values:string[])=>Array.from(new Set(values.map(value=>value.trim()).filter(Boolean))).slice(0,20);
+  if(input.enabled&&!clean(input.roles).length)throw new Error("Añade al menos un puesto objetivo.");
   const now=new Date().toISOString();const{error}=await client.from("auto_apply_settings").upsert({user_id:user.id,enabled:input.enabled,roles:clean(input.roles),locations:clean(input.locations),work_modes:clean(input.workModes),industries:clean(input.industries),seniority_levels:clean(input.seniorityLevels),excluded_companies:clean(input.excludedCompanies),minimum_match:Math.max(50,Math.min(100,Math.round(input.minimumMatch))),daily_limit:Math.max(1,Math.min(10,Math.round(input.dailyLimit))),next_run_at:input.enabled?now:null,updated_at:now},{onConflict:"user_id"});if(error)throw error;
-  if(input.enabled){const{error:runError}=await client.functions.invoke("auto-apply-runner",{body:{source:"dashboard"}});if(runError instanceof FunctionsHttpError){const payload=await runError.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"Auto Apply se activó, pero no pudo ejecutar la primera búsqueda.")}if(runError)throw runError;}
+  // Saving and running are separate outcomes. An invocation failure must not
+  // pretend that the settings were rolled back after the successful upsert.
+  if(input.enabled){
+    try{
+      const{data,error:runError}=await client.functions.invoke("auto-apply-runner",{body:{source:"dashboard"}});
+      if(runError instanceof FunctionsHttpError){const payload=await runError.context.json().catch(()=>null)as{message?:string}|null;return{runWarning:payload?.message||"No se pudo completar la primera búsqueda."}}
+      if(runError)return{runWarning:runError.message||"No se pudo completar la primera búsqueda."};
+      return{runWarning:null,result:data};
+    }catch{return{runWarning:"La configuración se guardó, pero no se pudo conectar con la primera búsqueda."}}
+  }
+  return{runWarning:null};
 }
 
 export async function runAutoApplyNow(){
