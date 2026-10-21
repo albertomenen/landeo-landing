@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- These effects hydrate authenticated Supabase state and subscribe to external auth/application updates. */
 
 import Link from "./SafeLink";
+import JobsLoading from "./JobsLoading";
 import {
   useCallback,
   useEffect,
@@ -804,6 +805,7 @@ function JobsView({
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [feedError, setFeedError] = useState(false);
   const feedRequest = useRef(0);
   const handledJobs = useRef(new Set<string>());
   const [index, setIndex] = useState(0);
@@ -837,6 +839,7 @@ function JobsView({
     const request = ++feedRequest.current;
     setLoading(true);
     setRefreshing(true);
+    setFeedError(false);
     if (demo) {
       setJobs([...marketingDemoJobs]);
       setIndex(0);
@@ -867,7 +870,7 @@ function JobsView({
           careerLevel: careerLevel === "all" ? undefined : careerLevel,
         }, publish));
     } catch (error) {
-      if(request === feedRequest.current)setNotice(error instanceof Error ? error.message : t.notices.loadError);
+      if(request === feedRequest.current){setFeedError(true);setNotice(error instanceof Error ? error.message : t.notices.loadError);}
     } finally {
       if(request === feedRequest.current){setLoading(false);setRefreshing(false);}
     }
@@ -1281,6 +1284,7 @@ function JobsView({
           </div>
         </m.aside>
         <section className="deck-panel">
+          {feedError&&job&&<div className="jobs-feed-error" role="alert">{localized(locale,"No hemos podido actualizar las ofertas. Puedes seguir viendo las que ya cargaron.","We couldn’t refresh jobs. You can still browse the jobs already loaded.")} <button type="button" onClick={()=>refresh()}>{localized(locale,"Reintentar","Retry")}</button></div>}
           <div className="deck-count">
             <span>
               {loading
@@ -1308,21 +1312,15 @@ function JobsView({
             initial={false}
             custom={cardDirection}
           >
-            {loading && !job ? (
+            {(loading || refreshing || query.trim()!==debouncedQuery) && !job ? (
               <m.div
                 key="loading"
-                className="empty-state jobs-loading-state"
-                role="status"
-                aria-live="polite"
-                aria-busy="true"
+                className="jobs-loading-state"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="jobs-loading-orbit" aria-hidden="true"><span>⌕</span></div>
-                <h2>{t.jobs.loadingTitle}</h2>
-                <p>{t.jobs.loadingDetail}</p>
-                <div className="jobs-loading-preview" aria-hidden="true"><i /><i /><i /></div>
+                <JobsLoading locale={locale} onRetry={()=>window.location.reload()} />
               </m.div>
             ) : job ? (
               <m.div
@@ -1454,6 +1452,13 @@ function JobsView({
                   {localized(locale, "Ver oferta completa", "View full job")} <b>→</b>
                 </span>
               </m.div>
+            ) : feedError ? (
+              <div key="load-error" className="empty-state jobs-feed-error-panel" role="alert">
+                <span aria-hidden="true">!</span>
+                <h2>{localized(locale,"No pudimos cargar las ofertas","We couldn’t load jobs")}</h2>
+                <p>{localized(locale,"Esto no significa que no haya empleos. Comprueba tu conexión y vuelve a intentarlo.","This doesn’t mean there are no jobs. Check your connection and try again.")}</p>
+                <button type="button" className="button button-primary" onClick={()=>refresh()}>{localized(locale,"Reintentar búsqueda","Retry search")}</button>
+              </div>
             ) : (
               <m.div
                 key="empty"
