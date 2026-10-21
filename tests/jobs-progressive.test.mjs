@@ -20,7 +20,7 @@ test("shows validated first jobs before slow catalogue queries finish and shares
       let limit = 0;
       const query = {
         select() { return query; }, eq() { return query; },
-        in() { return query; }, or() { return query; },
+        in() { return query; }, or() { return query; }, gt() { return query; }, abortSignal() { return query; },
         order() { return query; }, limit(value) { limit = value; return query; },
         then(resolve, reject) {
           if (limit > 24) broadStarted = true;
@@ -46,6 +46,9 @@ test("shows validated first jobs before slow catalogue queries finish and shares
     const resolveCountryCode = () => "";
     const cityLocationFilter = () => "";
     const prioritizeJobsWithRemoteFallback = jobs => jobs;
+    const isJobLocationCompatible = () => true;
+    const loadSalaryRates = async () => null;
+    const prioritizeHighSalaryRemote = jobs => jobs;
     ${source.replace(/^import .*;\s*$/gm, "")}
   `;
   const { outputText } = ts.transpileModule(isolated, {

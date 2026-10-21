@@ -264,7 +264,9 @@ function money(job: Job, locale: DashboardLocale) {
       currency: job.salaryCurrency,
       maximumFractionDigits: 0,
     }).format(value);
-  return `${format(job.salaryMin)}–${format(job.salaryMax)}`;
+  const period=String(job.metadata?.salary_interval||"").toLowerCase();
+  const suffix=/^(year|yearly|annual|annually|per-year-salary|anual)$/.test(period)?localized(locale,"/año","/year"):/^(month|monthly|per-month-salary|mensual)$/.test(period)?localized(locale,"/mes","/month"):/^(week|weekly|per-week-salary)$/.test(period)?localized(locale,"/semana","/week"):/^(hour|hourly|per-hour-wage)$/.test(period)?"/h":"";
+  return `${format(job.salaryMin)}–${format(job.salaryMax)}${suffix}`;
 }
 function displayName(
   user: User | null,
@@ -1389,6 +1391,7 @@ function JobsView({
                   </button>
                 </div>
                 <div className="feed-badges">
+                  {job.metadata?.salary_featured===true&&<span className="fresh-badge">{localized(locale,"Remoto · sueldo destacado","Remote · salary highlight")}</span>}
                   <span className="fresh-badge">
                     {job.source ?? t.jobs.offer}
                   </span>
