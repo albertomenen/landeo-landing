@@ -3,6 +3,8 @@ import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client
 import type {ApplyCapability,Job} from "./fixtures";
 import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,isJobLocationCompatible} from "./job-location";
 import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
+import {requestBillingAcceptance} from "./billing-consent";
+import {trackProductEvent} from "./analytics";
 import {calculateJobMatch,isJobProfessionallyRelevant,isJobWorkAuthorizationCompatible,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -360,7 +362,27 @@ export async function loadSavedJobs(){
   savedJobsCache.set(key,{expiresAt:Date.now()+DASHBOARD_CACHE_MS,value});return value;
 }
 
-export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){const client=createSupabaseBrowserClient();let promotionCode="";const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";if(action==="checkout"){const user=await currentUser();if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}}const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}window.location.assign(data.url)}
+export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){
+  const client=createSupabaseBrowserClient();
+  const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;
+  const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");
+  const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";
+  const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";
+  let promotionCode="";
+  const acceptance=action==="checkout"?await requestBillingAcceptance(selectedPlan,locale):null;
+  if(action==="checkout"&&!acceptance)return false;
+  if(action==="checkout"){
+    const user=await currentUser();
+    if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}
+  }
+  const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo,acceptance}});
+  if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}
+  if(error)throw error;
+  if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");
+  try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}
+  if(action==="checkout")trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"billing_confirmation"});
+  window.location.assign(data.url);return true;
+}
 
 export async function hasWebPro(knownUser?:User|null){const user=knownUser??await currentUser();if(!user)return false;const{data}=await createSupabaseBrowserClient().from("stripe_subscriptions").select("status,current_period_end").eq("user_id",user.id).in("status",["active","trialing"]).maybeSingle();return Boolean(data&&(!data.current_period_end||new Date(data.current_period_end).getTime()>Date.now()))}
 

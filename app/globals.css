@@ -11925,6 +11925,24 @@ h1 em:after {
 .jobs-feed-error { padding: 14px 18px; border: 1px solid #e8d4ac; border-radius: 12px; background: #fffbf2; color: #644c29; line-height: 1.5; }
 .jobs-feed-error button { text-decoration: underline; margin-left: 8px; font-weight: 700; }
 .jobs-feed-error-panel > button { margin-top: 20px; }
+.billing-consent { box-sizing: border-box; width: min(600px,calc(100% - 24px)); max-height: calc(100dvh - 32px); margin: auto; padding: 28px; border: 1px solid #d8e3d9; border-radius: 24px; background: #fffefa; color: #193f30; box-shadow: 0 24px 100px #10291d40; overflow-y: auto; }
+.billing-consent::backdrop { background: #10291da8; backdrop-filter: blur(5px); }
+.billing-consent form { position: relative; }
+.billing-consent-close { position: absolute; right: -8px; top: -14px; border: 0; background: transparent; color: #193f30; font-size: 28px; width: 40px; height: 40px; }
+.billing-consent .overline { font-size: 11px; letter-spacing: .12em; padding-right: 28px; }
+.billing-consent h2 { font-size: clamp(24px,4vw,32px); line-height: 1.12; letter-spacing: -.04em; margin: 12px 0 16px; padding-right: 18px; }
+.billing-consent p { font-size: 15px; line-height: 1.55; color: #52685b; margin: 10px 0; }
+.billing-consent-summary { margin: 18px 0; padding: 14px 16px; border-radius: 14px; background: #eef4e9; font-size: 15px; }
+.billing-consent-summary p { font-size: 14px; margin-bottom: 0; }
+.billing-consent nav { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 18px 0; }
+.billing-consent nav a { text-decoration: underline; font-size: 14px; font-weight: 700; }
+.billing-consent label { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; font-size: 14px; line-height: 1.55; cursor: pointer; border-top: 1px solid #e2e8df; }
+.billing-consent input { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; accent-color: #357e59; }
+.billing-consent small { display: block; font-size: 12px; color: #66796d; line-height: 1.5; }
+.billing-consent-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+.billing-consent button:disabled { opacity: .5; cursor: not-allowed; }
+.billing-consent :focus-visible { outline: 3px solid #5e9c70; outline-offset: 3px; }
+@media(max-width:480px) { .billing-consent { padding: 22px 18px; border-radius: 20px; } .billing-consent-actions { flex-wrap: wrap; } .billing-consent-actions button { flex: 1 1 auto; } }
 @keyframes jobs-search-float { 50% { transform: translateY(-5px) rotate(4deg); } }
 @keyframes jobs-loading-travel { from { transform: translateX(-110%); } to { transform: translateX(390%); } }
 @media (max-width: 600px) { .jobs-wait-card { min-height: 400px; border-radius: 22px; padding: 28px 20px; } .jobs-wait-visual { transform: scale(.88); margin-bottom: 12px; } .jobs-refresh-status { display: flex; margin: 7px 0 0; } }

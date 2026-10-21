@@ -63,7 +63,7 @@ test("loads Microsoft Clarity only after analytics consent and masks private rou
     new URL("components/GoogleAnalytics.tsx", root),
     "utf8",
   );
-  const legal = await readFile(new URL("components/LegalPage.tsx", root), "utf8");
+  const legal = await readFile(new URL("lib/legal-documents.ts", root), "utf8");
   assert.match(layout, /clarityId="yi6pc0lycq"/);
   assert.match(analytics, /consent !== "granted"/);
   assert.match(analytics, /www\.clarity\.ms\/tag/);

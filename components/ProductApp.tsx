@@ -1833,8 +1833,8 @@ function Paywall({
     try {
       window.localStorage.setItem("landeo-selected-plan", selectedPlan);
       trackProductEvent("paywall_checkout_clicked",{plan:selectedPlan,source:context.source});
-      trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"paywall"});
       await startStripe("checkout", selectedPlan);
+      setLoading(false);
     } catch (value) {
       trackProductEvent("stripe_checkout_failed",{plan:selectedPlan,source:"paywall"});
       setError(value instanceof Error ? value.message : t.error);
@@ -1889,7 +1889,7 @@ function Paywall({
           </button>
           <div className="plan-picker-footer">
             <span>◆ {locale === "es" ? "Pago seguro con Stripe" : "Secure payment with Stripe"}</span>
-            <span><Link href="/terms">{locale === "es" ? "Términos" : "Terms"}</Link><Link href="/privacy">{locale === "es" ? "Privacidad" : "Privacy"}</Link></span>
+            <span><Link href="/terms">{locale === "es" ? "Términos" : "Terms"}</Link><Link href="/refunds">{locale === "es" ? "Reembolsos" : "Refunds"}</Link><Link href="/privacy">{locale === "es" ? "Privacidad" : "Privacy"}</Link></span>
           </div>
         </div>
         <div className="plan-picker-visual" aria-hidden="true">
