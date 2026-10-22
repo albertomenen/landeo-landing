@@ -167,11 +167,12 @@ async function setStatus(
   status: string,
   values: Record<string, unknown> = {},
 ) {
-  await admin.from("applications").update({
+  const { error } = await admin.from("applications").update({
     status,
     updated_at: new Date().toISOString(),
     ...values,
   }).eq("id", applicationId);
+  if (error) throw error;
 }
 
 Deno.serve(async (request) => {
@@ -184,6 +185,15 @@ Deno.serve(async (request) => {
 
   let failureContext:
     | { admin: any; applicationId: string; userId: string }
+    | null = null;
+  // Set as soon as Resend or InfoJobs accepts the application. From then on a
+  // later error (bookkeeping, events, push) must never mark it failed or free
+  // its send token, or a retry would send the CV to the employer twice.
+  let delivered:
+    | {
+      response: { status: "sent" | "queued"; message: string; externalReference: string | null };
+      values: Record<string, unknown>;
+    }
     | null = null;
   try {
     const authorization = request.headers.get("Authorization");
@@ -590,7 +600,7 @@ Deno.serve(async (request) => {
             admin.from("applications").select("id", {
               count: "exact",
               head: true,
-            }).eq("user_id", userData.user.id).eq(
+            }).eq("user_id", userData.user.id).neq("id", application.id).eq(
               "delivery_channel",
               "email",
             ).in("status", ["queued", "processing", "sent"]).gte(
@@ -600,7 +610,7 @@ Deno.serve(async (request) => {
             admin.from("applications").select("id", {
               count: "exact",
               head: true,
-            }).eq("recipient_domain", recipientDomain).eq(
+            }).eq("recipient_domain", recipientDomain).neq("id", application.id).eq(
               "delivery_channel",
               "email",
             ).in("status", ["queued", "processing", "sent"]).gte(
@@ -655,6 +665,39 @@ Deno.serve(async (request) => {
           message: "Esta candidatura ya se está procesando.",
           externalReference: application.id,
         });
+      }
+      // The counts above race with parallel requests. Re-check against rows
+      // that already hold a send slot (a token): every claim happens before its
+      // own re-check, so the last of any racing pair sees the others and backs
+      // off, and the daily limits can never be exceeded.
+      const [{ count: claimedByUser, error: userClaimError }, { count: claimedByDomain, error: domainClaimError }] =
+        await Promise.all([
+          admin.from("applications").select("id", { count: "exact", head: true })
+            .eq("user_id", userData.user.id).neq("id", application.id)
+            .eq("delivery_channel", "email").not("email_send_token", "is", null)
+            .gte("applied_at", today.toISOString()),
+          admin.from("applications").select("id", { count: "exact", head: true })
+            .eq("recipient_domain", recipientDomain).neq("id", application.id)
+            .eq("delivery_channel", "email").not("email_send_token", "is", null)
+            .gte("applied_at", today.toISOString()),
+        ]);
+      if (userClaimError) throw userClaimError;
+      if (domainClaimError) throw domainClaimError;
+      const overUserLimit = (claimedByUser ?? 0) >= userLimit;
+      if (overUserLimit || (claimedByDomain ?? 0) >= domainLimit) {
+        const limitMessage = overUserLimit
+          ? `Has alcanzado el límite diario de ${userLimit} candidaturas por email.`
+          : "Esta empresa ha alcanzado temporalmente el límite de seguridad. Usa su web oficial.";
+        await setStatus(admin, application.id, "action_required", {
+          email_send_token: null,
+          action_url: target.apply_url,
+          error_message: limitMessage,
+        });
+        return json({
+          status: "action_required",
+          message: limitMessage,
+          ...(overUserLimit ? {} : { actionUrl: target.apply_url }),
+        }, 429);
       }
       await addEvent(
         admin,
@@ -766,6 +809,25 @@ Deno.serve(async (request) => {
           resend.message || `Resend respondió ${resendResponse.status}`,
         );
       }
+      delivered = {
+        response: internalIntake
+          ? {
+            status: "queued",
+            message:
+              "Landeo ha recibido tu CV. La candidatura quedará en gestión hasta confirmar el envío a la empresa.",
+            externalReference: application.id,
+          }
+          : {
+            status: "sent",
+            message: "CV enviado correctamente a la empresa.",
+            externalReference: resend.id ?? null,
+          },
+        values: {
+          external_reference: resend.id ?? null,
+          delivery_status: "accepted",
+          recipient_domain: recipientDomain,
+        },
+      };
       await markCoverLetterUsage("included_in_email");
       if (internalIntake) {
         await setStatus(admin, application.id, "queued", {
@@ -832,6 +894,24 @@ Deno.serve(async (request) => {
       });
     }
 
+    // Same claim as the email path: two concurrent requests (double click, or
+    // the user plus Auto Apply) must not both post to InfoJobs.
+    const { data: infoJobsClaim, error: infoJobsClaimError } = await admin
+      .from("applications").update({
+        status: "processing",
+        email_send_token: crypto.randomUUID(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", application.id).is("email_send_token", null).select("id")
+      .maybeSingle();
+    if (infoJobsClaimError) throw infoJobsClaimError;
+    if (!infoJobsClaim) {
+      return json({
+        status: "queued",
+        message: "Esta candidatura ya se está procesando.",
+        externalReference: application.id,
+      });
+    }
+
     const clientId = required("INFOJOBS_CLIENT_ID");
     const clientSecret = required("INFOJOBS_CLIENT_SECRET");
     let accessToken = integration.access_token as string;
@@ -854,6 +934,7 @@ Deno.serve(async (request) => {
             client_secret: clientSecret,
             refresh_token: integration.refresh_token,
           }),
+          signal: AbortSignal.timeout(15_000),
         },
       );
       const refreshed = await refreshResponse.json() as {
@@ -926,6 +1007,7 @@ Deno.serve(async (request) => {
       await setStatus(admin, application.id, "action_required", {
         action_url: target.apply_url,
         error_message: message,
+        email_send_token: null,
       });
       await addEvent(
         admin,
@@ -942,6 +1024,14 @@ Deno.serve(async (request) => {
       });
     }
 
+    delivered = {
+      response: {
+        status: "sent",
+        message: "Candidatura enviada mediante InfoJobs.",
+        externalReference: result.code ?? null,
+      },
+      values: { external_reference: result.code ?? null },
+    };
     const usedCoverLetter = questions.some((question) =>
       question.kind === "text" &&
       /carta|cover\s*letter|motivaci[oó]n|why.*you|por qu[eé]/i.test(question.label)
@@ -967,6 +1057,16 @@ Deno.serve(async (request) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (delivered && failureContext) {
+      console.error("submit-application after delivery", failureContext.applicationId, error);
+      await setStatus(
+        failureContext.admin,
+        failureContext.applicationId,
+        delivered.response.status,
+        delivered.values,
+      ).catch(() => undefined);
+      return json(delivered.response);
+    }
     if (failureContext) {
       await setStatus(
         failureContext.admin,

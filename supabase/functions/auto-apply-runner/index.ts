@@ -76,8 +76,24 @@ function jobScore(job: any, profile: any, settings: any) {
   return Math.min(100, score);
 }
 
-async function processUser(admin: any, settings: any) {
+// Stay well inside the Edge Function wall-clock limit: stop starting new
+// submissions or users after this, and leave the rest for the next cron tick.
+const RUN_BUDGET_MS = 110_000;
+const SUBMIT_TIMEOUT_MS = 60_000;
+// A run older than this that still says "running" was killed mid-way.
+const STALE_RUN_MS = 15 * 60 * 1000;
+
+async function processUser(admin: any, settings: any, deadline: number) {
   const now = new Date();
+  // One run per user at a time: a manual "run now" and the cron, or two cron
+  // ticks, would otherwise each spend the full daily allowance.
+  const { data: activeRuns, error: activeRunsError } = await admin.from("auto_apply_runs")
+    .select("id").eq("user_id", settings.user_id).eq("status", "running")
+    .gte("started_at", new Date(now.getTime() - STALE_RUN_MS).toISOString()).limit(1);
+  if (activeRunsError) throw activeRunsError;
+  if (activeRuns?.length) {
+    return { userId: settings.user_id, matched: 0, attempted: 0, sent: 0, actionRequired: 0, failed: 0, skipped: true, alreadyRunning: true };
+  }
   const { data: run, error: runError } = await admin.from("auto_apply_runs").insert({
     user_id: settings.user_id,
     status: "running",
@@ -115,7 +131,12 @@ async function processUser(admin: any, settings: any) {
       .in("status", ["queued", "processing", "sent"]);
     const remaining = Math.max(0, Number(settings.daily_limit ?? 3) - Number(sentToday ?? 0));
     if (!remaining) {
-      await admin.from("auto_apply_runs").update({ status: "skipped", error_message: "Límite diario alcanzado.", completed_at: now.toISOString() }).eq("id", run.id);
+      const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      await Promise.all([
+        admin.from("auto_apply_runs").update({ status: "skipped", error_message: "Límite diario alcanzado.", completed_at: now.toISOString() }).eq("id", run.id),
+        // Nothing to do until the allowance resets.
+        admin.from("auto_apply_settings").update({ next_run_at: tomorrow.toISOString() }).eq("user_id", settings.user_id),
+      ]);
       return { userId: settings.user_id, matched, attempted, sent, actionRequired, failed, skipped: true };
     }
 
@@ -151,6 +172,7 @@ async function processUser(admin: any, settings: any) {
     matched = candidates.length;
 
     for (const { job, score } of candidates.slice(0, remaining)) {
+      if (Date.now() > deadline) break;
       attempted += 1;
       await admin.from("swipes").upsert({ user_id: settings.user_id, job_id: job.id, direction: "right" }, { onConflict: "user_id,job_id" });
       const response = await fetch(`${required("SUPABASE_URL")}/functions/v1/submit-application`, {
@@ -167,8 +189,14 @@ async function processUser(admin: any, settings: any) {
           platform: "web",
           answers: { autoApply: true, autoApplyRunId: run.id, autoApplyMatch: score },
         }),
+        signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
+      }).catch((error) => {
+        console.error("auto-apply submit", job.id, error);
+        return null;
       });
-      const outcome = await response.json().catch(() => ({ status: "failed" }));
+      const outcome = response
+        ? await response.json().catch(() => ({ status: "failed" }))
+        : { status: "failed" };
       if (outcome.status === "sent") sent += 1;
       else if (outcome.status === "action_required") actionRequired += 1;
       else if (outcome.status === "queued") sent += 1;
@@ -227,22 +255,39 @@ Deno.serve(async (request) => {
       requestedUserId = data.user.id;
     }
 
+    const deadline = Date.now() + RUN_BUDGET_MS;
     let query = admin.from("auto_apply_settings").select("*").eq("enabled", true);
     if (requestedUserId) query = query.eq("user_id", requestedUserId);
-    else query = query.or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`).limit(25);
+    else {
+      // Oldest due first, so users who keep being skipped cannot starve the rest.
+      query = query.or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`)
+        .order("next_run_at", { ascending: true, nullsFirst: true }).limit(25);
+    }
     const { data: settingsRows, error } = await query;
     if (error) throw error;
     const results = [];
     for (const settings of settingsRows ?? []) {
+      if (requestedUserId) {
+        results.push(await processUser(admin, settings, deadline));
+        continue;
+      }
+      if (Date.now() > deadline) break;
+      // Claim the user before processing: push next_run_at forward only if it
+      // is still due, so overlapping cron ticks never pick the same user and a
+      // user whose run fails is retried in an hour instead of every tick.
+      const retryAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      let claim = admin.from("auto_apply_settings").update({ next_run_at: retryAt })
+        .eq("user_id", settings.user_id).eq("enabled", true);
+      claim = settings.next_run_at ? claim.eq("next_run_at", settings.next_run_at) : claim.is("next_run_at", null);
+      const { data: claimed, error: claimError } = await claim.select("user_id").maybeSingle();
+      if (claimError) throw claimError;
+      if (!claimed) continue;
       // One user's failure is recorded on their run; it must not stop the batch.
-      if (requestedUserId) results.push(await processUser(admin, settings));
-      else {
-        try {
-          results.push(await processUser(admin, settings));
-        } catch (error) {
-          console.error("auto-apply-runner user", settings.user_id, error);
-          results.push({ userId: settings.user_id, error: error instanceof Error ? error.message : "Error inesperado." });
-        }
+      try {
+        results.push(await processUser(admin, settings, deadline));
+      } catch (error) {
+        console.error("auto-apply-runner user", settings.user_id, error);
+        results.push({ userId: settings.user_id, error: error instanceof Error ? error.message : "Error inesperado." });
       }
     }
     return json({ processed: results.length, results });

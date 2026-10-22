@@ -462,9 +462,15 @@ async function mapWithConcurrency<T, R>(
   return result;
 }
 
+// Boards whose listing loaded and contained jobs in the last greenhouseJobs()
+// call. Only these may have missing jobs closed: a board that failed (429,
+// 5xx, timeout) or came back empty must not close all of its live jobs.
+let greenhouseLoadedBoards = new Set<string>();
+
 async function greenhouseJobs(
   requestedBoards: Set<string> | null = null,
 ): Promise<NormalizedJob[]> {
+  greenhouseLoadedBoards = new Set();
   const effectiveBoards = requestedBoards ? new Set(requestedBoards) : null;
   // The existing fourth cron shard includes the retired `neoris` board. Keep
   // that shard useful by attaching the early-career boards to it.
@@ -483,7 +489,7 @@ async function greenhouseJobs(
     selectedBoards.map(async (board) => {
       const response = await fetch(
         `https://boards-api.greenhouse.io/v1/boards/${board.token}/jobs?content=true&pay_transparency=true`,
-        { headers: { Accept: "application/json" } },
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20_000) },
       );
       if (!response.ok) {
         throw new Error(
@@ -507,6 +513,7 @@ async function greenhouseJobs(
           }>;
         }>;
       };
+      if (payload.jobs?.length) greenhouseLoadedBoards.add(board.token);
       return (payload.jobs ?? [])
         .filter((job) => targetMarket(job.location?.name ?? ""))
         .map((job): NormalizedJob => {
@@ -1701,11 +1708,12 @@ Deno.serve(async (request) => {
         const jobs = await source.load();
         imported[source.name] = await saveJobs(supabase, jobs);
         if (source.name === "Greenhouse") {
+          const requested = requestedGreenhouseBoards ??
+            new Set(greenhouseBoards.map((board) => board.token));
           deactivated[source.name] = await deactivateMissingGreenhouse(
             supabase,
             jobs,
-            requestedGreenhouseBoards ??
-              new Set(greenhouseBoards.map((board) => board.token)),
+            new Set([...requested].filter((token) => greenhouseLoadedBoards.has(token))),
           );
         }
       } catch (sourceError) {
