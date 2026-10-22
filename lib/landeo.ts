@@ -5,6 +5,7 @@ import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,i
 import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
 import {requestBillingAcceptance} from "./billing-consent";
 import {trackProductEvent} from "./analytics";
+import {resumeFormat,uploadCvWithRetry} from "./cv-upload";
 import {calculateJobMatch,isJobProfessionallyRelevant,isJobWorkAuthorizationCompatible,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -300,15 +301,15 @@ export type WebOnboardingAnswers={
   blocker:string;outcome:string;source:string;promoCode:string;
 };
 
-export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en"}){
+export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en";onUploadAttempt?:(attempt:number)=>void}){
   const client=createSupabaseBrowserClient();
   let session:Awaited<ReturnType<typeof getResilientSession>>;
   try{session=await getResilientSession(600)}catch{throw new Error(input.locale==="es"?"No hemos podido verificar tu sesión ahora mismo. Tus respuestas siguen guardadas; espera unos segundos y vuelve a intentarlo.":"We couldn't verify your session right now. Your answers are still saved; wait a few seconds and try again.")}
   const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
-  if(input.resume.size>10*1024*1024)throw new Error(input.locale==="es"?"El CV no puede superar 10 MB.":"Your résumé must be 10 MB or smaller.");
-  const lower=input.resume.name.toLowerCase();const extension=lower.endsWith(".docx")?"docx":lower.endsWith(".doc")?"doc":"pdf";
-  const allowed=["pdf","doc","docx"];if(!allowed.includes(extension))throw new Error(input.locale==="es"?"El CV debe ser PDF, DOC o DOCX.":"Your résumé must be a PDF, DOC or DOCX file.");
-  const cvPath=`${user.id}/cv.${extension}`;const{error:uploadError}=await client.storage.from("cvs").upload(cvPath,input.resume,{contentType:input.resume.type||"application/pdf",upsert:true});if(uploadError)throw uploadError;
+  const {extension,contentType}=resumeFormat(input.resume,input.locale);
+  const cvPath=`${user.id}/cv.${extension}`;
+  await uploadCvWithRetry(()=>client.storage.from("cvs").upload(cvPath,input.resume,{contentType,upsert:true}),input.locale,input.onUploadAttempt);
+  input.onUploadAttempt?.(0);
   const{data:existing,error:profileError}=await client.from("profiles").select("full_name,email,phone,universal_profile,privacy_consent_at,automatic_application_consent_at").eq("id",user.id).maybeSingle();if(profileError)throw profileError;
   const metadataName=String(user.user_metadata?.full_name??user.user_metadata?.name??"");const fullName=existing?.full_name||metadataName;
   const experienceYears:Record<string,number>={internship:0,entry:0,junior:2,mid:4,senior:7,expert:10};
