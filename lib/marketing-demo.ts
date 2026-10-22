@@ -1,4 +1,5 @@
 import type { Job } from "./fixtures";
+import type { ApplicationStatus, LiveApplication, TrackingStage } from "./landeo";
 
 type DemoInput = Pick<
   Job,
@@ -368,3 +369,54 @@ const demoInputs: DemoInput[] = [
 ];
 
 export const marketingDemoJobs = demoInputs.map(demoJob);
+
+const demoPipeline: Array<{
+  status: ApplicationStatus;
+  stage: TrackingStage;
+  daysAgo: number;
+  notes: string;
+  nextAction: string;
+}> = [
+  { status: "interview", stage: "interview", daysAgo: 6, notes: "Primera entrevista con el equipo de producto.", nextAction: "Preparar caso práctico" },
+  { status: "viewed", stage: "screening", daysAgo: 4, notes: "La empresa ha abierto la candidatura.", nextAction: "Hacer seguimiento por email" },
+  { status: "sent", stage: "applied", daysAgo: 2, notes: "", nextAction: "" },
+  { status: "sent", stage: "applied", daysAgo: 1, notes: "", nextAction: "" },
+  { status: "interview", stage: "offer", daysAgo: 12, notes: "Oferta recibida. Revisar condiciones.", nextAction: "Responder antes del viernes" },
+  { status: "rejected", stage: "closed", daysAgo: 15, notes: "Han seguido con otros perfiles.", nextAction: "" },
+];
+
+// Fictional applications for the marketing demo, so the Applications view can
+// be shown without a signed-in user or any real data.
+export function marketingDemoApplications(now = Date.now()): LiveApplication[] {
+  return demoPipeline.map((entry, index) => {
+    const job = marketingDemoJobs[index];
+    const appliedAt = new Date(now - entry.daysAgo * 86_400_000).toISOString();
+    const updatedAt = new Date(now - Math.max(0, entry.daysAgo - 1) * 86_400_000).toISOString();
+    const id = `demo-application-${index + 1}`;
+    return {
+      id,
+      jobId: job.id,
+      status: entry.status,
+      appliedAt,
+      updatedAt,
+      actionUrl: null,
+      errorMessage: null,
+      requiredFields: [],
+      deliveryStatus: entry.status === "sent" ? "delivered" : null,
+      coverLetter: `Hola equipo de ${job.company}:\n\nMe encantaría unirme como ${job.title}. Esta es una carta ficticia creada para la demo de Landeo.`,
+      coverLetterGeneratedAt: appliedAt,
+      coverLetterUsageStatus: null,
+      tracking: {
+        stage: entry.stage,
+        notes: entry.notes,
+        nextAction: entry.nextAction,
+        nextActionAt: null,
+        updatedAt,
+      },
+      job,
+      events: [
+        { id: `${id}-sent`, applicationId: id, type: "sent", message: "Candidatura enviada (demo)", createdAt: appliedAt, readAt: appliedAt },
+      ],
+    };
+  });
+}

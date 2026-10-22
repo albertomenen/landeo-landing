@@ -52,7 +52,7 @@ import { GuidedCoverLetter } from "./GuidedCoverLetter";
 import { SupportChat } from "./SupportChat";
 import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
-import { marketingDemoJobs } from "../lib/marketing-demo";
+import { marketingDemoApplications, marketingDemoJobs } from "../lib/marketing-demo";
 import { applicationGuide } from "../lib/application-guidance";
 import { trackProductEvent } from "../lib/analytics";
 
@@ -514,7 +514,8 @@ export default function ProductApp({
     event.preventDefault();
     setMobileNav(false);
     if (nextView === activeView) return;
-    window.history.pushState({ landeoDashboard: true }, "", href);
+    // The demo has a single URL; switch views in place.
+    if (!demo) window.history.pushState({ landeoDashboard: true }, "", href);
     setApplicationTargetId(null);
     setActiveView(nextView);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -564,7 +565,9 @@ export default function ProductApp({
     ) : activeView === "auto-apply" ? (
       <AutoApplyView user={user} profile={profile} pro={pro} locale={locale} />
     ) : activeView === "applications" ? (
-      <ApplicationsView user={user} locale={locale} targetId={applicationTargetId} onSelectApplication={clearApplicationTarget} />
+      <ApplicationsView user={user} locale={locale} demo={demo} targetId={applicationTargetId} onSelectApplication={clearApplicationTarget} />
+    ) : demo ? (
+      <DemoUnavailable locale={locale} />
     ) : activeView === "cover-letter" ? (
       <CoverLetterView
         user={user}
@@ -629,7 +632,7 @@ export default function ProductApp({
                   href={demo ? "/demo/marketing" : item.href}
                   data-no-transition="true"
                   onClick={(event) => {
-                    if (!demo) navigateDashboard(event, item.id, item.href);
+                    navigateDashboard(event, item.id, item.href);
                   }}
                   className={activeView === item.id ? "active" : ""}
                   data-tour={item.id === "applications" ? "applications-nav" : undefined}
@@ -680,8 +683,7 @@ export default function ProductApp({
                 href={demo ? "/demo/marketing" : "/app/profile/universal"}
                 data-no-transition="true"
                 onClick={(event) => {
-                  if (!demo)
-                    navigateDashboard(event, "universal", "/app/profile/universal");
+                  navigateDashboard(event, "universal", "/app/profile/universal");
                 }}
               >
                 {readiness.ready
@@ -758,7 +760,7 @@ export default function ProductApp({
                 href={demo ? "/demo/marketing" : item.href}
                 data-no-transition="true"
                 onClick={(event) => {
-                  if (!demo) navigateDashboard(event, item.id, item.href);
+                  navigateDashboard(event, item.id, item.href);
                 }}
                 data-tour={item.id === "applications" ? "applications-nav" : undefined}
                 className={
@@ -2135,14 +2137,36 @@ function AutoApplyView({
   );
 }
 
+function DemoUnavailable({ locale }: { locale: DashboardLocale }) {
+  return (
+    <>
+      <header className="view-header">
+        <div>
+          <span className="overline">DEMO</span>
+          <h1>{localized(locale, "Disponible en tu cuenta", "Available in your account")}</h1>
+          <p>
+            {localized(
+              locale,
+              "Esta sección usa datos reales. En la demo puedes explorar Empleos y Candidaturas.",
+              "This section uses real data. The demo covers Jobs and Applications.",
+            )}
+          </p>
+        </div>
+      </header>
+    </>
+  );
+}
+
 function ApplicationsView({
   user,
   locale,
+  demo = false,
   targetId,
   onSelectApplication,
 }: {
   user: User | null;
   locale: DashboardLocale;
+  demo?: boolean;
   targetId: string | null;
   onSelectApplication: () => void;
 }) {
@@ -2164,6 +2188,13 @@ function ApplicationsView({
   const scrolledTargetRef = useRef<string | null>(null);
   const appliedTargetRef = useRef<string | null>(null);
   const refresh = useCallback(async () => {
+    if (demo) {
+      // Keep local edits to demo applications; only seed them once.
+      setItems((current) => current.length ? current : marketingDemoApplications());
+      setSelected((current) => current ?? marketingDemoApplications()[0] ?? null);
+      setLoading(false);
+      return;
+    }
     if (!user) {
       setLoading(false);
       return;
@@ -2196,12 +2227,12 @@ function ApplicationsView({
     } finally {
       setLoading(false);
     }
-  }, [user, locale, targetId]);
+  }, [demo, user, locale, targetId]);
   useEffect(() => {
     refresh();
   }, [refresh]);
   // A poll landing mid-save would overwrite the optimistic stage with stale data.
-  useVisibleInterval(refresh, 15_000, !savingTracking);
+  useVisibleInterval(refresh, 15_000, !demo && !savingTracking);
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
@@ -2254,7 +2285,7 @@ function ApplicationsView({
     );
     setSelected({ ...selected, tracking: nextTracking });
     try {
-      await updateApplicationTracking(selected.id, {
+      if (!demo) await updateApplicationTracking(selected.id, {
         stage,
         notes: trackingNotes,
         nextAction,
@@ -2281,7 +2312,7 @@ function ApplicationsView({
     }
   };
   const guide = selected ? applicationGuide(selected, locale) : null;
-  if (!user)
+  if (!user && !demo)
     return (
       <SignInState
         locale={locale}
@@ -2322,7 +2353,7 @@ function ApplicationsView({
             : localized(locale, "Actualizar ahora", "Refresh now")}
         </m.button>
       </header>
-      {user.email?.trim().toLowerCase() === "alberto.menendez89@gmail.com" && (
+      {(demo || user?.email?.trim().toLowerCase() === "alberto.menendez89@gmail.com") && (
         <MarketingPipelineDemo locale={locale} />
       )}
       <div className="applications-layout">
