@@ -623,3 +623,18 @@ test("city autocomplete matches Spanish names such as Ciudad de México", async 
   const names = [...mexico[3].matchAll(/"([^"]+)"/g)].map((match) => normalize(match[1]));
   assert.ok(names.some((name) => name.startsWith(normalize("Ciudad de Mexico"))));
 });
+
+test("searching for a place finds its jobs and never leaves the feed empty", async () => {
+  const landeo = await readFile(new URL("lib/landeo.ts", root), "utf8");
+  const productApp = await readFile(new URL("components/ProductApp.tsx", root), "utf8");
+  // The search also queries the location column, with the usual city spellings.
+  assert.match(landeo, /function requestedSearchFilter[\s\S]*location\.ilike/);
+  assert.match(landeo, /requestedFilter=options\.search\?requestedSearchFilter\(options\.search\)/);
+  // A searched place overrides the profile city and the sponsorship filter.
+  assert.match(landeo, /searchedMarket=options\.search\?resolveCountryCode\(""/);
+  assert.match(landeo, /searchedMarket\|\|isJobWorkAuthorizationCompatible/);
+  // The client matches on location and falls back to remote roles.
+  assert.match(productApp, /citySearchTerms\(value\)/);
+  assert.match(productApp, /searchFallback/);
+  assert.match(productApp, /job\.workMode === "remote"/);
+});

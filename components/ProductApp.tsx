@@ -23,6 +23,7 @@ import {
 } from "motion/react";
 import { statusCopy, type Job } from "../lib/fixtures";
 import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
+import { citySearchTerms } from "../lib/job-location";
 import {
   coverLetterReadiness,
   deleteCurrentAccount,
@@ -215,6 +216,10 @@ function matchesJobQuery(job: Job, query: string) {
   if (!value) return true;
   const haystack = `${job.title} ${job.company} ${job.industry} ${job.skills.join(" ")}`;
   if (haystack.toLowerCase().includes(value.toLowerCase())) return true;
+  // People also search by place ("Ciudad de México", "Madrid"). Match the job
+  // location too, including the usual spellings of a city.
+  const location = (job.location ?? "").toLowerCase();
+  if (location && [value, ...citySearchTerms(value)].some((term) => term && location.includes(term.toLowerCase()))) return true;
   return queryAliases.some((group) => group.match.test(value) && group.terms.test(haystack));
 }
 type EarlyCareerFilter = "all" | "internship" | "junior";
@@ -910,22 +915,25 @@ function JobsView({
     refilling.current = true;
     void refresh({ refill: true }).finally(() => { refilling.current = false; });
   }, [demo, refresh]);
-  const filtered = useMemo(
-    () =>
-      jobs.filter(
-        (job) =>
-          (mode === "all" || job.applyCapability === mode) &&
-          (workMode === "all" || job.workMode === workMode) &&
-          (market === "all" ||
-            String(
-              job.market || job.metadata?.market_country || "",
-            ).toUpperCase() === market) &&
-          (careerLevel === "all" || jobCareerLevel(job) === careerLevel) &&
-          matchesIndustry(job, industry) &&
-          matchesJobQuery(job, query),
-      ),
-    [jobs, mode, workMode, market, careerLevel, industry, query],
-  );
+  const { filtered, searchFallback } = useMemo(() => {
+    const base = jobs.filter(
+      (job) =>
+        (mode === "all" || job.applyCapability === mode) &&
+        (workMode === "all" || job.workMode === workMode) &&
+        (market === "all" ||
+          String(
+            job.market || job.metadata?.market_country || "",
+          ).toUpperCase() === market) &&
+        (careerLevel === "all" || jobCareerLevel(job) === careerLevel) &&
+        matchesIndustry(job, industry),
+    );
+    const matching = base.filter((job) => matchesJobQuery(job, query));
+    if (matching.length || !query.trim()) return { filtered: matching, searchFallback: false };
+    // Nothing matches the search (for instance a city without openings): show
+    // the remote roles the feed already loaded instead of an empty screen.
+    const remote = base.filter((job) => job.workMode === "remote");
+    return { filtered: remote, searchFallback: remote.length > 0 };
+  }, [jobs, mode, workMode, market, careerLevel, industry, query]);
   const markets = useMemo(
     () =>
       Array.from(
@@ -1329,6 +1337,7 @@ function JobsView({
           </div>
         </m.aside>
         <section className="deck-panel">
+          {searchFallback&&<div className="jobs-feed-error" role="status">{localized(locale,`No hay ofertas para «${query.trim()}». Te mostramos primero las remotas.`,`No jobs for “${query.trim()}”. Showing remote roles first.`)}</div>}
           {feedError&&job&&<div className="jobs-feed-error" role="alert">{localized(locale,"No hemos podido actualizar las ofertas. Puedes seguir viendo las que ya cargaron.","We couldn’t refresh jobs. You can still browse the jobs already loaded.")} <button type="button" onClick={()=>refresh()}>{localized(locale,"Reintentar","Retry")}</button></div>}
           <div className="deck-count">
             <span>

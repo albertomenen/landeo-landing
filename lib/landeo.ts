@@ -1,7 +1,7 @@
 import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
-import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,isJobLocationCompatible} from "./job-location";
+import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,citySearchTerms,isJobLocationCompatible} from "./job-location";
 import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
 import {requestBillingAcceptance} from "./billing-consent";
 import {trackProductEvent} from "./analytics";
@@ -96,6 +96,13 @@ function searchTerms(value:string){
   const group=jobSearchGroups.find(item=>item.match.test(safe));
   return Array.from(new Set([safe,...(group?.terms??[])]));
 }
+// An explicit search can also be a place ("Ciudad de México"): add the job
+// location, with the usual spellings of a city, on top of title/company/industry.
+function requestedSearchFilter(value:string){
+  const base=jobSearchFilter(value);
+  const places=Array.from(new Set([...searchTerms(value),...citySearchTerms(value)])).map(term=>term.replace(/[%_(),.*]/g," ").trim()).filter(Boolean).map(term=>`location.ilike.%${term}%`);
+  return [base,...places].filter(Boolean).join(",");
+}
 function jobSearchFilter(value:string){
   return searchTerms(value).flatMap(term=>["title","company","industry"].map(field=>`${field}.ilike.%${term}%`)).join(",");
 }
@@ -154,7 +161,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   const recent=activeJobs().order("published_at",{ascending:false}).limit(Math.min(limit,80));
   const automatic=activeJobs().eq("application_capability","automatic").order("published_at",{ascending:false}).limit(50);
   const roleFilter=matchProfile?.role?jobSearchFilter(matchProfile.role):"";
-  const requestedFilter=options.search?jobSearchFilter(options.search):"";
+  const requestedFilter=options.search?requestedSearchFilter(options.search):"";
   const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(100):null;
   const requestedSearch=requestedFilter?activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(100):null;
   const internshipFilter="seniority.ilike.%Internship%,title.ilike.%intern%,title.ilike.%práctic%,title.ilike.%practicante%,title.ilike.%beca%,title.ilike.%trainee%,title.ilike.%apprentice%,title.ilike.%working student%,title.ilike.%co-op%,title.ilike.%placement%,contract_type.ilike.%intern%";
@@ -165,6 +172,11 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     : null;
   const remoteFilter="work_mode.ilike.%remot%,location.ilike.%remote%,location.ilike.%remoto%";
   const remoteJobs=activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(100);
+  // Searching for a place ("Ciudad de México") overrides the profile city for
+  // this search: otherwise a Barcelona profile can never see Mexico City jobs,
+  // and sponsorship rules would hide them as well.
+  const searchedMarket=options.search?resolveCountryCode("",options.search):"";
+  if(searchedMarket){candidateCity=options.search||"";candidateCountry="";}
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const cityFilter=cityLocationFilter(candidateCity);
   // A general recent sample can contain hundreds of jobs while still leaving
@@ -213,7 +225,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   const hiddenFingerprints=await hiddenFingerprintsReady;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()]
     .filter(row=>!hidden.has(row.id)&&!hiddenFingerprints.has(jobFingerprint(row)))
-    .filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile))
+    .filter(row=>searchedMarket||isJobWorkAuthorizationCompatible(row,matchProfile))
     .filter(row=>isJobLocationCompatible({location:row.location||"",market:String(row.metadata?.market_country||""),workMode:workMode(row.work_mode),metadata:row.metadata??{}},candidateCity,candidateCountry))
     .filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile));
   // The expansion pass re-sees the primary rows; only ask about new ones.
