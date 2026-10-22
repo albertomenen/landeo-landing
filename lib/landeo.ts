@@ -1,7 +1,11 @@
 import {FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
-import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter} from "./job-location";
+import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,isJobLocationCompatible} from "./job-location";
+import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
+import {requestBillingAcceptance} from "./billing-consent";
+import {trackProductEvent} from "./analytics";
+import {resumeFormat,uploadCvWithRetry} from "./cv-upload";
 import {calculateJobMatch,isJobProfessionallyRelevant,isJobWorkAuthorizationCompatible,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -115,6 +119,7 @@ export async function deleteCurrentAccount(){const client=createSupabaseBrowserC
 
 async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:(jobs:Job[])=>void){
   const client=createSupabaseBrowserClient();
+  const salaryRatesPromise=loadSalaryRates();
   const {data:session}=await client.auth.getSession();
   let hidden=new Set<string>();let hiddenFingerprintsReady:Promise<Set<string>>=Promise.resolve(new Set());let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
   if(session.session?.user){
@@ -183,12 +188,23 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     activeJobs().in("work_mode",["Remoto","Híbrido"]).order("published_at",{ascending:false}).limit(60),
   ];
   const defaultQueries=[recent,automatic,earlyCareer,remoteJobs,...focused,...localQueries,...(roleFocused?[roleFocused]:[]),...(localRoleFocused?[localRoleFocused]:[]),...(marketRoleFocused?[marketRoleFocused]:[]),...(remoteRoleFocused?[remoteRoleFocused]:[]),...(requestedSearch?[requestedSearch]:[])];
-  const primaryQueries=careerFocused?[careerFocused.limit(36)]:requestedFilter?[
+  const salaryQueries=["USD","EUR","GBP"].map(currency=>{
+    let query=activeJobs().or(remoteFilter).gt("salary_min",0).eq("metadata->>salary_currency",currency).in("metadata->>salary_interval",["year","yearly","annual","annually","per-year-salary","month","monthly","per-month-salary","week","weekly"]);
+    if(candidateMarket)query=query.in("metadata->>market_country",[candidateMarket,"REMOTE"]);
+    if(requestedFilter||roleFilter)query=query.or(requestedFilter||roleFilter);
+    if(options.careerLevel)query=query.or(options.careerLevel==="internship"?internshipFilter:juniorFilter);
+    // Salary discovery is optional: a slow/unavailable query must not block
+    // the normal first batch or hide otherwise available jobs.
+    return Promise.resolve(query.order("salary_min",{ascending:false}).limit(8).abortSignal(AbortSignal.timeout(1800))).then(result=>result.error?{data:[],error:null}:result).catch(()=>({data:[],error:null}));
+  });
+  const primaryQueries=careerFocused?[careerFocused.limit(36),...salaryQueries]:requestedFilter?[
     activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(36),
+    ...salaryQueries,
   ]:roleFilter?[
     ...(cityFilter?[activeJobs().or(roleFilter).or(cityFilter).order("published_at",{ascending:false}).limit(24)]:[]),
     activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(24),
-  ]:[activeJobs().order("published_at",{ascending:false}).limit(24),activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(24)];
+    ...salaryQueries,
+  ]:[activeJobs().order("published_at",{ascending:false}).limit(24),activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(24),...salaryQueries];
   const primaryResults=await Promise.all(primaryQueries);
   const knownTargets=new Set<string>();const checkedTargets=new Set<string>();
   const prepareJobs=async(results:typeof primaryResults)=>{
@@ -198,6 +214,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()]
     .filter(row=>!hidden.has(row.id)&&!hiddenFingerprints.has(jobFingerprint(row)))
     .filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile))
+    .filter(row=>isJobLocationCompatible({location:row.location||"",market:String(row.metadata?.market_country||""),workMode:workMode(row.work_mode),metadata:row.metadata??{}},candidateCity,candidateCountry))
     .filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile));
   // The expansion pass re-sees the primary rows; only ask about new ones.
   const uncheckedIds=rows.map(row=>row.id).filter(id=>!checkedTargets.has(id));
@@ -210,7 +227,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   const seenFingerprints=new Set<string>();
   const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity){
-    return prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)).slice(0,limit);
+    return prioritizeHighSalaryRemote(prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)),candidateCity,candidateCountry,await salaryRatesPromise).slice(0,limit);
   }
   return available.slice(0,limit);
   };
@@ -301,14 +318,15 @@ export type WebOnboardingAnswers={
   blocker:string;outcome:string;source:string;promoCode:string;
 };
 
-export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en"}){
+export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en";onUploadAttempt?:(attempt:number)=>void}){
   const client=createSupabaseBrowserClient();
   let session:Awaited<ReturnType<typeof getResilientSession>>;
   try{session=await getResilientSession(600)}catch{throw new Error(input.locale==="es"?"No hemos podido verificar tu sesión ahora mismo. Tus respuestas siguen guardadas; espera unos segundos y vuelve a intentarlo.":"We couldn't verify your session right now. Your answers are still saved; wait a few seconds and try again.")}
   const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
-  if(input.resume.size>10*1024*1024)throw new Error(input.locale==="es"?"El CV no puede superar 10 MB.":"Your résumé must be 10 MB or smaller.");
-  const extension=resumeExtension(input.resume.name);if(!extension)throw new Error(input.locale==="es"?"El CV debe ser PDF, DOC o DOCX.":"Your résumé must be a PDF, DOC or DOCX file.");
-  const cvPath=`${user.id}/cv.${extension}`;const{error:uploadError}=await client.storage.from("cvs").upload(cvPath,input.resume,{contentType:RESUME_CONTENT_TYPES[extension],upsert:true});if(uploadError)throw uploadError;
+  const {extension,contentType}=resumeFormat(input.resume,input.locale);
+  const cvPath=`${user.id}/cv.${extension}`;
+  await uploadCvWithRetry(()=>client.storage.from("cvs").upload(cvPath,input.resume,{contentType,upsert:true}),input.locale,input.onUploadAttempt);
+  input.onUploadAttempt?.(0);
   const{data:existing,error:profileError}=await client.from("profiles").select("full_name,email,phone,universal_profile,privacy_consent_at,automatic_application_consent_at").eq("id",user.id).maybeSingle();if(profileError)throw profileError;
   const metadataName=String(user.user_metadata?.full_name??user.user_metadata?.name??"");const fullName=existing?.full_name||metadataName;
   const experienceYears:Record<string,number>={internship:0,entry:0,junior:2,mid:4,senior:7,expert:10};
@@ -362,7 +380,27 @@ export async function loadSavedJobs(){
   savedJobsCache.set(key,{expiresAt:Date.now()+DASHBOARD_CACHE_MS,value});return value;
 }
 
-export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){const client=createSupabaseBrowserClient();let promotionCode="";const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";if(action==="checkout"){const user=await currentUser();if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}}const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}window.location.assign(data.url)}
+export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){
+  const client=createSupabaseBrowserClient();
+  const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;
+  const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");
+  const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";
+  const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";
+  let promotionCode="";
+  const acceptance=action==="checkout"?await requestBillingAcceptance(selectedPlan,locale):null;
+  if(action==="checkout"&&!acceptance)return false;
+  if(action==="checkout"){
+    const user=await currentUser();
+    if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}
+  }
+  const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo,acceptance}});
+  if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}
+  if(error)throw error;
+  if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");
+  try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}
+  if(action==="checkout")trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"billing_confirmation"});
+  window.location.assign(data.url);return true;
+}
 
 export async function hasWebPro(knownUser?:User|null){const user=knownUser??await currentUser();if(!user)return false;// Several live rows can coexist (upgrade, trial plus paid plan); any current one grants Pro.
   const{data}=await createSupabaseBrowserClient().from("stripe_subscriptions").select("status,current_period_end").eq("user_id",user.id).in("status",["active","trialing"]);return((data??[])as Array<{current_period_end:string|null}>).some(row=>!row.current_period_end||new Date(row.current_period_end).getTime()>Date.now())}
@@ -396,10 +434,20 @@ export async function loadAutoApplyDashboard(profile?:CandidateProfile|null):Pro
 
 export async function saveAutoApplySettings(input:AutoApplySettings){
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para configurar Auto Apply.");
-  if(!input.roles.length)throw new Error("Añade al menos un puesto objetivo.");
   const clean=(values:string[])=>Array.from(new Set(values.map(value=>value.trim()).filter(Boolean))).slice(0,20);
+  if(input.enabled&&!clean(input.roles).length)throw new Error("Añade al menos un puesto objetivo.");
   const now=new Date().toISOString();const{error}=await client.from("auto_apply_settings").upsert({user_id:user.id,enabled:input.enabled,roles:clean(input.roles),locations:clean(input.locations),work_modes:clean(input.workModes),industries:clean(input.industries),seniority_levels:clean(input.seniorityLevels),excluded_companies:clean(input.excludedCompanies),minimum_match:Math.max(50,Math.min(100,Math.round(input.minimumMatch))),daily_limit:Math.max(1,Math.min(10,Math.round(input.dailyLimit))),next_run_at:input.enabled?now:null,updated_at:now},{onConflict:"user_id"});if(error)throw error;
-  if(input.enabled){const{error:runError}=await client.functions.invoke("auto-apply-runner",{body:{source:"dashboard"}});if(runError instanceof FunctionsHttpError){const payload=await runError.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"Auto Apply se activó, pero no pudo ejecutar la primera búsqueda.")}if(runError)throw runError;}
+  // Saving and running are separate outcomes. An invocation failure must not
+  // pretend that the settings were rolled back after the successful upsert.
+  if(input.enabled){
+    try{
+      const{data,error:runError}=await client.functions.invoke("auto-apply-runner",{body:{source:"dashboard"}});
+      if(runError instanceof FunctionsHttpError){const payload=await runError.context.json().catch(()=>null)as{message?:string}|null;return{runWarning:payload?.message||"No se pudo completar la primera búsqueda."}}
+      if(runError)return{runWarning:runError.message||"No se pudo completar la primera búsqueda."};
+      return{runWarning:null,result:data};
+    }catch{return{runWarning:"La configuración se guardó, pero no se pudo conectar con la primera búsqueda."}}
+  }
+  return{runWarning:null};
 }
 
 export async function runAutoApplyNow(){

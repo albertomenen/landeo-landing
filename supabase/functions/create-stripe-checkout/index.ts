@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/http.ts";
 import { hasActiveStripeSubscription } from "../_shared/subscription.ts";
+import {BILLING_POLICY_VERSION,billingConsent,billingPolicyText,validBillingConsent} from "../_shared/billing-policy.ts";
+import {documents} from "../../../lib/legal-documents.ts";
 
 type Plan = "starter" | "pro" | "sprint";
 
@@ -109,7 +111,9 @@ Deno.serve(async (request) => {
       plan?: Plan;
       locale?: "es" | "en";
       returnTo?: string;
+      acceptance?: unknown;
     };
+    if(body.action!=="portal"&&!validBillingConsent(body.acceptance))return json({message:body.locale==="en"?"Please review and accept the current billing conditions before continuing.":"Revisa y acepta las condiciones actuales de pago antes de continuar."},400);
     const plan = selectedPlan(body.plan);
     const { data: existingCustomer } = await admin.from("stripe_customers")
       .select("stripe_customer_id").eq("user_id", userData.user.id)
@@ -151,6 +155,12 @@ Deno.serve(async (request) => {
     }
 
     const limit = applicationLimit(plan);
+    const locale=body.locale==="en"?"en":"es";
+    const acceptanceId=crypto.randomUUID();
+    const general=documents[locale].terms;
+    const termsSnapshot=[general.title,`Billing terms version: ${BILLING_POLICY_VERSION}`,general.intro,general.notice,...general.sections.flatMap(section=>[section.title,...(section.paragraphs??[]),...(section.bullets??[])])].join("\n\n");
+    const {error:acceptanceError}=await admin.from("billing_acceptances").insert({id:acceptanceId,user_id:userData.user.id,policy_version:BILLING_POLICY_VERSION,locale,plan,terms_accepted:true,immediate_start:true,consent_text:`${billingConsent[locale].terms}\n\n${billingConsent[locale].immediate}`,policy_snapshot:billingPolicyText(locale),terms_snapshot:termsSnapshot});
+    if(acceptanceError)throw new Error(locale==="es"?"No pudimos guardar la aceptación. No se ha iniciado ningún pago; vuelve a intentarlo.":"We couldn’t record acceptance. No payment has been started; please try again.");
     const params = new URLSearchParams();
     params.set("mode", "subscription");
     params.set("customer", customerId);
@@ -176,11 +186,17 @@ Deno.serve(async (request) => {
     params.set("metadata[supabase_user_id]", userData.user.id);
     params.set("metadata[plan]", plan);
     params.set("metadata[application_limit]", limit);
+    params.set("metadata[billing_acceptance_id]",acceptanceId);
+    params.set("metadata[billing_policy_version]",BILLING_POLICY_VERSION);
+    params.set("custom_text[submit][message]",locale==="es"?`Suscripción con renovación automática hasta que la canceles. Cancelar no solicita un reembolso. Consulta la [política de pagos](${siteUrl}/refunds/${BILLING_POLICY_VERSION}?lang=es). Conservas tus derechos legales.`:`Subscription renews automatically until cancelled. Cancellation alone does not request a refund. Read the [billing policy](${siteUrl}/refunds/${BILLING_POLICY_VERSION}?lang=en). Your statutory rights remain.`);
     params.set("subscription_data[metadata][supabase_user_id]", userData.user.id);
     params.set("subscription_data[metadata][plan]", plan);
     params.set("subscription_data[metadata][application_limit]", limit);
+    params.set("subscription_data[metadata][billing_acceptance_id]",acceptanceId);
     const session = await stripeRequest("/checkout/sessions", params);
     if (!session.url) throw new Error("Stripe no devolvió la URL de pago.");
+    const {error:linkError}=await admin.from("billing_acceptances").update({stripe_checkout_id:session.id}).eq("id",acceptanceId);
+    if(linkError)throw new Error("No pudimos asociar el checkout. No se ha realizado ningún cobro.");
     return json({ url: session.url });
   } catch (error) {
     return json({

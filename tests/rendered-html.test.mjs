@@ -63,7 +63,7 @@ test("loads Microsoft Clarity only after analytics consent and masks private rou
     new URL("components/GoogleAnalytics.tsx", root),
     "utf8",
   );
-  const legal = await readFile(new URL("components/LegalPage.tsx", root), "utf8");
+  const legal = await readFile(new URL("lib/legal-documents.ts", root), "utf8");
   assert.match(layout, /clarityId="yi6pc0lycq"/);
   assert.match(analytics, /consent !== "granted"/);
   assert.match(analytics, /www\.clarity\.ms\/tag/);
@@ -96,8 +96,7 @@ test("renders the main product route", async () => {
   assert.match(html, /Empleos para ti/);
   assert.match(html, /Postularme/);
   assert.match(html, /Navegación móvil/);
-  assert.match(html, /Buscamos ofertas que encajen contigo/);
-  assert.match(html, /jobs-loading-orbit/);
+  assert.match(html, /Cargando/);
   assert.match(html, /aria-busy="true"/);
 });
 
@@ -588,8 +587,8 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(landeo, /includeWorldwide/);
   assert.match(landeo, /work_mode",\["Remoto","Híbrido"\]/);
   assert.match(landeo, /profile\?\.universal_profile/);
-  assert.match(jobLocation, /global\|worldwide\|anywhere/);
-  assert.match(jobLocation, /europe\|europa\|emea/);
+  assert.match(jobLocation, /worldwide\|global\|anywhere/);
+  assert.match(jobLocation, /europe\|europa\|european\|eu\|eea\|emea/);
   assert.match(styles, /@keyframes landeo-confetti/);
   assert.match(productApp, /automaticEverywhere/);
   assert.match(productApp, /router\.push\(`\/app\/jobs\/\$\{job\.id\}`\)/);

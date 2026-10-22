@@ -1,4 +1,5 @@
 import type { Job } from "./fixtures";
+type LocationJob=Pick<Job,"location"|"market"|"workMode"|"metadata">;
 
 function normalizeLocation(value: string) {
   return value
@@ -46,6 +47,8 @@ const countryAliases: Record<string, string[]> = {
   AE: ["united arab emirates", "uae", "emiratos arabes unidos", "ae"],
   SG: ["singapore", "singapur", "sg"],
   ZA: ["south africa", "sudafrica", "za"],
+  CL: ["chile", "cl"], EC: ["ecuador", "ec"], UY: ["uruguay", "uy"],
+  CR: ["costa rica", "cr"], PA: ["panama", "pa"],
 };
 
 function countryCode(country: string, location: string) {
@@ -84,12 +87,45 @@ export function cityLocationFilter(city: string) {
   return citySearchTerms(city).map(term => term.replace(/[%_(),.*]/g, " ").trim()).filter(Boolean).map(term => `location.ilike.%${term}%`).join(",");
 }
 
-function locationRelevance(job: Job, city: string, country: string) {
+export function remoteLocationEligibility(job:LocationJob,city:string,country:string):boolean|null{
+  if(job.workMode!=="remote")return false;
+  const candidate=countryCode(country,city),place=normalizeLocation(job.location);
+  const explicit=job.metadata?.auto_apply_allowed_countries;
+  const listed=job.metadata?.listed_countries;
+  const declared=Array.isArray(explicit)&&explicit.length?explicit:Array.isArray(listed)&&listed.length?listed:[];
+  if(declared.length)return Boolean(candidate&&declared.some(code=>String(code).toUpperCase()===candidate));
+  if(/\b(worldwide|global|anywhere)\b/.test(place)||job.metadata?.remote_scope==="worldwide")return true;
+  const regions:Array<[RegExp,string[]]>=[
+    [/\b(latam|latin america|latinamerica|latinoamerica|america latina)\b/,["MX","AR","CO","PE","BR","CL","EC","UY","CR","PA"]],
+    [/\b(europe|europa|european|eu|eea|emea)\b/,["ES","PT","GB","FR","DE","IT","NL","AT","BE","CH","CZ","DK","EE","FI","IE","NO","PL","SE","RO",...(/\bemea\b/.test(place)?["ZA","AE"]:[])]],
+    [/\b(namer|north america)\b/,["US","CA","MX"]],
+    [/\b(amer|americas)\b/,["US","CA","MX","AR","CO","PE","BR","CL","EC","UY","CR","PA"]],
+    [/\b(apac|asia pacific)\b/,["AU","NZ","IN","JP","KR","SG","HK","TW"]],
+  ];
+  const regionsFound=regions.filter(([pattern])=>pattern.test(place));
+  const named=Object.entries(countryAliases).filter(([,names])=>names.some(name=>name.length>2?` ${place} `.includes(` ${name} `):new RegExp(`\\b${name.toUpperCase()}\\b`).test(job.location))).map(([code])=>code);
+  if(regionsFound.length)return Boolean(candidate&&(named.includes(candidate)||regionsFound.some(([,codes])=>codes.includes(candidate))));
+  if(named.length)return Boolean(candidate&&named.includes(candidate));
+  const market=String(job.market||"").toUpperCase();
+  if(market&&market!=="REMOTE")return Boolean(candidate&&market===candidate);
+  // Unknown eligibility stays visible, but is never promoted as a verified fit.
+  return null;
+}
+
+export function isJobLocationCompatible(job:LocationJob,city:string,country:string){
+  if(job.workMode==="remote")return remoteLocationEligibility(job,city,country)!==false;
+  const candidate=countryCode(country,city),market=countryCode(job.market,job.location);
+  if(candidate&&market&&candidate!==market)return false;
+  return true;
+}
+
+function locationRelevance(job: LocationJob, city: string, country: string) {
+  if(!isJobLocationCompatible(job,city,country))return null;
   const place = normalizeLocation(job.location);
   const cityName = normalizeLocation(city.split(",")[0] ?? "");
   const candidateCountry = countryCode(country, city);
   const jobCountry = String(job.market ?? "").toUpperCase();
-  if (!cityName) return 0;
+  if (!cityName&&job.workMode!=="remote") return null;
   if (citySearchTerms(city).some(term => ` ${place} `.includes(` ${normalizeLocation(term)} `))) return 0;
   const aliases =
     countryAliases[candidateCountry] ??
@@ -109,18 +145,7 @@ function locationRelevance(job: Job, city: string, country: string) {
     return genericCountry ? 1 : null;
   }
   if (countryMatch) return 1;
-  const remoteScope = place
-    .replace(/\b(remote|remoto)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (
-    !remoteScope ||
-    /\b(global|worldwide|anywhere)\b/.test(remoteScope)
-  )
-    return 2;
-  if (/\b(latam|latin america|latinamerica|latinoamerica|america latina)\b/.test(remoteScope) && ["MX", "AR", "CO", "PE", "BR"].includes(candidateCountry)) return 2;
-  if (/\b(europe|europa|emea)\b/.test(remoteScope) && ["ES", "PT", "GB", "FR", "DE", "IT", "NL", "AT", "BE", "CH", "CZ", "DK", "EE", "FI", "IE", "NO", "PL", "SE", "RO"].includes(candidateCountry)) return 2;
-  return null;
+  return 2;
 }
 
 export function prioritizeJobsByLocation(
@@ -139,11 +164,7 @@ export function prioritizeJobsByLocation(
 }
 
 function isRemoteJob(job: Job) {
-  return (
-    job.workMode === "remote" ||
-    String(job.market ?? "").toUpperCase() === "REMOTE" ||
-    /\b(remote|remoto)\b/.test(normalizeLocation(job.location))
-  );
+  return job.workMode === "remote";
 }
 
 /**
@@ -157,7 +178,7 @@ export function prioritizeJobsWithRemoteFallback(
   country: string,
   includeWorldwide = false,
 ) {
-  const ranked = jobs.map((job, index) => ({
+  const ranked = jobs.filter(job=>isJobLocationCompatible(job,city,country)).map((job, index) => ({
     job,
     index,
     relevance: locationRelevance(job, city, country),
@@ -187,9 +208,7 @@ export function prioritizeJobsWithRemoteFallback(
     (item) => !orderedIds.has(item.job.id),
   );
 
-  // With no nearby result, remote jobs are the safe default even when their
-  // source did not provide a precise geographic scope. Explicit worldwide
-  // mode additionally includes the rest of the compatible catalogue.
+  // Expansion never bypasses an explicitly incompatible country or region.
   if (!nearby.length || includeWorldwide) ordered.push(...worldwideRemainder);
   return ordered.map((item) => item.job);
 }

@@ -25,7 +25,7 @@ test('explicit country is authoritative and unrelated cities stay excluded', () 
 test('uses remote jobs before broad location fallbacks when a city has no jobs', () => {
   assert.deepEqual(
     prioritizeJobsWithRemoteFallback(jobs, 'Madrid', 'España').map(job => job.id),
-    ['eu', 'latam', 'us', 'city', 'district', 'cdmx', 'other'],
+    ['eu'],
   );
 });
 
@@ -36,6 +36,6 @@ test('keeps nearby jobs first and only expands globally when requested', () => {
   );
   assert.deepEqual(
     prioritizeJobsWithRemoteFallback(jobs, 'CDMX', 'México', true).map(job => job.id),
-    ['city', 'district', 'cdmx', 'latam', 'eu', 'us', 'other'],
+    ['city', 'district', 'cdmx', 'latam', 'other'],
   );
 });

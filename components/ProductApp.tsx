@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- These effects hydrate authenticated Supabase state and subscribe to external auth/application updates. */
 
 import Link from "./SafeLink";
+import JobsLoading from "./JobsLoading";
 import {
   useCallback,
   useEffect,
@@ -281,7 +282,9 @@ function money(job: Job, locale: DashboardLocale) {
       currency: job.salaryCurrency,
       maximumFractionDigits: 0,
     }).format(value);
-  return `${format(job.salaryMin)}–${format(job.salaryMax)}`;
+  const period=String(job.metadata?.salary_interval||"").toLowerCase();
+  const suffix=/^(year|yearly|annual|annually|per-year-salary|anual)$/.test(period)?localized(locale,"/año","/year"):/^(month|monthly|per-month-salary|mensual)$/.test(period)?localized(locale,"/mes","/month"):/^(week|weekly|per-week-salary)$/.test(period)?localized(locale,"/semana","/week"):/^(hour|hourly|per-hour-wage)$/.test(period)?"/h":"";
+  return `${format(job.salaryMin)}–${format(job.salaryMax)}${suffix}`;
 }
 function displayName(
   user: User | null,
@@ -563,7 +566,7 @@ export default function ProductApp({
         ensureIdentity={refreshIdentity}
       />
     ) : activeView === "auto-apply" ? (
-      <AutoApplyView user={user} profile={profile} pro={pro} locale={locale} />
+      <AutoApplyView user={user} profile={profile} pro={pro} locale={locale} identityLoading={identityLoading} />
     ) : activeView === "applications" ? (
       <ApplicationsView user={user} locale={locale} demo={demo} targetId={applicationTargetId} onSelectApplication={clearApplicationTarget} />
     ) : demo ? (
@@ -821,6 +824,7 @@ function JobsView({
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [feedError, setFeedError] = useState(false);
   const feedRequest = useRef(0);
   const handledJobs = useRef(new Set<string>());
   const [index, setIndex] = useState(0);
@@ -856,6 +860,7 @@ function JobsView({
     // already on screen (including the one being read) stay where they are.
     if (!refill) setLoading(true);
     setRefreshing(true);
+    setFeedError(false);
     if (demo) {
       setJobs([...marketingDemoJobs]);
       setIndex(0);
@@ -890,7 +895,7 @@ function JobsView({
           careerLevel: careerLevel === "all" ? undefined : careerLevel,
         }, publish));
     } catch (error) {
-      if(request === feedRequest.current)setNotice(error instanceof Error ? error.message : t.notices.loadError);
+      if(request === feedRequest.current){setFeedError(true);setNotice(error instanceof Error ? error.message : t.notices.loadError);}
     } finally {
       if(request === feedRequest.current){setLoading(false);setRefreshing(false);}
     }
@@ -1324,6 +1329,7 @@ function JobsView({
           </div>
         </m.aside>
         <section className="deck-panel">
+          {feedError&&job&&<div className="jobs-feed-error" role="alert">{localized(locale,"No hemos podido actualizar las ofertas. Puedes seguir viendo las que ya cargaron.","We couldn’t refresh jobs. You can still browse the jobs already loaded.")} <button type="button" onClick={()=>refresh()}>{localized(locale,"Reintentar","Retry")}</button></div>}
           <div className="deck-count">
             <span>
               {loading
@@ -1351,21 +1357,15 @@ function JobsView({
             initial={false}
             custom={cardDirection}
           >
-            {loading && !job ? (
+            {(loading || refreshing || query.trim()!==debouncedQuery) && !job ? (
               <m.div
                 key="loading"
-                className="empty-state jobs-loading-state"
-                role="status"
-                aria-live="polite"
-                aria-busy="true"
+                className="jobs-loading-state"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="jobs-loading-orbit" aria-hidden="true"><span>⌕</span></div>
-                <h2>{t.jobs.loadingTitle}</h2>
-                <p>{t.jobs.loadingDetail}</p>
-                <div className="jobs-loading-preview" aria-hidden="true"><i /><i /><i /></div>
+                <JobsLoading locale={locale} onRetry={()=>window.location.reload()} />
               </m.div>
             ) : job ? (
               <m.div
@@ -1434,6 +1434,7 @@ function JobsView({
                   </button>
                 </div>
                 <div className="feed-badges">
+                  {job.metadata?.salary_featured===true&&<span className="fresh-badge">{localized(locale,"Remoto · sueldo destacado","Remote · salary highlight")}</span>}
                   <span className="fresh-badge">
                     {job.source ?? t.jobs.offer}
                   </span>
@@ -1496,6 +1497,13 @@ function JobsView({
                   {localized(locale, "Ver oferta completa", "View full job")} <b>→</b>
                 </span>
               </m.div>
+            ) : feedError ? (
+              <div key="load-error" className="empty-state jobs-feed-error-panel" role="alert">
+                <span aria-hidden="true">!</span>
+                <h2>{localized(locale,"No pudimos cargar las ofertas","We couldn’t load jobs")}</h2>
+                <p>{localized(locale,"Esto no significa que no haya empleos. Comprueba tu conexión y vuelve a intentarlo.","This doesn’t mean there are no jobs. Check your connection and try again.")}</p>
+                <button type="button" className="button button-primary" onClick={()=>refresh()}>{localized(locale,"Reintentar búsqueda","Retry search")}</button>
+              </div>
             ) : (
               <m.div
                 key="empty"
@@ -1870,8 +1878,8 @@ function Paywall({
     try {
       window.localStorage.setItem("landeo-selected-plan", selectedPlan);
       trackProductEvent("paywall_checkout_clicked",{plan:selectedPlan,source:context.source});
-      trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"paywall"});
       await startStripe("checkout", selectedPlan);
+      setLoading(false);
     } catch (value) {
       trackProductEvent("stripe_checkout_failed",{plan:selectedPlan,source:"paywall"});
       setError(value instanceof Error ? value.message : t.error);
@@ -1926,7 +1934,7 @@ function Paywall({
           </button>
           <div className="plan-picker-footer">
             <span>◆ {locale === "es" ? "Pago seguro con Stripe" : "Secure payment with Stripe"}</span>
-            <span><Link href="/terms">{locale === "es" ? "Términos" : "Terms"}</Link><Link href="/privacy">{locale === "es" ? "Privacidad" : "Privacy"}</Link></span>
+            <span><Link href="/terms">{locale === "es" ? "Términos" : "Terms"}</Link><Link href="/refunds">{locale === "es" ? "Reembolsos" : "Refunds"}</Link><Link href="/privacy">{locale === "es" ? "Privacidad" : "Privacy"}</Link></span>
           </div>
         </div>
         <div className="plan-picker-visual" aria-hidden="true">
@@ -2022,16 +2030,21 @@ function OutcomeModal({
   );
 }
 
-function AutoApplyView({
+const autoApplyServices={load:loadAutoApplyDashboard,save:saveAutoApplySettings,run:runAutoApplyNow};
+export function AutoApplyView({
   user,
   profile,
   pro,
   locale,
+  identityLoading=false,
+  services=autoApplyServices,
 }: {
   user: User | null;
   profile: CandidateProfile | null;
   pro: boolean;
   locale: DashboardLocale;
+  identityLoading?:boolean;
+  services?:typeof autoApplyServices;
 }) {
   const [dashboard, setDashboard] = useState<AutoApplyDashboard | null>(null);
   const [form, setForm] = useState<AutoApplySettings | null>(null);
@@ -2040,55 +2053,78 @@ function AutoApplyView({
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const hydrated = useRef(false);
+  const [drafts,setDrafts]=useState({roles:"",locations:"",industries:"",excludedCompanies:""});
+  const hydratedUser=useRef<string|null>(null);
+  const requestId=useRef(0);
+  const consentRef=useRef<HTMLInputElement>(null);
+  const rolesRef=useRef<HTMLInputElement>(null);
+  const requirementsRef=useRef<HTMLDivElement>(null);
+  const baseReadiness=profileReadiness(profile);
+  const consentRecorded=Boolean(profile?.privacyConsentAt&&profile?.automaticConsentAt);
+  const readiness={...baseReadiness,ready:baseReadiness.ready&&consentRecorded,missing:[...baseReadiness.missing,...(!consentRecorded?["confirmar los consentimientos en el perfil"]:[])]};
   const refresh = useCallback(async () => {
+    if(identityLoading)return;
     if (!user) { setLoading(false); return; }
+    const request=++requestId.current;
     try {
-      const next = await loadAutoApplyDashboard(profile);
+      const next = await services.load(profile);
+      if(request!==requestId.current)return;
+      const initial=hydratedUser.current!==user.id;
       setDashboard(next);
-      setForm((current) => current ?? next.settings);
-      // Seed consent once; later polls must not re-check a box the user unchecked.
-      if (!hydrated.current) {
-        hydrated.current = true;
+      setForm((current) => initial||!current?next.settings:{...current,enabled:next.settings.enabled,lastRunAt:next.settings.lastRunAt,nextRunAt:next.settings.nextRunAt});
+      if(initial){
+        hydratedUser.current=user.id;
         setConfirmed(next.settings.enabled);
+        setDrafts({roles:next.settings.roles.join(", "),locations:next.settings.locations.join(", "),industries:next.settings.industries.join(", "),excludedCompanies:next.settings.excludedCompanies.join(", ")});
       }
-      setError("");
+      if(initial)setError("");
+      return next;
     } catch (value) {
-      setError(value instanceof Error ? value.message : localized(locale, "No pudimos cargar Auto Apply.", "We couldn't load Auto Apply."));
-    } finally { setLoading(false); }
-  }, [user, profile, locale]);
-  useEffect(() => { void refresh(); }, [refresh]);
-  const poll = useCallback(() => void refresh(), [refresh]);
-  useVisibleInterval(poll, 20_000, Boolean(dashboard?.settings.enabled) && !saving);
+      if(request===requestId.current)setError(value instanceof Error ? value.message : localized(locale, "No pudimos cargar Auto Apply.", "We couldn't load Auto Apply."));
+    } finally { if(request===requestId.current)setLoading(false); }
+  }, [user, profile, locale,identityLoading,services]);
+  useEffect(() => { void refresh();return ()=>{requestId.current+=1}; }, [refresh]);
+  useEffect(() => {
+    if (!dashboard?.settings.enabled) return;
+    const timer = window.setInterval(() => void refresh(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [dashboard?.settings.enabled, refresh]);
   const list = (value: string) => Array.from(new Set(value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)));
   const update = <Key extends keyof AutoApplySettings>(key: Key, value: AutoApplySettings[Key]) => setForm((current) => current ? { ...current, [key]: value } : current);
+  const updateList=(key:keyof typeof drafts,value:string)=>{setDrafts(current=>({...current,[key]:value}));update(key,list(value))};
   const save = async (enabled = form?.enabled ?? false) => {
     if (!form || saving) return;
+    if(enabled&&(!pro||!readiness.ready)){
+      setError(localized(locale,"Revisa los requisitos indicados para activar Auto Apply.","Review the requirements below to enable Auto Apply."));
+      requirementsRef.current?.focus();return;
+    }
+    if(enabled&&!form.roles.some(role=>role.trim())){setError(localized(locale,"Añade al menos un puesto objetivo.","Add at least one target role."));rolesRef.current?.focus();return}
     if (enabled && !confirmed) {
       setError(localized(locale, "Confirma la autorización antes de activar Auto Apply.", "Confirm the authorization before enabling Auto Apply."));
+      consentRef.current?.focus();
       return;
     }
     setSaving(true);setError("");setNotice("");
     try {
-      await saveAutoApplySettings({ ...form, enabled });
-      trackProductEvent(enabled ? "auto_apply_enabled" : "auto_apply_paused", { daily_limit: form.dailyLimit, minimum_match: form.minimumMatch });
-      setForm((current) => current ? { ...current, enabled } : current);
-      setNotice(enabled
-        ? localized(locale, "Auto Apply está activo. La primera búsqueda ya está en marcha.", "Auto Apply is active. The first search is already running.")
-        : localized(locale, "Configuración guardada. Auto Apply está pausado.", "Settings saved. Auto Apply is paused."));
-      await refresh();
+      const result=await services.save({ ...form, enabled });
+      setForm(current=>current?{...current,enabled}:current);
+      const latest=await refresh();
+      if(!enabled||latest?.settings.enabled)trackProductEvent(enabled?"auto_apply_enabled":"auto_apply_paused",{daily_limit:form.dailyLimit,minimum_match:form.minimumMatch});
+      if(enabled&&latest&&!latest.settings.enabled){setError(latest.lastRun?.errorMessage||localized(locale,"Auto Apply sigue pausado. Revisa el perfil y la suscripción.","Auto Apply is still paused. Check your profile and subscription."));setNotice("")}
+      else if(result?.runWarning){setError(localized(locale,"La configuración se ha guardado, pero la primera búsqueda no se completó. Revisa el estado y vuelve a intentarlo desde «Buscar ahora».","Settings were saved, but the first search did not complete. Check the status and retry using ‘Search now’."));setNotice("")}
+      else setNotice(enabled?localized(locale,"Configuración guardada. Consulta los contadores y la última ejecución para ver el resultado.","Settings saved. Check the counters and last run for the result."):localized(locale,"Configuración guardada. Auto Apply está pausado.","Settings saved. Auto Apply is paused."));
     } catch (value) {
       setError(value instanceof Error ? value.message : localized(locale, "No pudimos guardar la configuración.", "We couldn't save your settings."));
     } finally { setSaving(false); }
   };
   const runNow = async () => {
     if (saving) return;setSaving(true);setError("");setNotice("");
-    try { await runAutoApplyNow();trackProductEvent("auto_apply_run_requested");setNotice(localized(locale, "Búsqueda completada. Hemos actualizado los contadores.", "Search completed. Your counters are now up to date."));await refresh(); }
+    try { await services.run();trackProductEvent("auto_apply_run_requested");setNotice(localized(locale, "Solicitud procesada. Consulta la última ejecución y los contadores.", "Request processed. Check the last run and counters."));await refresh(); }
     catch (value) { setError(value instanceof Error ? value.message : localized(locale, "No pudimos ejecutar Auto Apply.", "We couldn't run Auto Apply.")); }
     finally { setSaving(false); }
   };
+  if(identityLoading)return <p className="inline-loading" role="status">{localized(locale,"Comprobando perfil y suscripción…","Checking profile and subscription…")}</p>;
   if (!user) return <SignInState locale={locale} title={localized(locale, "Inicia sesión para configurar Auto Apply", "Sign in to configure Auto Apply")} />;
-  const readiness = profileReadiness(profile);
   const stats = dashboard?.stats ?? { matched: 0, queued: 0, sent: 0, delivered: 0, actionRequired: 0, failed: 0 };
   const statItems = [
     [localized(locale, "Compatibles", "Matched"), stats.matched],
@@ -2109,26 +2145,32 @@ function AutoApplyView({
       </section>
       <div className="auto-apply-grid">
         <section className="auto-apply-form-card">
-          <div className="section-heading"><div><span className="overline">1 · PREFERENCIAS</span><h2>{localized(locale, "Define dónde debe postularte Landeo", "Tell Landeo where to apply")}</h2></div></div>
-          {loading || !form ? <p className="inline-loading">{localized(locale, "Cargando configuración…", "Loading settings…")}</p> : <div className="auto-apply-fields">
-            <label className="wide"><span>{localized(locale, "Puestos objetivo", "Target roles")}</span><small>{localized(locale, "Sepáralos con comas", "Separate with commas")}</small><input value={form.roles.join(", ")} onChange={(event) => update("roles", list(event.target.value))} placeholder={localized(locale, "Full Stack Developer, Frontend Engineer", "Full Stack Developer, Frontend Engineer")} /></label>
-            <label><span>{localized(locale, "Ubicaciones", "Locations")}</span><input value={form.locations.join(", ")} onChange={(event) => update("locations", list(event.target.value))} placeholder={localized(locale, "Barcelona, Madrid, Remoto", "Barcelona, Madrid, Remote")} /></label>
-            <label><span>{localized(locale, "Sectores", "Industries")}</span><input value={form.industries.join(", ")} onChange={(event) => update("industries", list(event.target.value))} placeholder={localized(locale, "SaaS, Tecnología, Farmacéutica", "SaaS, Technology, Pharma")} /></label>
+          <div className="auto-apply-section-heading"><span className="overline">{localized(locale,"1 · PREFERENCIAS","1 · PREFERENCES")}</span><h2>{localized(locale, "Define dónde debe postularte Landeo", "Tell Landeo where to apply")}</h2></div>
+          {loading ? <p className="inline-loading" role="status">{localized(locale, "Cargando configuración…", "Loading settings…")}</p> : !form ? <div role="alert"><p>{localized(locale,"No pudimos cargar tus preferencias.","We couldn’t load your preferences.")}</p><button type="button" className="button button-secondary" onClick={()=>{setLoading(true);void refresh()}}>{localized(locale,"Reintentar","Retry")}</button></div> : <div className="auto-apply-fields">
+            <label className="wide"><span>{localized(locale, "Puestos objetivo", "Target roles")}</span><small>{localized(locale, "Sepáralos con comas", "Separate with commas")}</small><input ref={rolesRef} value={drafts.roles} onChange={(event) => updateList("roles",event.target.value)} placeholder="Full Stack Developer, Frontend Engineer" /></label>
+            <label><span>{localized(locale, "Ubicaciones", "Locations")}</span><input value={drafts.locations} onChange={(event) => updateList("locations",event.target.value)} placeholder={localized(locale, "Barcelona, Madrid, Remoto", "Barcelona, Madrid, Remote")} /></label>
+            <label><span>{localized(locale, "Sectores", "Industries")}</span><input value={drafts.industries} onChange={(event) => updateList("industries",event.target.value)} placeholder={localized(locale, "SaaS, Tecnología, Farmacéutica", "SaaS, Technology, Pharma")} /></label>
             <fieldset><legend>{localized(locale, "Modalidad", "Work setup")}</legend>{["Remoto", "Híbrido", "Presencial"].map((mode) => <label key={mode}><input type="checkbox" checked={form.workModes.includes(mode)} onChange={(event) => update("workModes", event.target.checked ? [...form.workModes, mode] : form.workModes.filter((item) => item !== mode))} /><span>{mode}</span></label>)}</fieldset>
             <fieldset><legend>{localized(locale, "Nivel", "Seniority")}</legend>{["Prácticas", "Junior", "Mid", "Senior"].map((level) => <label key={level}><input type="checkbox" checked={form.seniorityLevels.includes(level)} onChange={(event) => update("seniorityLevels", event.target.checked ? [...form.seniorityLevels, level] : form.seniorityLevels.filter((item) => item !== level))} /><span>{level}</span></label>)}</fieldset>
             <label><span>{localized(locale, "Coincidencia mínima", "Minimum match")} · {form.minimumMatch}%</span><input type="range" min="50" max="95" step="5" value={form.minimumMatch} onChange={(event) => update("minimumMatch", Number(event.target.value))} /></label>
             <label><span>{localized(locale, "Máximo diario", "Daily maximum")}</span><select value={form.dailyLimit} onChange={(event) => update("dailyLimit", Number(event.target.value))}>{[1,2,3,4,5,6,7,8,9,10].map((value) => <option key={value} value={value}>{value} {localized(locale, "candidaturas", "applications")}</option>)}</select></label>
-            <label className="wide"><span>{localized(locale, "Empresas excluidas", "Excluded companies")}</span><input value={form.excludedCompanies.join(", ")} onChange={(event) => update("excludedCompanies", list(event.target.value))} placeholder={localized(locale, "Empresa A, Empresa B", "Company A, Company B")} /></label>
+            <label className="wide"><span>{localized(locale, "Empresas excluidas", "Excluded companies")}</span><input value={drafts.excludedCompanies} onChange={(event) => updateList("excludedCompanies",event.target.value)} placeholder={localized(locale, "Empresa A, Empresa B", "Company A, Company B")} /></label>
           </div>}
         </section>
         <aside className="auto-apply-control-card">
           <span className="overline">2 · CONTROL</span><h2>{localized(locale, "Tú decides cuándo funciona", "You're always in control")}</h2>
           <ul><li>✓ {localized(locale, "Solo canales de email oficiales y verificados", "Verified official email channels only")}</li><li>✓ {localized(locale, "Sin duplicados y con límite diario", "No duplicates and a daily limit")}</li><li>✓ {localized(locale, "Carta personalizada en el idioma de la oferta", "A personalized letter in the job's language")}</li><li>✓ {localized(locale, "Puedes pausarlo en cualquier momento", "Pause it at any time")}</li></ul>
-          {!pro && <p className="auto-apply-warning">{localized(locale, "Necesitas una suscripción activa para enviar candidaturas.", "You need an active subscription to send applications.")}</p>}
-          {!readiness.ready && <p className="auto-apply-warning">{localized(locale, `Completa tu perfil antes de activarlo: ${readiness.missing.join(", ")}.`, `Complete your profile before enabling it: ${readiness.missing.join(", ")}.`)}</p>}
-          <label className="auto-apply-consent"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>{localized(locale, "Autorizo a Landeo a enviar mi CV y carta personalizada a las ofertas que cumplan estas preferencias.", "I authorize Landeo to send my résumé and personalized letter to jobs matching these preferences.")}</span></label>
-          {error && <p className="form-error">{error}</p>}{notice && <p className="form-success">{notice}</p>}
-          <div className="auto-apply-actions"><button className="button button-ghost" type="button" disabled={saving || !form} onClick={() => void save(false)}>{form?.enabled ? localized(locale, "Pausar", "Pause") : localized(locale, "Guardar", "Save")}</button><button className="button button-primary" type="button" disabled={saving || !form || !pro || !readiness.ready || !confirmed} onClick={() => void save(true)}>{saving ? localized(locale, "Procesando…", "Working…") : form?.enabled ? localized(locale, "Guardar y buscar", "Save and search") : localized(locale, "Activar Auto Apply", "Enable Auto Apply")}</button></div>
+          <div className="auto-apply-requirements" ref={requirementsRef} tabIndex={-1} aria-label={localized(locale,"Requisitos de activación","Activation requirements")}>
+            <strong>{localized(locale,"Antes de activar","Before enabling")}</strong>
+            <p><span aria-hidden="true">{pro?"✓":"○"}</span> {localized(locale,"Suscripción activa","Active subscription")} {!pro&&<Link href="/pricing">{localized(locale,"Ver planes","View plans")} →</Link>}</p>
+            <p><span aria-hidden="true">{readiness.ready?"✓":"○"}</span> {localized(locale,"Perfil y CV completos","Complete profile and résumé")} {!readiness.ready&&<Link href="/app/profile/universal">{localized(locale,"Completar perfil","Complete profile")} →</Link>}</p>
+            {!readiness.ready&&<small>{localized(locale,`Falta: ${readiness.missing.join(", ")}.`,"Complete the missing details and application consents in your universal profile.")}</small>}
+            <p><span aria-hidden="true">{form?.roles.length?"✓":"○"}</span> {localized(locale,"Al menos un puesto objetivo","At least one target role")}</p>
+          </div>
+          <label className="auto-apply-consent"><input ref={consentRef} type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>{localized(locale, "Autorizo a Landeo a enviar mi CV y carta personalizada a las ofertas que cumplan estas preferencias.", "I authorize Landeo to send my résumé and personalized letter to jobs matching these preferences.")}</span></label>
+          {!confirmed&&<p className="auto-apply-activation-hint" id="auto-apply-activation-hint">{localized(locale,"Marca la autorización anterior para permitir el envío automático.","Check the authorization above to allow automatic applications.")}</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}{notice && <p className="form-success" role="status">{notice}</p>}
+          <div className="auto-apply-actions"><button className="button button-ghost" type="button" disabled={saving || !form} onClick={() => void save(false)}>{form?.enabled ? localized(locale, "Pausar", "Pause") : localized(locale, "Guardar", "Save")}</button><button className="button button-primary" type="button" disabled={saving || !form || loading} aria-describedby={!confirmed?"auto-apply-activation-hint":undefined} onClick={() => void save(true)}>{saving ? localized(locale, "Procesando…", "Working…") : form?.enabled ? localized(locale, "Guardar y buscar", "Save and search") : localized(locale, "Activar Auto Apply", "Enable Auto Apply")}</button></div>
           {form?.enabled && <button className="text-button auto-apply-run-now" type="button" disabled={saving} onClick={() => void runNow()}>↻ {localized(locale, "Buscar ahora", "Search now")}</button>}
           {dashboard?.lastRun && <small className="auto-apply-last-run">{localized(locale, "Última ejecución", "Last run")}: {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(dashboard.lastRun.startedAt))}{dashboard.lastRun.errorMessage ? ` · ${dashboard.lastRun.errorMessage}` : ""}</small>}
         </aside>

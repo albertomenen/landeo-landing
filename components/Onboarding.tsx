@@ -10,7 +10,8 @@ import {
 } from "motion/react";
 import Link from "./SafeLink";
 import { Brand } from "./Brand";
-import { completeWebOnboarding, resumeExtension } from "../lib/landeo";
+import { completeWebOnboarding } from "../lib/landeo";
+import { CvUploadError, resumeFormat } from "../lib/cv-upload";
 import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
 import { trackProductEvent } from "../lib/analytics";
 
@@ -623,6 +624,7 @@ export default function Onboarding() {
     [answers, setAnswers] = useState<Answers>(initial),
     [resume, setResume] = useState<File | null>(null),
     [saving, setSaving] = useState(false),
+    [uploadAttempt, setUploadAttempt] = useState(0),
     [error, setError] = useState(""),
     [cityOpen, setCityOpen] = useState(false),
     [cityResults, setCityResults] = useState<WorldCity[]>([]),
@@ -864,7 +866,7 @@ export default function Onboarding() {
     moveTo(index + 1);
   };
   const finish = async () => {
-    if (!resume) return;
+    if (!resume || saving) return;
     setSaving(true);
     setError("");
     trackProductEvent("onboarding_completion_started", { total_steps: steps.length });
@@ -882,17 +884,19 @@ export default function Onboarding() {
         },
         resume,
         locale,
+        onUploadAttempt: setUploadAttempt,
       });
-      localStorage.removeItem("landeo-onboarding-draft");
+      try { localStorage.removeItem("landeo-onboarding-draft"); } catch { /* Optional draft cleanup must not block navigation. */ }
       trackProductEvent("onboarding_completed", { total_steps: steps.length });
       window.location.assign("/app/jobs?welcome=1");
     } catch (reason) {
       const message=reason instanceof Error ? reason.message : t.error;
-      const sessionError=/sesión|session|caduc|expired/i.test(message);
+      const sessionError=!(reason instanceof CvUploadError)&&/sesión ha caducado|session has expired/i.test(message);
       trackProductEvent("onboarding_completion_failed", { reason: sessionError ? "session" : "save" });
       if(sessionError)setSessionMissing(true);
       else setError(message);
       setSaving(false);
+      setUploadAttempt(0);
     }
   };
   const renderChoices = (
@@ -1343,30 +1347,13 @@ export default function Onboarding() {
           accept=".pdf,.doc,.docx"
           onChange={(e) => {
             const file = e.target.files?.[0] ?? null;
-            // Reset so re-selecting the same file after an error fires onChange again.
-            e.target.value = "";
-            if (!file) return;
-            if (!resumeExtension(file.name)) {
-              setResume(null);
-              setError(
-                locale === "es"
-                  ? "El CV debe ser PDF, DOC o DOCX."
-                  : "Your résumé must be a PDF, DOC or DOCX file.",
-              );
-              return;
-            }
-            if (file.size > 10 * 1024 * 1024) {
-              setResume(null);
-              setError(
-                locale === "es"
-                  ? "El CV no puede superar 10 MB."
-                  : "Your résumé must be 10 MB or smaller.",
-              );
-              return;
+            if (file) {
+              try { resumeFormat(file, locale); }
+              catch (reason) { setResume(null); setError((reason as Error).message); e.target.value = ""; return; }
             }
             setError("");
             setResume(file);
-            trackProductEvent("onboarding_resume_selected",{file_type:file.name.toLowerCase().split(".").pop()||"unknown"});
+            if(file)trackProductEvent("onboarding_resume_selected",{file_type:file.name.toLowerCase().split(".").pop()||"unknown"});
           }}
         />
         <m.button
@@ -1393,7 +1380,7 @@ export default function Onboarding() {
       </m.div>,
     );
   else body = <Welcome locale={locale} />;
-  const supportHref = `mailto:careers@haired.app?subject=${encodeURIComponent(locale === "es" ? "Problema durante el onboarding de Landeo" : "Problem during Landeo onboarding")}&body=${encodeURIComponent(locale === "es" ? `Hola, he encontrado un problema en el paso ${index + 1} del onboarding. Descripción:` : `Hi, I found a problem on step ${index + 1} of onboarding. Description:`)}`;
+  const supportHref = `mailto:careers@haired.app?subject=${encodeURIComponent(locale === "es" ? "Problema durante el onboarding de Landeo" : "Problem during Landeo onboarding")}&body=${encodeURIComponent(locale === "es" ? `Hola, he encontrado un problema en el paso ${index + 1} del onboarding. Mensaje: ${error}\nDescripción:` : `Hi, I found a problem on step ${index + 1} of onboarding. Message: ${error}\nDescription:`)}`;
   if (sessionMissing) {
     return (
       <main className="onboarding-page onboarding-v2 onboarding-checking" role="alert" aria-live="polite">
@@ -1500,6 +1487,10 @@ export default function Onboarding() {
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
                 {body}
+                {saving && <p role="status" aria-live="polite">{uploadAttempt > 1
+                  ? (locale === "es" ? `La subida se ha interrumpido. Reintentando CV (${uploadAttempt}/3)…` : `Upload interrupted. Retrying résumé (${uploadAttempt}/3)…`)
+                  : uploadAttempt === 1 ? (locale === "es" ? "Subiendo tu CV…" : "Uploading your résumé…")
+                  : t.saving}</p>}
                 {error && (
                   <m.p
                     className="onboarding-error"
@@ -1510,8 +1501,8 @@ export default function Onboarding() {
                     {error}{" "}
                     <a href={supportHref}>
                       {locale === "es"
-                        ? "Contactar con soporte"
-                        : "Contact support"}
+                        ? "Escríbenos a careers@haired.app"
+                        : "Email careers@haired.app"}
                     </a>
                   </m.p>
                 )}
@@ -1536,7 +1527,7 @@ export default function Onboarding() {
                   disabled={saving}
                   onClick={finish}
                 >
-                  {saving ? t.saving : `${t.finish} →`}
+                  {saving ? t.saving : error ? (locale === "es" ? "Reintentar →" : "Retry →") : `${t.finish} →`}
                 </m.button>
               ) : (
                 <div>
