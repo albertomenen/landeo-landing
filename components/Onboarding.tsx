@@ -10,7 +10,7 @@ import {
 } from "motion/react";
 import Link from "./SafeLink";
 import { Brand } from "./Brand";
-import { completeWebOnboarding } from "../lib/landeo";
+import { completeWebOnboarding, resumeExtension } from "../lib/landeo";
 import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
 import { trackProductEvent } from "../lib/analytics";
 
@@ -1343,7 +1343,20 @@ export default function Onboarding() {
           accept=".pdf,.doc,.docx"
           onChange={(e) => {
             const file = e.target.files?.[0] ?? null;
-            if (file && file.size > 10 * 1024 * 1024) {
+            // Reset so re-selecting the same file after an error fires onChange again.
+            e.target.value = "";
+            if (!file) return;
+            if (!resumeExtension(file.name)) {
+              setResume(null);
+              setError(
+                locale === "es"
+                  ? "El CV debe ser PDF, DOC o DOCX."
+                  : "Your résumé must be a PDF, DOC or DOCX file.",
+              );
+              return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+              setResume(null);
               setError(
                 locale === "es"
                   ? "El CV no puede superar 10 MB."
@@ -1353,7 +1366,7 @@ export default function Onboarding() {
             }
             setError("");
             setResume(file);
-            if(file)trackProductEvent("onboarding_resume_selected",{file_type:file.name.toLowerCase().split(".").pop()||"unknown"});
+            trackProductEvent("onboarding_resume_selected",{file_type:file.name.toLowerCase().split(".").pop()||"unknown"});
           }}
         />
         <m.button

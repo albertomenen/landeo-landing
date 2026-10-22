@@ -911,12 +911,14 @@ function JobsView({
     : ["profile"];
   const attribution = job ? sourceAttribution(job, locale) : null;
   const removeCurrent = useCallback(
-    (direction: -1 | 1) => {
-      if (!job) return;
+    (direction: -1 | 1, target: Job | undefined = job) => {
+      // Callers that finish asynchronously pass the job they acted on, so a
+      // deck reordered in the meantime never loses the wrong card.
+      if (!target) return;
       setCardDirection(direction);
-      handledJobs.current.add(job.id);
+      handledJobs.current.add(target.id);
       setJobs((current) => {
-        const remaining=current.filter((item) => item.id !== job.id);
+        const remaining=current.filter((item) => item.id !== target.id);
         // Refill shortly before the current page runs out. Already handled
         // jobs are excluded in Supabase, so this reveals the next catalogue
         // page without downloading the complete database up front.
@@ -955,7 +957,7 @@ function JobsView({
     if (!await verifiedIdentity("job_pass")) return;
     try {
       await recordSwipe(job.id, "left");
-      removeCurrent(-1);
+      removeCurrent(-1, job);
       setNotice(t.notices.discarded);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : t.notices.swipeError);
@@ -994,7 +996,7 @@ function JobsView({
       } : {});
       const application = (await loadApplications()).find((item) => item.jobId === jobId);
       triggerConfetti();
-      removeCurrent(1);
+      removeCurrent(1, targetJob);
       setApplicationFlow((current) => ({
         job: targetJob,
         phase: "result",
@@ -1080,6 +1082,9 @@ function JobsView({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (document.querySelector(".dashboard-tour-layer")) return;
+      // Modals own the keyboard: Enter or arrows must not act on the card behind them.
+      if (applicationFlow || paywall) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
       if (
         (event.target as HTMLElement).matches("input,select,textarea,button,a")
       )
@@ -1090,7 +1095,7 @@ function JobsView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pass, apply, save]);
+  }, [pass, apply, save, applicationFlow, paywall]);
   return (
     <>
       {demo && (

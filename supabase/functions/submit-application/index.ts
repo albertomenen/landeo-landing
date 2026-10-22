@@ -3,6 +3,7 @@ import { coverLetterProfileFrom, generateCoverLetter } from "../_shared/cover-le
 import { coverLetterLanguage } from "../_shared/cover-letter-language.ts";
 import { corsHeaders, json } from "../_shared/http.ts";
 import { sendApplicationPush } from "../_shared/push.ts";
+import { hasActiveStripeSubscription } from "../_shared/subscription.ts";
 
 const required = (name: string) => {
   const value = Deno.env.get(name);
@@ -133,17 +134,8 @@ async function hasRevenueCatApplicationAccess(
   return Boolean(accessUntil && accessUntil > Date.now());
 }
 
-async function hasStripeWebApplicationAccess(admin: any, userId: string) {
-  const { data, error } = await admin.from("stripe_subscriptions")
-    .select("status,current_period_end").eq("user_id", userId)
-    .in("status", ["active", "trialing"]).maybeSingle();
-  if (error) throw error;
-  if (!data) return false;
-  return !data.current_period_end || new Date(data.current_period_end).getTime() > Date.now();
-}
-
 async function hasApplicationAccess(admin: any, userId: string, platform?: ApplicationPlatform) {
-  if (platform === "web") return hasStripeWebApplicationAccess(admin, userId);
+  if (platform === "web") return hasActiveStripeSubscription(admin, userId);
   return hasRevenueCatApplicationAccess(userId, platform);
 }
 
@@ -903,7 +895,7 @@ Deno.serve(async (request) => {
         id: Number(question.id),
         answer: String(
           applicationAnswers[`question:${question.id}`] ??
-            (/carta|cover\\s*letter|motivaci[oó]n|why.*you|por qu[eé]/i.test(question.label)
+            (/carta|cover\s*letter|motivaci[oó]n|why.*you|por qu[eé]/i.test(question.label)
               ? applicationAnswers.generatedCoverLetter ?? ""
               : ""),
         ),

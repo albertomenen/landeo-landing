@@ -101,6 +101,12 @@ function featuredScore(job:Job){
   return job.match+brandBoost+feedBoost+(job.applyCapability==="automatic"?3:0);
 }
 
+const RESUME_CONTENT_TYPES={pdf:"application/pdf",doc:"application/msword",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"} as const;
+export type ResumeExtension=keyof typeof RESUME_CONTENT_TYPES;
+// Only these extensions are accepted; anything else returns null instead of
+// being stored as `cv.pdf` with an arbitrary content type.
+export function resumeExtension(name:string):ResumeExtension|null{const extension=name.toLowerCase().split(".").pop()??"";return Object.hasOwn(RESUME_CONTENT_TYPES,extension)?extension as ResumeExtension:null}
+
 export async function currentUser(){try{return(await getResilientSession())?.user??null}catch{return null}}
 
 export async function deleteCurrentAccount(){const client=createSupabaseBrowserClient();const{data:session}=await client.auth.getSession();if(session.session){const supportRemoval=await fetch("/api/support",{method:"DELETE",headers:{authorization:`Bearer ${session.session.access_token}`}});if(!supportRemoval.ok)throw new Error("No pudimos eliminar el historial de soporte. Reintenta la eliminación de la cuenta.");}const{data,error}=await client.functions.invoke("delete-account",{body:{confirmation:"delete"}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo eliminar la cuenta.")}if(error)throw new Error(error.message||"No se pudo eliminar la cuenta.");if(!data?.deleted)throw new Error(data?.message||"No se pudo confirmar la eliminación.");clearDashboardCaches();await client.auth.signOut({scope:"local"}).catch(()=>undefined)}
@@ -290,9 +296,8 @@ export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;
   try{session=await getResilientSession(600)}catch{throw new Error(input.locale==="es"?"No hemos podido verificar tu sesión ahora mismo. Tus respuestas siguen guardadas; espera unos segundos y vuelve a intentarlo.":"We couldn't verify your session right now. Your answers are still saved; wait a few seconds and try again.")}
   const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
   if(input.resume.size>10*1024*1024)throw new Error(input.locale==="es"?"El CV no puede superar 10 MB.":"Your résumé must be 10 MB or smaller.");
-  const lower=input.resume.name.toLowerCase();const extension=lower.endsWith(".docx")?"docx":lower.endsWith(".doc")?"doc":"pdf";
-  const allowed=["pdf","doc","docx"];if(!allowed.includes(extension))throw new Error(input.locale==="es"?"El CV debe ser PDF, DOC o DOCX.":"Your résumé must be a PDF, DOC or DOCX file.");
-  const cvPath=`${user.id}/cv.${extension}`;const{error:uploadError}=await client.storage.from("cvs").upload(cvPath,input.resume,{contentType:input.resume.type||"application/pdf",upsert:true});if(uploadError)throw uploadError;
+  const extension=resumeExtension(input.resume.name);if(!extension)throw new Error(input.locale==="es"?"El CV debe ser PDF, DOC o DOCX.":"Your résumé must be a PDF, DOC or DOCX file.");
+  const cvPath=`${user.id}/cv.${extension}`;const{error:uploadError}=await client.storage.from("cvs").upload(cvPath,input.resume,{contentType:RESUME_CONTENT_TYPES[extension],upsert:true});if(uploadError)throw uploadError;
   const{data:existing,error:profileError}=await client.from("profiles").select("full_name,email,phone,universal_profile,privacy_consent_at,automatic_application_consent_at").eq("id",user.id).maybeSingle();if(profileError)throw profileError;
   const metadataName=String(user.user_metadata?.full_name??user.user_metadata?.name??"");const fullName=existing?.full_name||metadataName;
   const experienceYears:Record<string,number>={internship:0,entry:0,junior:2,mid:4,senior:7,expert:10};
@@ -348,7 +353,8 @@ export async function loadSavedJobs(){
 
 export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"starter"|"pro"|"sprint"){const client=createSupabaseBrowserClient();let promotionCode="";const storedPlan=typeof window!=="undefined"?window.localStorage.getItem("landeo-selected-plan"):null;const selectedPlan=plan??(storedPlan==="starter"||storedPlan==="pro"||storedPlan==="sprint"?storedPlan:"pro");const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";if(action==="checkout"){const user=await currentUser();if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}}const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo}});if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}if(error)throw error;if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}window.location.assign(data.url)}
 
-export async function hasWebPro(knownUser?:User|null){const user=knownUser??await currentUser();if(!user)return false;const{data}=await createSupabaseBrowserClient().from("stripe_subscriptions").select("status,current_period_end").eq("user_id",user.id).in("status",["active","trialing"]).maybeSingle();return Boolean(data&&(!data.current_period_end||new Date(data.current_period_end).getTime()>Date.now()))}
+export async function hasWebPro(knownUser?:User|null){const user=knownUser??await currentUser();if(!user)return false;// Several live rows can coexist (upgrade, trial plus paid plan); any current one grants Pro.
+  const{data}=await createSupabaseBrowserClient().from("stripe_subscriptions").select("status,current_period_end").eq("user_id",user.id).in("status",["active","trialing"]);return((data??[])as Array<{current_period_end:string|null}>).some(row=>!row.current_period_end||new Date(row.current_period_end).getTime()>Date.now())}
 
 const defaultAutoApplySettings=(profile?:CandidateProfile|null):AutoApplySettings=>({
   enabled:false,

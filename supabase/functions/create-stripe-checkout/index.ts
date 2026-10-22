@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/http.ts";
+import { hasActiveStripeSubscription } from "../_shared/subscription.ts";
 
 type Plan = "starter" | "pro" | "sprint";
 
@@ -142,16 +143,7 @@ Deno.serve(async (request) => {
       return json({ url: portal.url });
     }
 
-    const { data: activeSubscription } = await admin.from(
-      "stripe_subscriptions",
-    )
-      .select("status,current_period_end").eq("user_id", userData.user.id)
-      .in("status", ["active", "trialing"]).maybeSingle();
-    if (
-      activeSubscription &&
-      (!activeSubscription.current_period_end ||
-        new Date(activeSubscription.current_period_end).getTime() > Date.now())
-    ) {
+    if (await hasActiveStripeSubscription(admin, userData.user.id)) {
       return json({
         message: "Ya tienes un plan de Landeo activo.",
         alreadyActive: true,

@@ -4,7 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 const SHOW_DELAY_MS = 180;
-const SAFETY_TIMEOUT_MS = 12_000;
+const SAFETY_TIMEOUT_MS = 6_000;
 
 export default function RouteTransition() {
   const pathname = usePathname();
@@ -20,6 +20,8 @@ function RouteTransitionController() {
   const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // The controller is keyed by pathname + search, so this is the route it renders for.
+    const route = `${window.location.pathname}${window.location.search}`;
     const clearTimers = () => {
       if (showTimer.current) clearTimeout(showTimer.current);
       if (safetyTimer.current) clearTimeout(safetyTimer.current);
@@ -59,6 +61,9 @@ function RouteTransitionController() {
     };
     const onHistory = () => {
       if (window.location.pathname.startsWith("/app/")) return;
+      // Hash-only history steps (e.g. Back after an in-page anchor) never change
+      // the key, so nothing would finish the transition and the veil would block input.
+      if (`${window.location.pathname}${window.location.search}` === route) return;
       start();
     };
     const onPageShow = () => finish();

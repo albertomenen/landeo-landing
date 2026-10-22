@@ -5916,9 +5916,23 @@ h1 em:after {
   font-size: 13px;
 }
 .onboarding-checking span {
+  display: inline-block;
   color: var(--green);
   font-size: 28px;
+}
+/* Only the loading state spins; the "sign in again" alert keeps a static icon. */
+.onboarding-checking[role="status"] span {
   animation: route-spinner 0.9s linear infinite;
+}
+@keyframes route-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-checking[role="status"] span {
+    animation: none;
+  }
 }
 @media (max-width: 800px) {
   .filters-panel .work-mode-filter {

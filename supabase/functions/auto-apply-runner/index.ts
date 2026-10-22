@@ -2,6 +2,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/http.ts";
 import { autoApplyGeographyCompatible } from "../_shared/auto-apply-geography.ts";
+import { hasActiveStripeSubscription } from "../_shared/subscription.ts";
 
 const required = (name: string) => {
   const value = Deno.env.get(name);
@@ -75,15 +76,6 @@ function jobScore(job: any, profile: any, settings: any) {
   return Math.min(100, score);
 }
 
-async function activeWebSubscription(admin: any, userId: string) {
-  const { data } = await admin.from("stripe_subscriptions")
-    .select("status,current_period_end")
-    .eq("user_id", userId)
-    .in("status", ["active", "trialing"])
-    .maybeSingle();
-  return Boolean(data && (!data.current_period_end || Date.parse(data.current_period_end) > Date.now()));
-}
-
 async function processUser(admin: any, settings: any) {
   const now = new Date();
   const { data: run, error: runError } = await admin.from("auto_apply_runs").insert({
@@ -98,10 +90,12 @@ async function processUser(admin: any, settings: any) {
   let actionRequired = 0;
   let failed = 0;
   try {
-    const [{ data: profile }, subscribed] = await Promise.all([
+    const [{ data: profile, error: profileError }, subscribed] = await Promise.all([
       admin.from("profiles").select("*").eq("id", settings.user_id).maybeSingle(),
-      activeWebSubscription(admin, settings.user_id),
+      hasActiveStripeSubscription(admin, settings.user_id),
     ]);
+    // A failed lookup must not look like "no profile" and switch Auto Apply off.
+    if (profileError) throw profileError;
     if (!profile || !subscribed || !profile.cv_path || !profile.privacy_consent_at || !profile.automatic_application_consent_at) {
       await admin.from("auto_apply_settings").update({ enabled: false, updated_at: now.toISOString() }).eq("user_id", settings.user_id);
       await admin.from("auto_apply_runs").update({
@@ -239,7 +233,18 @@ Deno.serve(async (request) => {
     const { data: settingsRows, error } = await query;
     if (error) throw error;
     const results = [];
-    for (const settings of settingsRows ?? []) results.push(await processUser(admin, settings));
+    for (const settings of settingsRows ?? []) {
+      // One user's failure is recorded on their run; it must not stop the batch.
+      if (requestedUserId) results.push(await processUser(admin, settings));
+      else {
+        try {
+          results.push(await processUser(admin, settings));
+        } catch (error) {
+          console.error("auto-apply-runner user", settings.user_id, error);
+          results.push({ userId: settings.user_id, error: error instanceof Error ? error.message : "Error inesperado." });
+        }
+      }
+    }
     return json({ processed: results.length, results });
   } catch (error) {
     console.error("auto-apply-runner", error);

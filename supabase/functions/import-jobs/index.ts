@@ -1598,6 +1598,16 @@ async function deactivateMissingGreenhouse(
   return staleIds.length;
 }
 
+function secureEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(left);
+  const b = encoder.encode(right);
+  if (a.length !== b.length) return false;
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
+  return difference === 0;
+}
+
 Deno.serve(async (request) => {
   try {
     if (request.method !== "POST") {
@@ -1607,10 +1617,10 @@ Deno.serve(async (request) => {
     const bearerToken = request.headers
       .get("Authorization")
       ?.replace(/^Bearer\s+/i, "");
-    const authorizedWithServiceRole =
-      bearerToken === required("SUPABASE_SERVICE_ROLE_KEY");
+    const authorizedWithServiceRole = Boolean(bearerToken) &&
+      secureEqual(bearerToken ?? "", required("SUPABASE_SERVICE_ROLE_KEY"));
     if (
-      request.headers.get("x-import-secret") !== importSecret &&
+      !secureEqual(request.headers.get("x-import-secret") ?? "", importSecret) &&
       !authorizedWithServiceRole
     ) {
       return json({ error: "No autorizado" }, 401);
