@@ -192,6 +192,23 @@ const queryAliases: Array<{ match: RegExp; terms: RegExp }> = [
   { match: /design|disen|ux|ui/i, terms: /design|designer|ux|ui|research/i },
   { match: /sales|ventas|comercial/i, terms: /sales|account executive|business development|partnerships|revenue/i },
 ];
+// Polls only while the tab is visible, and catches up as soon as it is shown
+// again, so background tabs stop hitting Supabase every few seconds.
+function useVisibleInterval(callback: () => void, ms: number, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return;
+    const tick = () => {
+      if (!document.hidden) callback();
+    };
+    const timer = window.setInterval(tick, ms);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [callback, ms, enabled]);
+}
+
 function matchesJobQuery(job: Job, query: string) {
   const value = query.trim();
   if (!value) return true;
@@ -831,9 +848,11 @@ function JobsView({
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 320);
     return () => window.clearTimeout(timer);
   }, [query]);
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ refill = false }: { refill?: boolean } = {}) => {
     const request = ++feedRequest.current;
-    setLoading(true);
+    // A refill tops up the deck in the background: no skeleton, and the cards
+    // already on screen (including the one being read) stay where they are.
+    if (!refill) setLoading(true);
     setRefreshing(true);
     if (demo) {
       setJobs([...marketingDemoJobs]);
@@ -850,6 +869,10 @@ function JobsView({
         const append = published;
         published = true;
         setJobs(current => {
+          if (refill) {
+            const currentIds = new Set(current.map(item => item.id));
+            return [...current, ...available.filter(item => !currentIds.has(item.id))];
+          }
           if (!append) return available;
           const byId = new Map(available.map(item => [item.id, item]));
           const kept = current.filter(item => byId.has(item.id)).map(item => byId.get(item.id)!);
@@ -874,6 +897,12 @@ function JobsView({
     refresh();
     return () => { feedRequest.current += 1; };
   }, [refresh]);
+  const refilling = useRef(false);
+  const refill = useCallback(() => {
+    if (demo || refilling.current) return;
+    refilling.current = true;
+    void refresh({ refill: true }).finally(() => { refilling.current = false; });
+  }, [demo, refresh]);
   const filtered = useMemo(
     () =>
       jobs.filter(
@@ -917,18 +946,20 @@ function JobsView({
       if (!target) return;
       setCardDirection(direction);
       handledJobs.current.add(target.id);
-      setJobs((current) => {
-        const remaining=current.filter((item) => item.id !== target.id);
-        // Refill shortly before the current page runs out. Already handled
-        // jobs are excluded in Supabase, so this reveals the next catalogue
-        // page without downloading the complete database up front.
-        if(!demo&&remaining.length<=5)window.setTimeout(refresh,0);
-        return remaining;
-      });
+      setJobs((current) => current.filter((item) => item.id !== target.id));
+      // Refill shortly before the current page runs out. Already handled
+      // jobs are excluded in Supabase, so this reveals the next catalogue
+      // page without downloading the complete database up front.
+      if (jobs.length - 1 <= 5) refill();
       setIndex(0);
     },
-    [job,demo,refresh],
+    [job, jobs.length, refill],
   );
+  const restoreJob = useCallback((target: Job) => {
+    handledJobs.current.delete(target.id);
+    setJobs((current) => [target, ...current.filter((item) => item.id !== target.id)]);
+    setIndex(0);
+  }, []);
   const triggerConfetti = useCallback(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     setConfettiBurst((value) => value + 1);
@@ -955,14 +986,16 @@ function JobsView({
       return;
     }
     if (!await verifiedIdentity("job_pass")) return;
+    // Optimistic: the card leaves immediately and comes back if saving fails.
+    removeCurrent(-1, job);
+    setNotice(t.notices.discarded);
     try {
       await recordSwipe(job.id, "left");
-      removeCurrent(-1, job);
-      setNotice(t.notices.discarded);
     } catch (error) {
+      restoreJob(job);
       setNotice(error instanceof Error ? error.message : t.notices.swipeError);
     }
-  }, [job, demo, removeCurrent, t.notices, verifiedIdentity]);
+  }, [job, demo, removeCurrent, restoreJob, t.notices, verifiedIdentity]);
   const save = useCallback(async () => {
     if (!job) return;
     if (demo) {
@@ -970,11 +1003,16 @@ function JobsView({
       return;
     }
     if (!await verifiedIdentity("job_save")) return;
+    setSavedJobIds((current) => new Set(current).add(job.id));
+    setNotice(t.notices.saved);
     try {
       await recordSwipe(job.id, "save");
-      setSavedJobIds((current) => new Set(current).add(job.id));
-      setNotice(t.notices.saved);
     } catch (error) {
+      setSavedJobIds((current) => {
+        const next = new Set(current);
+        next.delete(job.id);
+        return next;
+      });
       setNotice(error instanceof Error ? error.message : t.notices.saveError);
     }
   }, [job, demo, t.notices, verifiedIdentity]);
@@ -1126,7 +1164,7 @@ function JobsView({
             transition={refreshing ? { duration: 0.75, repeat: Infinity, ease: "linear" } : { duration: 0.16 }}
             whileHover={loading ? undefined : { y: -1, scale: 1.03 }}
             whileTap={loading ? undefined : { scale: 0.94 }}
-            onClick={refresh}
+            onClick={() => refresh()}
           >
             ↻
           </m.button>
@@ -2000,24 +2038,26 @@ function AutoApplyView({
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const hydrated = useRef(false);
   const refresh = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     try {
       const next = await loadAutoApplyDashboard(profile);
       setDashboard(next);
       setForm((current) => current ?? next.settings);
-      setConfirmed(next.settings.enabled);
+      // Seed consent once; later polls must not re-check a box the user unchecked.
+      if (!hydrated.current) {
+        hydrated.current = true;
+        setConfirmed(next.settings.enabled);
+      }
       setError("");
     } catch (value) {
       setError(value instanceof Error ? value.message : localized(locale, "No pudimos cargar Auto Apply.", "We couldn't load Auto Apply."));
     } finally { setLoading(false); }
   }, [user, profile, locale]);
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => {
-    if (!dashboard?.settings.enabled) return;
-    const timer = window.setInterval(() => void refresh(), 20_000);
-    return () => window.clearInterval(timer);
-  }, [dashboard?.settings.enabled, refresh]);
+  const poll = useCallback(() => void refresh(), [refresh]);
+  useVisibleInterval(poll, 20_000, Boolean(dashboard?.settings.enabled) && !saving);
   const list = (value: string) => Array.from(new Set(value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)));
   const update = <Key extends keyof AutoApplySettings>(key: Key, value: AutoApplySettings[Key]) => setForm((current) => current ? { ...current, [key]: value } : current);
   const save = async (enabled = form?.enabled ?? false) => {
@@ -2030,7 +2070,7 @@ function AutoApplyView({
     try {
       await saveAutoApplySettings({ ...form, enabled });
       trackProductEvent(enabled ? "auto_apply_enabled" : "auto_apply_paused", { daily_limit: form.dailyLimit, minimum_match: form.minimumMatch });
-      setForm({ ...form, enabled });
+      setForm((current) => current ? { ...current, enabled } : current);
       setNotice(enabled
         ? localized(locale, "Auto Apply está activo. La primera búsqueda ya está en marcha.", "Auto Apply is active. The first search is already running.")
         : localized(locale, "Configuración guardada. Auto Apply está pausado.", "Settings saved. Auto Apply is paused."));
@@ -2122,6 +2162,7 @@ function ApplicationsView({
   const [trackingSaved, setTrackingSaved] = useState(false);
   const detailRef = useRef<HTMLElement | null>(null);
   const scrolledTargetRef = useRef<string | null>(null);
+  const appliedTargetRef = useRef<string | null>(null);
   const refresh = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -2130,9 +2171,15 @@ function ApplicationsView({
     try {
       const next = await loadApplications();
       setItems(next);
+      // Jump to a linked application once; afterwards polls keep whatever the
+      // user has selected instead of pulling them back to the link target.
+      const target = targetId && appliedTargetRef.current !== targetId
+        ? next.find((item) => item.id === targetId)
+        : undefined;
+      if (target) appliedTargetRef.current = targetId;
       setSelected(
         (current) =>
-          next.find((item) => item.id === targetId) ??
+          target ??
           next.find((item) => item.id === current?.id) ?? next[0] ?? null,
       );
       setError("");
@@ -2152,9 +2199,9 @@ function ApplicationsView({
   }, [user, locale, targetId]);
   useEffect(() => {
     refresh();
-    const timer = setInterval(refresh, 15000);
-    return () => clearInterval(timer);
   }, [refresh]);
+  // A poll landing mid-save would overwrite the optimistic stage with stale data.
+  useVisibleInterval(refresh, 15_000, !savingTracking);
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
@@ -2178,12 +2225,15 @@ function ApplicationsView({
       requestAnimationFrame(() => detailRef.current?.scrollIntoView({ block: "start" }));
     }
   }, [loading, selected?.id, targetId]);
+  // Load the form only when another application is selected. Polls and saves
+  // return the same application, and must not wipe notes being typed.
   useEffect(() => {
     setTrackingNotes(selected?.tracking.notes ?? "");
     setNextAction(selected?.tracking.nextAction ?? "");
     setNextActionAt(selected?.tracking.nextActionAt?.slice(0, 10) ?? "");
     setTrackingSaved(false);
-  }, [selected?.id, selected?.tracking.updatedAt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
   const saveTracking = async (stage = selected?.tracking.stage) => {
     if (!selected || !stage || savingTracking) return;
     const previous = selected;

@@ -56,6 +56,8 @@ const DASHBOARD_CACHE_MS=30_000;
 type TimedPromise<T>={expiresAt:number;value:Promise<T>};
 type JobCacheEntry=TimedPromise<Job[]>&{initialJobs?:Job[];listeners:Set<(jobs:Job[])=>void>};
 const jobsCache=new Map<string,JobCacheEntry>();
+// company/title/location of handled jobs, so each feed load only fetches new ones.
+const hiddenFingerprintCache=new Map<string,string>();
 const applicationsCache=new Map<string,TimedPromise<LiveApplication[]>>();
 const savedJobsCache=new Map<string,TimedPromise<Job[]>>();
 type JobLoadOptions={includeDismissed?:boolean;includeWorldwide?:boolean;search?:string;careerLevel?:"internship"|"junior"};
@@ -114,7 +116,7 @@ export async function deleteCurrentAccount(){const client=createSupabaseBrowserC
 async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:(jobs:Job[])=>void){
   const client=createSupabaseBrowserClient();
   const {data:session}=await client.auth.getSession();
-  let hidden=new Set<string>();let hiddenFingerprints=new Set<string>();let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
+  let hidden=new Set<string>();let hiddenFingerprintsReady:Promise<Set<string>>=Promise.resolve(new Set());let candidateCity="",candidateCountry="";let matchProfile:MatchProfile|null=null;
   if(session.session?.user){
     const[{data:swipes},{data:applications},{data:profile}]=await Promise.all([
       client.from("swipes").select("job_id,direction").eq("user_id",session.session.user.id).neq("direction","save"),
@@ -123,12 +125,15 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     ]);
     const hiddenSwipeIds=(swipes??[]).filter((row:{job_id:string;direction:string})=>row.direction==="right"||!options.includeDismissed).map((row:{job_id:string})=>row.job_id);
     hidden=new Set([...hiddenSwipeIds,...(applications??[]).map((row:{job_id:string})=>row.job_id)]);
-    const hiddenIds=[...hidden];
-    if(hiddenIds.length){
-      const hiddenResults=await Promise.all(chunks(hiddenIds).map(ids=>client.from("jobs").select("company,title,location").in("id",ids)));
+    // Fingerprints of already handled jobs only matter when filtering results,
+    // so fetch them alongside the feed queries, and only for jobs not seen before.
+    const hiddenIds=[...hidden];const missingIds=hiddenIds.filter(id=>!hiddenFingerprintCache.has(id));
+    hiddenFingerprintsReady=Promise.all(chunks(missingIds).map(ids=>client.from("jobs").select("id,company,title,location").in("id",ids))).then(hiddenResults=>{
       const hiddenError=hiddenResults.find(result=>result.error)?.error;if(hiddenError)throw hiddenError;
-      hiddenFingerprints=new Set(hiddenResults.flatMap(result=>(result.data??[])as Array<Pick<JobRow,"company"|"title"|"location">>).map(jobFingerprint));
-    }
+      for(const row of hiddenResults.flatMap(result=>(result.data??[])as Array<Pick<JobRow,"id"|"company"|"title"|"location">>))hiddenFingerprintCache.set(row.id,jobFingerprint(row));
+      return new Set(hiddenIds.flatMap(id=>hiddenFingerprintCache.get(id)??[]));
+    });
+    hiddenFingerprintsReady.catch(()=>{});
     const universal=profile?.universal_profile as Partial<UniversalProfile>|null;candidateCity=universal?.city||profile?.location||"";candidateCountry=universal?.country||"";
     matchProfile={role:profile?.role||"",location:candidateCity,skills:Array.isArray(profile?.skills)?profile.skills:[],workModes:Array.isArray(profile?.work_modes)?profile.work_modes:[],minSalary:profile?.min_salary??null,maxSalary:profile?.max_salary??null,yearsExperience:Number(universal?.yearsExperience??0),country:candidateCountry,workAuthorizationCountries:Array.isArray(universal?.workAuthorizationCountries)?universal.workAuthorizationCountries:[],visaRequirement:universal?.visaRequirement||""};
   }
@@ -145,29 +150,29 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   const automatic=activeJobs().eq("application_capability","automatic").order("published_at",{ascending:false}).limit(50);
   const roleFilter=matchProfile?.role?jobSearchFilter(matchProfile.role):"";
   const requestedFilter=options.search?jobSearchFilter(options.search):"";
-  const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(160):null;
+  const roleFocused=roleFilter?activeJobs().or(roleFilter).order("published_at",{ascending:false}).limit(100):null;
   const requestedSearch=requestedFilter?activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(100):null;
   const internshipFilter="seniority.ilike.%Internship%,title.ilike.%intern%,title.ilike.%práctic%,title.ilike.%practicante%,title.ilike.%beca%,title.ilike.%trainee%,title.ilike.%apprentice%,title.ilike.%working student%,title.ilike.%co-op%,title.ilike.%placement%,contract_type.ilike.%intern%";
   const juniorFilter="seniority.ilike.%Entry%,title.ilike.%junior%,title.ilike.%graduate%,title.ilike.%new grad%,title.ilike.%entry level%,title.ilike.%emerging talent%";
   const earlyCareer=activeJobs().or(`${internshipFilter},${juniorFilter}`).order("published_at",{ascending:false}).limit(80);
   const careerFocused=options.careerLevel
-    ? activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(180)
+    ? activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(100)
     : null;
   const remoteFilter="work_mode.ilike.%remot%,location.ilike.%remote%,location.ilike.%remoto%";
-  const remoteJobs=activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(120);
+  const remoteJobs=activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(100);
   const candidateMarket=resolveCountryCode(candidateCountry,candidateCity);
   const cityFilter=cityLocationFilter(candidateCity);
   // A general recent sample can contain hundreds of jobs while still leaving
   // only a handful after role and location filters. Query those intersections
   // explicitly so Barcelona, CDMX and other large markets do not look empty.
   const localRoleFocused=roleFilter&&cityFilter
-    ? activeJobs().or(roleFilter).or(cityFilter).order("published_at",{ascending:false}).limit(160)
+    ? activeJobs().or(roleFilter).or(cityFilter).order("published_at",{ascending:false}).limit(100)
     : null;
   const marketRoleFocused=roleFilter&&candidateMarket
-    ? activeJobs().or(roleFilter).in("metadata->>market_country",[candidateMarket,"REMOTE"]).order("published_at",{ascending:false}).limit(180)
+    ? activeJobs().or(roleFilter).in("metadata->>market_country",[candidateMarket,"REMOTE"]).order("published_at",{ascending:false}).limit(100)
     : null;
   const remoteRoleFocused=roleFilter
-    ? activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(140)
+    ? activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(100)
     : null;
   const localQueries=cityFilter?[
     activeJobs().or(cityFilter).order("published_at",{ascending:false}).limit(80),
@@ -185,16 +190,22 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(24),
   ]:[activeJobs().order("published_at",{ascending:false}).limit(24),activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(24)];
   const primaryResults=await Promise.all(primaryQueries);
+  const knownTargets=new Set<string>();const checkedTargets=new Set<string>();
   const prepareJobs=async(results:typeof primaryResults)=>{
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
+  const hiddenFingerprints=await hiddenFingerprintsReady;
   const rows=[...new Map(results.flatMap(result=>(result.data??[])as JobRow[]).map(row=>[row.id,row])).values()]
     .filter(row=>!hidden.has(row.id)&&!hiddenFingerprints.has(jobFingerprint(row)))
     .filter(row=>isJobWorkAuthorizationCompatible(row,matchProfile))
     .filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile));
-  const targetResults=await Promise.all(chunks(rows.map(row=>row.id)).map(ids=>client.functions.invoke("available-job-targets",{body:{jobIds:ids}})));
+  // The expansion pass re-sees the primary rows; only ask about new ones.
+  const uncheckedIds=rows.map(row=>row.id).filter(id=>!checkedTargets.has(id));
+  const targetResults=await Promise.all(chunks(uncheckedIds).map(ids=>client.functions.invoke("available-job-targets",{body:{jobIds:ids}})));
   const targetError=targetResults.find(result=>result.error)?.error;if(targetError)throw targetError;
-  const targetIds=new Set(targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[]);
+  for(const id of uncheckedIds)checkedTargets.add(id);
+  for(const id of targetResults.flatMap(result=>Array.isArray(result.data?.jobIds)?result.data.jobIds:[]) as string[])knownTargets.add(id);
+  const targetIds=knownTargets;
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
   const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
@@ -209,7 +220,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   // cannot hold up the first useful result on a slower connection.
   try{
     const results=await Promise.all(careerFocused?[
-      activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(180),
+      activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(100),
     ]:defaultQueries);
     return await prepareJobs([...primaryResults,...results]);
   }catch(error){if(initialJobs.length)return initialJobs;throw error}
@@ -368,7 +379,7 @@ export async function loadAutoApplyDashboard(profile?:CandidateProfile|null):Pro
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para usar Auto Apply.");
   const[{data:settings,error:settingsError},{data:applications,error:applicationsError},{data:runs,error:runsError}]=await Promise.all([
     client.from("auto_apply_settings").select("*").eq("user_id",user.id).maybeSingle(),
-    client.from("applications").select("status,delivery_status,answers").eq("user_id",user.id).contains("answers",{autoApply:true}),
+    client.from("applications").select("status,delivery_status").eq("user_id",user.id).contains("answers",{autoApply:true}),
     client.from("auto_apply_runs").select("status,matched_count,started_at,completed_at,error_message").eq("user_id",user.id).order("started_at",{ascending:false}).limit(1),
   ]);
   if(settingsError)throw settingsError;if(applicationsError)throw applicationsError;if(runsError)throw runsError;

@@ -299,7 +299,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
                 {t.dashboard.columns.map((column,columnIndex)=><section key={column.title}>
                   <div className="landing-dashboard-column-title"><strong>{column.title}</strong><span>{column.count}</span></div>
                   {column.jobs.map(job=><article key={job.role}>
-                    <div className="landing-dashboard-job-head"><span><img src={job.logo} alt="" /></span><div><strong>{job.role}</strong><small>{job.company}</small></div></div>
+                    <div className="landing-dashboard-job-head"><span><img src={job.logo} alt="" loading="lazy" decoding="async" /></span><div><strong>{job.role}</strong><small>{job.company}</small></div></div>
                     <p>⌖ {job.location}</p>
                     <p>↗ {job.activity}</p>
                     <footer><span>{job.status}</span><b>{columnIndex===0?"✓":columnIndex===1?"◎":"★"}</b></footer>
@@ -317,7 +317,7 @@ export default function LandingPage({initialLocale}:{initialLocale:LandingLocale
           <p>{t.social.subtitle}</p>
         </div>
         <div className="company-logo-grid">
-          {companyLogos.map(company=><div key={company.name}><img src={company.src} alt={company.name} loading="lazy" /></div>)}
+          {companyLogos.map(company=><div key={company.name}><img src={company.src} alt={company.name} loading="lazy" decoding="async" /></div>)}
         </div>
         <small>{t.social.note}</small>
       </section>
