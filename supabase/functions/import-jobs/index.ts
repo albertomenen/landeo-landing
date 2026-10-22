@@ -1492,10 +1492,24 @@ async function remotiveJobs(): Promise<NormalizedJob[]> {
   });
 }
 
+// Statements run through PostgREST have an 8s limit. Right after the other
+// cron shards the database can be briefly slow, so retry a timed-out
+// statement a couple of times instead of dropping the whole shard.
+async function retryOnStatementTimeout(
+  run: () => PromiseLike<any>,
+): Promise<any> {
+  let result = await run();
+  for (let attempt = 1; attempt <= 2 && /statement timeout/i.test(String(result.error?.message ?? "")); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+    result = await run();
+  }
+  return result;
+}
+
 async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
   if (!jobs.length) return 0;
   let saved = 0;
-  const batchSize = 200;
+  const batchSize = 100;
   for (let start = 0; start < jobs.length; start += batchSize) {
     const batch = jobs.slice(start, start + batchSize);
     const existingRows: Array<{source:string;external_id:string;metadata:Record<string,unknown>|null}> = [];
@@ -1506,10 +1520,12 @@ async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
       bySource.set(job.source, ids);
     }
     for (const [source, externalIds] of bySource) {
-      const { data: current, error: currentError } = await supabase.from("jobs")
-        .select("source,external_id,metadata")
-        .eq("source", source)
-        .in("external_id", externalIds);
+      const { data: current, error: currentError } = await retryOnStatementTimeout(() =>
+        supabase.from("jobs")
+          .select("source,external_id,metadata")
+          .eq("source", source)
+          .in("external_id", externalIds)
+      );
       if (currentError) throw currentError;
       existingRows.push(...(current ?? []));
     }
@@ -1519,12 +1535,14 @@ async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
       const protectedEntries = Object.entries(previous).filter(([key]) => key.startsWith("company_office_") || key.startsWith("company_address_"));
       return { ...job, metadata: { ...job.metadata, ...Object.fromEntries(protectedEntries) } };
     });
-    const { data, error } = await supabase
-      .from("jobs")
-      .upsert(rows, {
-        onConflict: "source,external_id",
-      })
-      .select("id,source,external_id");
+    const { data, error } = await retryOnStatementTimeout(() =>
+      supabase
+        .from("jobs")
+        .upsert(rows, {
+          onConflict: "source,external_id",
+        })
+        .select("id,source,external_id")
+    );
     if (error) throw error;
     const ids = new Map(
       (data ?? []).map(
@@ -1596,10 +1614,12 @@ async function deactivateMissingGreenhouse(
     if ((data?.length ?? 0) < pageSize) break;
   }
   for (let start = 0; start < staleIds.length; start += 200) {
-    const { error } = await supabase
-      .from("jobs")
-      .update({ status: "closed" })
-      .in("id", staleIds.slice(start, start + 200));
+    const { error } = await retryOnStatementTimeout(() =>
+      supabase
+        .from("jobs")
+        .update({ status: "closed" })
+        .in("id", staleIds.slice(start, start + 200))
+    );
     if (error) throw error;
   }
   return staleIds.length;

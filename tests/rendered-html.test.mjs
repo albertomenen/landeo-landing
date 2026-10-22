@@ -186,7 +186,7 @@ test("keeps the owner-only marketing pipeline separate from real applications", 
     "utf8",
   );
   const demo = productApp.split("function MarketingPipelineDemo")[1]?.split("function SavedView")[0];
-  assert.match(productApp, /user\.email\?\.trim\(\)\.toLowerCase\(\) === "alberto\.menendez89@gmail\.com"/);
+  assert.match(productApp, /user\?\.email\?\.trim\(\)\.toLowerCase\(\) === "alberto\.menendez89@gmail\.com"/);
   assert.match(demo, /useState\(100\)/);
   assert.match(demo, /value: 25/);
   assert.match(demo, /value: 6/);
@@ -453,7 +453,7 @@ test("keeps the marketing demo isolated from real applications", async () => {
   const response = await render("/demo/marketing");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Marketing Demo/);
+  assert.match(html, /Landeo — Marketing/);
   assert.match(html, /Datos ficticios/);
   assert.match(html, /noindex/);
 });
@@ -586,12 +586,10 @@ test("removes the disposable starter and keeps integration contracts", async () 
   assert.match(landeo, /application_capability","automatic"/);
   assert.match(landeo, /includeDismissed/);
   assert.match(landeo, /includeWorldwide/);
-  assert.match(landeo, /work_mode","Remoto"/);
+  assert.match(landeo, /work_mode",\["Remoto","Híbrido"\]/);
   assert.match(landeo, /profile\?\.universal_profile/);
-  assert.match(
-    jobLocation,
-    /global\|worldwide\|anywhere\|europe\|europa\|emea/,
-  );
+  assert.match(jobLocation, /global\|worldwide\|anywhere/);
+  assert.match(jobLocation, /europe\|europa\|emea/);
   assert.match(styles, /@keyframes landeo-confetti/);
   assert.match(productApp, /automaticEverywhere/);
   assert.match(productApp, /router\.push\(`\/app\/jobs\/\$\{job\.id\}`\)/);

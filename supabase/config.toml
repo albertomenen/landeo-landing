@@ -6,3 +6,7 @@ verify_jwt = false
 # The pg_cron Greenhouse sync authenticates with `x-import-secret`, not a JWT.
 [functions.import-jobs]
 verify_jwt = false
+
+# Stripe signs its webhooks; it does not send a Supabase JWT.
+[functions.stripe-webhook]
+verify_jwt = false
