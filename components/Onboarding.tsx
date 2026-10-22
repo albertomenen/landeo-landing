@@ -343,6 +343,22 @@ type WorldCity = {
   p: number;
 };
 let worldCitiesPromise: Promise<WorldCity[]> | null = null;
+// The bundled city list uses English names. Spanish speakers type these, so
+// they must match too; keyed by `${name}|${country code}`.
+const CITY_ALIASES: Record<string, string[]> = {
+  "Mexico City|MX": ["Ciudad de México", "CDMX", "México DF"],
+  "Munich|DE": ["München", "Múnich"],
+  "Lisbon|PT": ["Lisboa"],
+  "Florence|IT": ["Firenze", "Florencia"],
+  "Rome|IT": ["Roma"],
+  "Vienna|AT": ["Wien", "Viena"],
+  "Prague|CZ": ["Praha", "Praga"],
+  "Warsaw|PL": ["Warszawa", "Varsovia"],
+  "Moscow|RU": ["Moscú"],
+  "Brussels|BE": ["Bruxelles", "Bruselas"],
+  "Copenhagen|DK": ["København", "Copenhague"],
+  "Athens|GR": ["Atenas"],
+};
 const loadWorldCities = () =>
   (worldCitiesPromise ??= fetch("/cities-world.json").then((response) => {
     if (!response.ok) throw new Error("city_database");
@@ -735,17 +751,17 @@ export default function Onboarding() {
           partial: WorldCity[] = [],
           seen = new Set<string>();
         for (const city of database) {
-          const name = normalizeSearch(city.n),
-            ascii = normalizeSearch(city.a),
-            country = normalizeSearch(city.c),
-            key = `${city.n}|${city.cc}`;
+          const key = `${city.n}|${city.cc}`,
+            names = [city.n, city.a, ...(CITY_ALIASES[key] ?? [])]
+              .filter(Boolean)
+              .map(normalizeSearch),
+            country = normalizeSearch(city.c);
           if (seen.has(key)) continue;
-          if (name.startsWith(query) || ascii.startsWith(query)) {
+          if (names.some((name) => name.startsWith(query))) {
             prefix.push(city);
             seen.add(key);
           } else if (
-            name.includes(query) ||
-            ascii.includes(query) ||
+            names.some((name) => name.includes(query)) ||
             country.startsWith(query)
           ) {
             partial.push(city);

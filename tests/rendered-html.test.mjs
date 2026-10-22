@@ -608,3 +608,18 @@ test("removes the disposable starter and keeps integration contracts", async () 
   await access(new URL("public/og-landing.png", root));
   await access(new URL("public/og-bilingual.png", root));
 });
+
+test("city autocomplete matches Spanish names such as Ciudad de México", async () => {
+  const onboarding = await readFile(new URL("components/Onboarding.tsx", root), "utf8");
+  const cities = JSON.parse(await readFile(new URL("public/cities-world.json", root), "utf8"));
+  const block = onboarding.match(/const CITY_ALIASES[^=]*=\s*\{([\s\S]*?)\n\};/)?.[1] ?? "";
+  const aliases = [...block.matchAll(/"([^"|]+)\|([A-Z]{2})":\s*\[([^\]]*)\]/g)];
+  assert.ok(aliases.length >= 10);
+  const normalize = (value) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  for (const [, name, code] of aliases) {
+    assert.ok(cities.some((city) => city.n === name && city.cc === code), `${name}|${code} is not in cities-world.json`);
+  }
+  const mexico = aliases.find(([, name, code]) => name === "Mexico City" && code === "MX");
+  const names = [...mexico[3].matchAll(/"([^"]+)"/g)].map((match) => normalize(match[1]));
+  assert.ok(names.some((name) => name.startsWith(normalize("Ciudad de Mexico"))));
+});
