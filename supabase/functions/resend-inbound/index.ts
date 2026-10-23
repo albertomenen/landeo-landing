@@ -63,9 +63,13 @@ async function verifySignature(payload: string, id: string, timestamp: string, s
 const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// Reading received emails needs a Resend key with more than "sending access".
+// Keep it separate from RESEND_API_KEY, which only sends.
+const inboundApiKey = () => Deno.env.get("RESEND_INBOUND_API_KEY") || required("RESEND_API_KEY");
+
 async function fetchReceived(emailId: string) {
   const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
-    headers: { Authorization: `Bearer ${required("RESEND_API_KEY")}` },
+    headers: { Authorization: `Bearer ${inboundApiKey()}` },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Resend no devolvió el correo recibido (${response.status}).`);

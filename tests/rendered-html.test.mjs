@@ -725,6 +725,7 @@ test("reply tracking is opt-in, private and does not break the current flow", as
   assert.match(migration, /on delete cascade/);
   const inbound = await readFile(new URL("supabase/functions/resend-inbound/index.ts", root), "utf8");
   assert.match(inbound, /verifySignature/);
+  assert.match(inbound, /RESEND_INBOUND_API_KEY/);
   assert.match(inbound, /if \(!token\) return json\(\{ ok: true, ignored: true \}\)/);
   assert.match(inbound, /sender\.domain === replyDomain/);
   const config = await readFile(new URL("supabase/config.toml", root), "utf8");
