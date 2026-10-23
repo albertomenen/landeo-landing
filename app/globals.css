@@ -11991,3 +11991,16 @@ h1 em:after {
 .delivery-badge.pending { color: #795a18; background: #fff4d9; border-color: #f1dfad; }
 .delivery-badge.processing { color: #526698; background: #edf0f9; border-color: #dce3f5; }
 .delivery-badge.failed { color: #8a2f25; background: #fdf0ee; border-color: #f0c9c4; }
+
+.delivery-chip.replied:not(.active) { border-color: #bde7cd; background: #dff5e8; color: #24704b; }
+.delivery-badge.replied { color: #24704b; background: #dff5e8; border-color: #bde7cd; }
+.application-replies { display: grid; gap: 10px; margin: 16px 0; }
+.application-reply { background: #fff; border: 1px solid #d9e4d6; border-radius: 12px; padding: 12px 14px; display: grid; gap: 4px; }
+.application-reply.reply { border-color: #bde7cd; }
+.application-reply.bounce { border-color: #f0c9c4; background: #fdf0ee; }
+.application-reply header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.application-reply header strong { font-size: 12px; }
+.application-reply small, .application-reply p { font-size: 11px; color: #4f6455; margin: 0; }
+.application-reply-subject { font-weight: 700; color: #1d3a2a !important; }
+.application-reply-preview { white-space: pre-wrap; }
+.application-reply-note { margin-top: 4px !important; }

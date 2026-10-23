@@ -2415,6 +2415,7 @@ function ApplicationsView({
             <div className="delivery-summary" role="group" aria-label={localized(locale, "Estado del envío", "Delivery status")}>
               {([
                 ["all", localized(locale, "Todas", "All")],
+                ["replied", localized(locale, "Con respuesta", "Replied")],
                 ["sent", localized(locale, "Enviadas", "Sent")],
                 ["pending", localized(locale, "Por terminar", "To finish")],
                 ["processing", localized(locale, "En gestión", "In progress")],
@@ -2596,6 +2597,31 @@ function ApplicationsView({
                       <a className="application-guide-action" href={selected.actionUrl} target="_blank" rel="noreferrer">
                         {t.paywall.official}
                       </a>
+                    )}
+                    {selected.replies.length > 0 && (
+                      <div className="application-replies">
+                        <span className="overline">{localized(locale, "RESPUESTAS DE LA EMPRESA", "COMPANY REPLIES")}</span>
+                        {selected.replies.map((reply) => (
+                          <article key={reply.id} className={`application-reply ${reply.kind}`}>
+                            <header>
+                              <strong>
+                                {reply.kind === "reply"
+                                  ? localized(locale, "Respuesta", "Reply")
+                                  : reply.kind === "auto_reply"
+                                    ? localized(locale, "Respuesta automática", "Automatic reply")
+                                    : localized(locale, "Aviso de no entrega", "Delivery failure notice")}
+                              </strong>
+                              <small>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(reply.receivedAt))}</small>
+                            </header>
+                            {reply.senderName || reply.senderDomain ? <p className="application-reply-from">{[reply.senderName, reply.senderDomain].filter(Boolean).join(" · ")}</p> : null}
+                            {reply.subject ? <p className="application-reply-subject">{reply.subject}</p> : null}
+                            {reply.preview ? <p className="application-reply-preview">{reply.preview}</p> : null}
+                            {reply.kind === "reply" && (
+                              <small className="application-reply-note">{localized(locale, "Te la hemos reenviado a tu correo; contesta desde ahí.", "We forwarded it to your inbox; answer from there.")}</small>
+                            )}
+                          </article>
+                        ))}
+                      </div>
                     )}
                     <div className="application-guide-meta">
                       <span>{localized(locale, "Envío", "Delivery")}: {t.status[selected.status as keyof typeof t.status] ?? selected.status}</span>

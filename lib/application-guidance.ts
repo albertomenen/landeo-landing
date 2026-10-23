@@ -15,7 +15,7 @@ export type ApplicationGuide = {
 const copy = (locale: DashboardLocale, es: string, en: string) =>
   locale === "es" ? es : en;
 
-export type DeliveryKey = "sent" | "pending" | "processing" | "failed";
+export type DeliveryKey = "replied" | "sent" | "pending" | "processing" | "failed";
 export type DeliveryState = { key: DeliveryKey; label: string; ageDays: number };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,11 +25,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * person tracks for themselves (which defaults to "applied" for everything).
  */
 export function deliveryState(
-  application: Pick<LiveApplication, "status" | "deliveryStatus" | "appliedAt">,
+  application: Pick<LiveApplication, "status" | "deliveryStatus" | "appliedAt"> & { replies?: LiveApplication["replies"] },
   locale: DashboardLocale,
   now = Date.now(),
 ): DeliveryState {
   const ageDays = Math.max(0, Math.floor((now - Date.parse(application.appliedAt)) / DAY_MS)) || 0;
+  // A human answer from the company beats any delivery status, unless the send failed.
+  if (application.status !== "failed" && application.replies?.some((reply) => reply.kind === "reply")) {
+    return { key: "replied", ageDays, label: copy(locale, "La empresa ha respondido", "The company replied") };
+  }
   switch (application.status) {
     case "action_required":
       return { key: "pending", ageDays, label: copy(locale, "Falta que la termines tú", "You still need to finish it") };
@@ -52,6 +56,15 @@ export function applicationGuide(
   locale: DashboardLocale,
 ): ApplicationGuide {
   const { status, actionUrl, requiredFields, tracking } = application;
+  const lastReply = application.replies?.find((reply) => reply.kind === "reply");
+  if (status !== "failed" && lastReply) return {
+    tone: "progress",
+    title: copy(locale, "La empresa ha respondido", "The company replied"),
+    description: copy(locale, "Hemos recibido una respuesta de la empresa y te la hemos reenviado a tu correo. Puedes contestarla directamente desde ahí.", "We received a reply from the company and forwarded it to your inbox. You can answer it directly from there."),
+    waitingOn: copy(locale, "Tú", "You"),
+    nextStep: copy(locale, "Lee la respuesta, contesta a la empresa y anota abajo el siguiente paso.", "Read the reply, answer the company and note the next step below."),
+    source: "delivery",
+  };
 
   if (status === "action_required") return {
     tone: "action",

@@ -5,6 +5,7 @@ import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
 import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
+import { classifyInbound, parseReplyToken, parseSender, previewFromText } from "../supabase/functions/_shared/inbound-reply.ts";
 import { calculateJobMatch, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
 
 const root = new URL("../", import.meta.url);
@@ -661,4 +662,71 @@ test("shows what actually happened to an application, not the personal stage", (
   assert.match(guide.nextStep, /directamente/);
   const fresh = applicationGuide(app("queued"), "es");
   assert.equal(fresh.tone, "waiting");
+});
+
+
+test("recognises company replies sent to an application's reply address", () => {
+  const token = "0123456789abcdef0123456789abcdef";
+  const domain = "reply.getlandeo.com";
+  assert.equal(parseReplyToken([`apply+${token}@${domain}`], domain), token);
+  assert.equal(parseReplyToken([`"Ana Pérez" <APPLY+${token.toUpperCase()}@Reply.GetLandeo.com>`], domain), token);
+  // Other products share the Resend account: anything else is ignored.
+  assert.equal(parseReplyToken(["hello@mail.haired.app"], domain), null);
+  assert.equal(parseReplyToken([`apply+${token}@other.example.com`], domain), null);
+  assert.equal(parseReplyToken([`apply+short@${domain}`], domain), null);
+  assert.equal(parseReplyToken(undefined, domain), null);
+  assert.deepEqual(parseSender('"Marta Gil" <Marta@Empresa.COM>'), { name: "Marta Gil", address: "marta@empresa.com", domain: "empresa.com" });
+});
+
+test("tells human replies from automatic acknowledgements and bounces", () => {
+  const kind = (from, subject, headers = {}) => classifyInbound({ from, subject, headers });
+  assert.equal(kind("Marta Gil <marta@empresa.com>", "Re: Application: Partnerships Manager"), "reply");
+  assert.equal(kind("Marta Gil <marta@empresa.com>", "Sobre tu candidatura"), "reply");
+  assert.equal(kind("jobs@empresa.com", "Hemos recibido tu candidatura"), "auto_reply");
+  assert.equal(kind("jobs@empresa.com", "Thank you for applying"), "auto_reply");
+  assert.equal(kind("marta@empresa.com", "Fuera de la oficina"), "auto_reply");
+  assert.equal(kind("no-reply@ats.example.com", "Update"), "auto_reply");
+  assert.equal(kind("hr@empresa.com", "Hello", { "Auto-Submitted": "auto-replied" }), "auto_reply");
+  assert.equal(kind("hr@empresa.com", "Hello", [{ name: "Precedence", value: "bulk" }]), "auto_reply");
+  assert.equal(kind("hr@empresa.com", "Hello", { "Auto-Submitted": "no" }), "reply");
+  assert.equal(kind("MAILER-DAEMON@mx.empresa.com", "Returned mail"), "bounce");
+  assert.equal(kind("postmaster@empresa.com", "Delivery Status Notification (Failure)"), "bounce");
+});
+
+test("keeps only a short preview of a reply, without quoted history", () => {
+  const text = "Hola Daniel,\n\nGracias por tu candidatura. ¿Podemos hablar el jueves?\n\n> Hello, Daniel is applying...\nOn Thu, Oct 22, 2026 at 10:00 Landeo wrote:\n> older text";
+  assert.equal(previewFromText(text), "Hola Daniel, Gracias por tu candidatura. ¿Podemos hablar el jueves?");
+  const long = previewFromText("palabra ".repeat(100), 50);
+  assert.ok(long.length <= 50 && long.endsWith("…"));
+  assert.equal(previewFromText(null), "");
+});
+
+test("a human reply outranks the delivery state; a failed send does not", () => {
+  const base = { deliveryStatus: "delivered", appliedAt: "2026-10-20T12:00:00Z" };
+  const reply = { id: "r1", kind: "reply" };
+  assert.equal(deliveryState({ ...base, status: "sent", replies: [reply] }, "es").key, "replied");
+  assert.equal(deliveryState({ ...base, status: "sent", replies: [{ id: "r2", kind: "auto_reply" }] }, "es").key, "sent");
+  assert.equal(deliveryState({ ...base, status: "failed", replies: [reply] }, "es").key, "failed");
+  const guide = applicationGuide({ ...base, status: "sent", actionUrl: null, requiredFields: [], replies: [reply],
+    tracking: { stage: "applied", notes: "", nextAction: "", nextActionAt: null, updatedAt: null } }, "es");
+  assert.equal(guide.title, "La empresa ha respondido");
+});
+
+test("reply tracking is opt-in, private and does not break the current flow", async () => {
+  const submit = await readFile(new URL("supabase/functions/submit-application/index.ts", root), "utf8");
+  // Without REPLY_DOMAIN (or for the internal intake) the candidate keeps getting replies directly.
+  assert.match(submit, /let replyTo = candidateEmail;/);
+  assert.match(submit, /if \(replyDomain && !internalIntake\)/);
+  assert.match(submit, /reply_to: replyTo,/);
+  const migration = await readFile(new URL("supabase/migrations/20261023180000_add_application_replies.sql", root), "utf8");
+  assert.match(migration, /alter table public\.application_replies enable row level security/);
+  assert.match(migration, /using \(user_id = auth\.uid\(\)\)/);
+  assert.doesNotMatch(migration, /create policy[^;]*for (insert|update|delete)/i);
+  assert.match(migration, /on delete cascade/);
+  const inbound = await readFile(new URL("supabase/functions/resend-inbound/index.ts", root), "utf8");
+  assert.match(inbound, /verifySignature/);
+  assert.match(inbound, /if \(!token\) return json\(\{ ok: true, ignored: true \}\)/);
+  assert.match(inbound, /sender\.domain === replyDomain/);
+  const config = await readFile(new URL("supabase/config.toml", root), "utf8");
+  assert.match(config, /\[functions\.resend-inbound\]\s*verify_jwt = false/);
 });

@@ -8,6 +8,7 @@ const PUSHABLE_EVENTS = new Set([
   "resend_bounced",
   "resend_failed",
   "resend_suppressed",
+  "company_reply",
 ]);
 
 const TITLES: Record<string, string> = {
@@ -20,6 +21,7 @@ const TITLES: Record<string, string> = {
   resend_bounced: "El correo fue rechazado",
   resend_failed: "Falló la entrega del CV",
   resend_suppressed: "Envío bloqueado",
+  company_reply: "Una empresa ha respondido",
 };
 
 export async function sendApplicationPush(

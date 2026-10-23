@@ -417,6 +417,18 @@ export function marketingDemoApplications(now = Date.now()): LiveApplication[] {
       events: [
         { id: `${id}-sent`, applicationId: id, type: "sent", message: "Candidatura enviada (demo)", createdAt: appliedAt, readAt: appliedAt },
       ],
+      replies: entry.status === "interview"
+        ? [{
+          id: `${id}-reply`,
+          applicationId: id,
+          kind: "reply" as const,
+          senderName: `Equipo de selección de ${job.company}`,
+          senderDomain: "empresa-demo.example",
+          subject: "Próximos pasos de tu candidatura (demo)",
+          preview: "Gracias por tu interés. Nos gustaría hablar contigo esta semana. Mensaje ficticio de demostración.",
+          receivedAt: updatedAt,
+        }]
+        : [],
     };
   });
 }

@@ -756,6 +756,19 @@ Deno.serve(async (request) => {
       const officialSubject = safeEmailSubject(
         target.metadata?.application_subject,
       );
+      // Replies go through Landeo (apply+<token>@REPLY_DOMAIN) so we can show them
+      // and forward them to the candidate. Without REPLY_DOMAIN, or for the
+      // internal intake mailbox, the candidate keeps receiving them directly.
+      const replyDomain = (Deno.env.get("REPLY_DOMAIN") ?? "").trim().toLowerCase();
+      let replyTo = candidateEmail;
+      if (replyDomain && !internalIntake) {
+        const { data: tokenRow } = await admin.from("applications").select("reply_token")
+          .eq("id", application.id).maybeSingle();
+        const replyToken = String(tokenRow?.reply_token ?? "");
+        if (/^[a-f0-9]{32}$/.test(replyToken)) {
+          replyTo = `"${candidateName.replace(/["\\]/g, "")}" <apply+${replyToken}@${replyDomain}>`;
+        }
+      }
       const resendResponse = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -765,7 +778,7 @@ Deno.serve(async (request) => {
         body: JSON.stringify({
           from,
           to: [recipient],
-          reply_to: candidateEmail,
+          reply_to: replyTo,
           subject: internalIntake
             ? `[Landeo · ${postingLanguage === "en" ? "To manage" : "Por gestionar"}] ${job.company} — ${job.title} — ${profile.full_name}`
             : officialSubject ||
