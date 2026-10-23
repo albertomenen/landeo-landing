@@ -15,6 +15,38 @@ export type ApplicationGuide = {
 const copy = (locale: DashboardLocale, es: string, en: string) =>
   locale === "es" ? es : en;
 
+export type DeliveryKey = "sent" | "pending" | "processing" | "failed";
+export type DeliveryState = { key: DeliveryKey; label: string; ageDays: number };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * What actually happened to the submission, independent of the stage the
+ * person tracks for themselves (which defaults to "applied" for everything).
+ */
+export function deliveryState(
+  application: Pick<LiveApplication, "status" | "deliveryStatus" | "appliedAt">,
+  locale: DashboardLocale,
+  now = Date.now(),
+): DeliveryState {
+  const ageDays = Math.max(0, Math.floor((now - Date.parse(application.appliedAt)) / DAY_MS)) || 0;
+  switch (application.status) {
+    case "action_required":
+      return { key: "pending", ageDays, label: copy(locale, "Falta que la termines tú", "You still need to finish it") };
+    case "failed":
+      return { key: "failed", ageDays, label: copy(locale, "No se pudo enviar", "Could not be sent") };
+    case "queued":
+    case "processing":
+      return { key: "processing", ageDays, label: ageDays >= 3
+        ? copy(locale, `En gestión desde hace ${ageDays} días`, `In progress for ${ageDays} days`)
+        : copy(locale, "En gestión por Landeo", "Being handled by Landeo") };
+    default:
+      return { key: "sent", ageDays, label: application.deliveryStatus === "delivered"
+        ? copy(locale, "Entregada a la empresa", "Delivered to the company")
+        : copy(locale, "Enviada a la empresa", "Sent to the company") };
+  }
+}
+
 export function applicationGuide(
   application: LiveApplication,
   locale: DashboardLocale,
@@ -45,14 +77,24 @@ export function applicationGuide(
     source: "delivery",
   };
 
-  if (status === "queued" || status === "processing") return {
-    tone: "waiting",
-    title: copy(locale, "Landeo está gestionando el envío", "Landeo is handling the submission"),
-    description: copy(locale, "Todavía no hay confirmación de envío a la empresa. No es una respuesta del reclutador.", "Submission to the company is not confirmed yet. This is not a recruiter response."),
-    waitingOn: "Landeo",
-    nextStep: copy(locale, "Por ahora, espera una actualización del estado de envío.", "For now, wait for an update to the delivery status."),
-    source: "delivery",
-  };
+  if (status === "queued" || status === "processing") {
+    const { ageDays } = deliveryState(application, locale);
+    const stuck = ageDays >= 7;
+    return {
+      tone: stuck ? "action" : "waiting",
+      title: stuck
+        ? copy(locale, `Lleva ${ageDays} días en gestión`, `It has been in progress for ${ageDays} days`)
+        : copy(locale, "Landeo está gestionando el envío", "Landeo is handling the submission"),
+      description: stuck
+        ? copy(locale, "Todavía no hay confirmación de que la empresa la haya recibido. Esto no es una respuesta del reclutador ni un rechazo.", "There is still no confirmation that the company received it. This is neither a recruiter response nor a rejection.")
+        : copy(locale, "Todavía no hay confirmación de envío a la empresa. No es una respuesta del reclutador.", "Submission to the company is not confirmed yet. This is not a recruiter response."),
+      waitingOn: "Landeo",
+      nextStep: stuck
+        ? copy(locale, "No esperes más: puedes aplicar tú directamente en la web de la empresa o escribirnos y lo revisamos.", "Don't wait any longer: you can apply directly on the company website, or write to us and we will check it.")
+        : copy(locale, "Por ahora, espera una actualización del estado de envío.", "For now, wait for an update to the delivery status."),
+      source: "delivery",
+    };
+  }
 
   if (status === "rejected") return {
     tone: "closed",

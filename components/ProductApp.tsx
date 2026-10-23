@@ -55,7 +55,7 @@ import { SupportChat } from "./SupportChat";
 import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
 import { marketingDemoApplications, marketingDemoJobs } from "../lib/marketing-demo";
-import { applicationGuide } from "../lib/application-guidance";
+import { applicationGuide, deliveryState, type DeliveryKey } from "../lib/application-guidance";
 import { trackProductEvent } from "../lib/analytics";
 
 export type ProductView =
@@ -2227,6 +2227,7 @@ function ApplicationsView({
   const [statusFilter, setStatusFilter] = useState<"all" | TrackingStage>(
     "all",
   );
+  const [deliveryFilter, setDeliveryFilter] = useState<"all" | DeliveryKey>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -2287,10 +2288,11 @@ function ApplicationsView({
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
+        if (deliveryFilter !== "all" && deliveryState(item, locale).key !== deliveryFilter) return false;
         if (statusFilter === "all") return true;
         return item.tracking.stage === statusFilter;
       }),
-    [items, statusFilter],
+    [items, statusFilter, deliveryFilter, locale],
   );
   useEffect(() => {
     if (!filteredItems.some((item) => item.id === selected?.id)) {
@@ -2409,6 +2411,31 @@ function ApplicationsView({
       )}
       <div className="applications-layout">
         <section className="applications-list">
+          {items.length > 0 && (
+            <div className="delivery-summary" role="group" aria-label={localized(locale, "Estado del envío", "Delivery status")}>
+              {([
+                ["all", localized(locale, "Todas", "All")],
+                ["sent", localized(locale, "Enviadas", "Sent")],
+                ["pending", localized(locale, "Por terminar", "To finish")],
+                ["processing", localized(locale, "En gestión", "In progress")],
+                ["failed", localized(locale, "No enviadas", "Not sent")],
+              ] as Array<["all" | DeliveryKey, string]>).map(([key, label]) => {
+                const count = key === "all" ? items.length : items.filter((item) => deliveryState(item, locale).key === key).length;
+                if (key !== "all" && !count) return null;
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`delivery-chip ${key}${deliveryFilter === key ? " active" : ""}`}
+                    aria-pressed={deliveryFilter === key}
+                    onClick={() => setDeliveryFilter(key)}
+                  >
+                    {label} <b>{count}</b>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="status-tabs">
             <button
               type="button"
@@ -2497,9 +2524,16 @@ function ApplicationsView({
                   }).format(new Date(application.updatedAt))}
                 </small>
               </div>
-              <span className={`tracking-badge ${application.tracking.stage}`}>
-                {trackingLabel(application.tracking.stage, locale)}
-              </span>
+              {(() => {
+                const delivery = deliveryState(application, locale);
+                return delivery.key === "sent" ? (
+                  <span className={`tracking-badge ${application.tracking.stage}`}>
+                    {application.tracking.updatedAt ? trackingLabel(application.tracking.stage, locale) : delivery.label}
+                  </span>
+                ) : (
+                  <span className={`delivery-badge ${delivery.key}`}>{delivery.label}</span>
+                );
+              })()}
             </m.button>
           ))}
         </section>
@@ -2514,9 +2548,16 @@ function ApplicationsView({
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <span className={`tracking-badge ${selected.tracking.stage}`}>
-                  {trackingLabel(selected.tracking.stage, locale)}
-                </span>
+                {(() => {
+                  const delivery = deliveryState(selected, locale);
+                  return delivery.key === "sent" ? (
+                    <span className={`tracking-badge ${selected.tracking.stage}`}>
+                      {selected.tracking.updatedAt ? trackingLabel(selected.tracking.stage, locale) : delivery.label}
+                    </span>
+                  ) : (
+                    <span className={`delivery-badge ${delivery.key}`}>{delivery.label}</span>
+                  );
+                })()}
                 <h2>{selected.job.title}</h2>
                 <p>
                   {selected.job.company} · {selected.job.location}
@@ -2543,6 +2584,14 @@ function ApplicationsView({
                         )}
                       </div>
                     </div>
+                    {(selected.status === "queued" || selected.status === "processing") && deliveryState(selected, locale).ageDays >= 7 && (() => {
+                      const url = String(selected.job.metadata?.canonical_apply_url ?? selected.job.metadata?.source_url ?? "");
+                      return /^https?:\/\//.test(url) ? (
+                        <a className="application-guide-action" href={url} target="_blank" rel="noreferrer">
+                          {localized(locale, "Aplicar yo directamente en la web", "Apply directly on the company site")}
+                        </a>
+                      ) : null;
+                    })()}
                     {selected.status === "action_required" && selected.actionUrl && (
                       <a className="application-guide-action" href={selected.actionUrl} target="_blank" rel="noreferrer">
                         {t.paywall.official}

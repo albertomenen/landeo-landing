@@ -4,6 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
+import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
 import { calculateJobMatch, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
 
 const root = new URL("../", import.meta.url);
@@ -637,4 +638,27 @@ test("searching for a place finds its jobs and never leaves the feed empty", asy
   assert.match(productApp, /citySearchTerms\(value\)/);
   assert.match(productApp, /searchFallback/);
   assert.match(productApp, /job\.workMode === "remote"/);
+});
+
+
+test("shows what actually happened to an application, not the personal stage", () => {
+  const now = Date.parse("2026-10-23T12:00:00Z");
+  const app = (status, extra = {}) => ({
+    status, deliveryStatus: null, appliedAt: "2026-10-22T12:00:00Z", actionUrl: null, requiredFields: [],
+    tracking: { stage: "applied", notes: "", nextAction: "", nextActionAt: null, updatedAt: null }, ...extra,
+  });
+  assert.equal(deliveryState(app("action_required"), "es", now).key, "pending");
+  assert.equal(deliveryState(app("failed"), "es", now).key, "failed");
+  assert.equal(deliveryState(app("queued"), "es", now).key, "processing");
+  assert.equal(deliveryState(app("sent", { deliveryStatus: "delivered" }), "es", now).label, "Entregada a la empresa");
+  assert.equal(deliveryState(app("sent"), "en", now).label, "Sent to the company");
+  // A queued application that has waited a week is called out, never shown as "Aplicada".
+  const old = app("queued", { appliedAt: "2026-10-10T12:00:00Z" });
+  assert.match(deliveryState(old, "es", now).label, /13 días/);
+  const guide = applicationGuide(old, "es");
+  assert.equal(guide.tone, "action");
+  assert.match(guide.title, /días en gestión/);
+  assert.match(guide.nextStep, /directamente/);
+  const fresh = applicationGuide(app("queued"), "es");
+  assert.equal(fresh.tone, "waiting");
 });
