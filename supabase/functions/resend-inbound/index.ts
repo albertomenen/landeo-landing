@@ -191,7 +191,9 @@ Deno.serve(async (request) => {
       const intro = `${company} ha respondido a tu candidatura para ${title} a través de Landeo. Puedes contestar directamente a este correo y llegará a la empresa.`;
       const forwardResponse = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: { Authorization: `Bearer ${required("RESEND_API_KEY")}`, "Content-Type": "application/json" },
+        // RESEND_API_KEY is limited to the application sending domain, so the forward
+        // (sent from the reply domain) uses the same dedicated key that reads mail.
+        headers: { Authorization: `Bearer ${inboundApiKey()}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: `${company.replace(/[<>"\r\n]/g, " ").trim().slice(0, 60)} vía Landeo <respuestas@${replyDomain}>`,
           to: [candidateEmail],
