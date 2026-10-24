@@ -12,7 +12,7 @@ export const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> 
     privacy: {
       title: "Privacy Policy",
       intro: "This policy explains what information Landeo uses, why it is needed, who may process it and the choices available to you.",
-      updated: "Effective and last updated: 14 September 2026",
+      updated: "Effective and last updated: 24 October 2026",
       notice: "Landeo is designed to keep your information private. We do not sell personal data. Access is restricted and information is encrypted in transit; no online service can promise absolute security.",
       sections: [
         { title: "1. Who is responsible", paragraphs: [
@@ -27,12 +27,14 @@ export const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> 
           "Technical and security information needed to operate the service, including timestamps, device or browser information, IP-derived security data and error logs.",
           "Subscription or entitlement status supplied by the relevant marketplace or service provider. Landeo does not receive your complete payment-card details from Apple.",
           "For web purchases, Stripe processes payments. We record the version of the billing conditions and consent wording accepted, server timestamp, account and checkout reference to administer the contract and handle claims. These records do not depend on analytics cookies and are retained only as necessary for contractual and legal purposes.",
+          "Employer replies to applications sent by email: sender (name and domain), subject, date, type (reply, automatic reply or delivery-failure notice) and a preview of up to 280 characters. The full message is forwarded to your email and Landeo does not keep it.",
           "Optional website analytics and privacy-masked interaction data, such as pages, clicks and scrolling, only after you accept analytics cookies. We do not use this consent to enable personalized advertising.",
         ] },
         { title: "3. Why we use information", bullets: [
           "Create and secure your account and synchronize your profile across devices.",
           "Match and display potentially relevant jobs based on the preferences you choose.",
           "Prepare and submit an application after you expressly choose to apply.",
+          "Show you, and forward to your email, the replies that employers send to your applications, and notify you about them.",
           "Generate a tailored cover letter when you have enabled that feature.",
           "Provide support, prevent misuse, diagnose errors and improve reliability.",
           "Comply with legal obligations and establish, exercise or defend legal claims.",
@@ -46,16 +48,18 @@ export const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> 
         ] },
         { title: "6. Applications and disclosures to employers", paragraphs: [
           "A job application starts only after your express action to apply and the required consent. Landeo may then disclose the application details needed by the employer, its applicant-tracking system or the relevant job platform. This can include your identity, contact details, CV, professional profile and tailored cover letter.",
+          "When an application is sent by email, the message uses a unique Landeo address as its reply address (apply+code@reply.getlandeo.com), different for each application. If the employer replies, the message reaches Landeo, which forwards it to your email so you can answer. Your later replies from your own email go directly to the employer and no longer pass through Landeo. Landeo does not read these replies manually: it only classifies them automatically (reply, automatic reply or delivery-failure notice) so it can show them to you.",
           "If an external sign-in, question, consent screen or CAPTCHA requires your attention, Landeo returns control to you. Once information reaches an employer or job platform, that recipient processes it under its own privacy notice and applicable law.",
         ] },
         { title: "7. Service providers and international processing", paragraphs: [
-          "We use carefully selected providers only where needed to operate Landeo. These may include Supabase for authentication, database and private file storage; OpenAI for user-enabled AI drafting; Resend for transactional email and supported application delivery; Apple and Google for sign-in; Apple and relevant subscription infrastructure for entitlement status; Google Analytics for consented website analytics; and Microsoft Clarity for consented, privacy-masked session replays and heatmaps. Form inputs and marked private areas are masked. Employers, applicant-tracking systems and job platforms receive data only as needed for applications you initiate.",
+          "We use carefully selected providers only where needed to operate Landeo. These may include Supabase for authentication, database and private file storage; OpenAI for user-enabled AI drafting; Resend for transactional email, supported application delivery and receiving and forwarding employer replies; Apple and Google for sign-in; Apple and relevant subscription infrastructure for entitlement status; Google Analytics for consented website analytics; and Microsoft Clarity for consented, privacy-masked session replays and heatmaps. Form inputs and marked private areas are masked. Employers, applicant-tracking systems and job platforms receive data only as needed for applications you initiate.",
           "Some providers may process information outside Spain or the European Economic Area. Where required, transfers rely on an adequacy decision, contractual safeguards such as Standard Contractual Clauses, or another lawful mechanism. Providers must protect information consistently with their contracts and applicable law.",
           "Landeo is not designed for routine manual reading of private CVs or profile content. Authorized access may nevertheless occur when reasonably necessary for support requested by you, security, abuse prevention or legal compliance.",
           "If you use the support chat, your message and a pseudonymous account reference are relayed to our team through Telegram; replies are stored in Landeo using Cloudflare. Do not send passwords, CVs or sensitive personal information. The web chat displays up to 100 recent messages and removes records older than 90 days during subsequent chat activity. Telegram may retain separate copies under its own privacy policy; contact us for a support-data deletion request.",
         ] },
         { title: "8. Retention and permanent account deletion", paragraphs: [
           "Profile, CV, preferences and application history are retained while your account is active so the service can work. You can permanently delete your account from within the app. You may also contact us from the email address linked to the account if you cannot access that option.",
+          "Stored employer replies (sender, subject, type and preview) are kept while your account is active and are deleted when you delete your account. Landeo does not keep the full employer message; the email provider may keep temporary copies under its own terms.",
           "Deletion removes or irreversibly anonymizes account information from active systems. Limited copies may remain temporarily in encrypted backups or security logs and are removed through the normal backup cycle, unless a longer period is required to prevent fraud, resolve a dispute or comply with law. Information already sent to an employer or job platform must be deleted directly with that recipient.",
         ] },
         { title: "9. Security", paragraphs: [
@@ -136,7 +140,7 @@ export const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> 
     privacy: {
       title: "Política de privacidad",
       intro: "Esta política explica qué información utiliza Landeo, por qué es necesaria, quién puede tratarla y qué opciones tienes.",
-      updated: "Vigente y actualizada por última vez: 14 de septiembre de 2026",
+      updated: "Vigente y actualizada por última vez: 24 de octubre de 2026",
       notice: "Landeo está diseñado para mantener privada tu información. No vendemos datos personales. El acceso está restringido y la información se cifra durante la transmisión; ningún servicio en línea puede prometer seguridad absoluta.",
       sections: [
         { title: "1. Responsable del tratamiento", paragraphs: [
@@ -151,12 +155,14 @@ export const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> 
           "Información técnica y de seguridad necesaria para operar el servicio, incluidos marcas de tiempo, datos de dispositivo o navegador, datos de seguridad derivados de la IP y registros de errores.",
           "Estado de suscripción o acceso facilitado por la tienda o el proveedor correspondiente. Landeo no recibe de Apple los datos completos de tu tarjeta.",
           "Para compras web, Stripe procesa los pagos. Registramos la versión de las condiciones y los textos de consentimiento aceptados, fecha y hora del servidor, cuenta y referencia del checkout para gestionar el contrato y las reclamaciones. Estos registros no dependen de cookies analíticas y se conservan solo durante el tiempo necesario para fines contractuales y legales.",
+          "Respuestas de empresas a tus candidaturas enviadas por correo: remitente (nombre y dominio), asunto, fecha, tipo (respuesta, respuesta automática o aviso de no entrega) y un extracto de hasta 280 caracteres. El mensaje completo se reenvía a tu correo y Landeo no lo conserva.",
           "Analítica web opcional y datos de interacción protegidos, como páginas, clics y desplazamiento, únicamente después de que aceptes las cookies analíticas. No usamos este consentimiento para activar publicidad personalizada.",
         ] },
         { title: "3. Para qué usamos la información", bullets: [
           "Crear y proteger tu cuenta y sincronizar tu perfil entre dispositivos.",
           "Mostrar empleos potencialmente relevantes según las preferencias que elijas.",
           "Preparar y enviar una candidatura después de que decidas expresamente postularte.",
+          "Mostrarte y reenviarte a tu correo las respuestas que las empresas envíen a tus candidaturas, y avisarte de ellas.",
           "Generar una carta adaptada cuando hayas activado esa función.",
           "Prestar soporte, evitar usos indebidos, diagnosticar errores y mejorar la fiabilidad.",
           "Cumplir obligaciones legales y formular, ejercer o defender reclamaciones.",
@@ -168,16 +174,18 @@ export const documents: Record<LandingLocale, Record<LegalKind, LegalDocument>> 
         ] },
         { title: "6. Candidaturas y comunicación a empresas", paragraphs: [
           "Una candidatura solo comienza después de tu acción expresa de postularte y del consentimiento necesario. Landeo puede entonces comunicar los datos requeridos a la empresa, su sistema de seguimiento de candidatos o el portal correspondiente. Esto puede incluir identidad, contacto, CV, perfil profesional y carta adaptada.",
+          "Cuando una candidatura se envía por correo, el mensaje indica como dirección de respuesta una dirección única de Landeo (apply+código@reply.getlandeo.com), distinta para cada candidatura. Si la empresa responde, el mensaje llega a Landeo, que lo reenvía a tu correo para que puedas contestar. Tus respuestas posteriores desde tu correo irán directamente a la empresa y ya no pasan por Landeo. Landeo no lee manualmente estas respuestas: solo las clasifica de forma automática (respuesta, respuesta automática o aviso de no entrega) para mostrártelas.",
           "Si un acceso externo, pregunta, pantalla de consentimiento o CAPTCHA requiere tu atención, Landeo te devuelve el control. Cuando la información llega a una empresa o plataforma, ese destinatario la trata conforme a su propio aviso de privacidad y la ley aplicable.",
         ] },
         { title: "7. Proveedores y tratamiento internacional", paragraphs: [
-          "Utilizamos proveedores seleccionados solo cuando son necesarios para operar Landeo. Pueden incluir Supabase para autenticación, base de datos y archivos privados; OpenAI para redacción con IA activada por el usuario; Resend para correo transaccional y entregas compatibles; Apple y Google para iniciar sesión; Apple y la infraestructura de suscripciones correspondiente para confirmar el acceso; Google Analytics para analítica web consentida; y Microsoft Clarity para mapas de calor y grabaciones de sesión protegidas y consentidas. Los formularios y las zonas privadas marcadas permanecen ocultos. Las empresas, sistemas de candidatos y portales reciben datos únicamente cuando es necesario para candidaturas iniciadas por ti.",
+          "Utilizamos proveedores seleccionados solo cuando son necesarios para operar Landeo. Pueden incluir Supabase para autenticación, base de datos y archivos privados; OpenAI para redacción con IA activada por el usuario; Resend para correo transaccional, entregas compatibles y la recepción y reenvío de las respuestas de las empresas; Apple y Google para iniciar sesión; Apple y la infraestructura de suscripciones correspondiente para confirmar el acceso; Google Analytics para analítica web consentida; y Microsoft Clarity para mapas de calor y grabaciones de sesión protegidas y consentidas. Los formularios y las zonas privadas marcadas permanecen ocultos. Las empresas, sistemas de candidatos y portales reciben datos únicamente cuando es necesario para candidaturas iniciadas por ti.",
           "Algunos proveedores pueden tratar información fuera de España o del Espacio Económico Europeo. Cuando es necesario, las transferencias se apoyan en una decisión de adecuación, garantías contractuales como las Cláusulas Contractuales Tipo u otro mecanismo válido. Los proveedores deben proteger la información conforme a sus contratos y a la ley aplicable.",
           "Landeo no está diseñado para la lectura manual habitual de CV o perfiles privados. Aun así, puede producirse acceso autorizado cuando sea razonablemente necesario para el soporte que solicites, seguridad, prevención de abusos o cumplimiento legal.",
           "Si utilizas el chat de soporte, tu mensaje y una referencia seudónima de tu cuenta se transmiten a nuestro equipo mediante Telegram; las respuestas se guardan en Landeo con Cloudflare. No envíes contraseñas, CV ni información sensible. El chat web muestra hasta 100 mensajes recientes y elimina registros de más de 90 días durante la actividad posterior del chat. Telegram puede conservar copias separadas conforme a su política de privacidad; contacta con nosotros para solicitar la eliminación de datos de soporte.",
         ] },
         { title: "8. Conservación y eliminación definitiva de la cuenta", paragraphs: [
           "El perfil, CV, preferencias e historial de candidaturas se conservan mientras la cuenta esté activa para que funcione el servicio. Puedes eliminar definitivamente tu cuenta desde la propia app. También puedes contactarnos desde el correo asociado a la cuenta si no puedes acceder a esa opción.",
+          "Las respuestas de empresas guardadas (remitente, asunto, tipo y extracto) se conservan mientras la cuenta esté activa y se eliminan al borrar la cuenta. Landeo no guarda el mensaje completo de la empresa; el proveedor de correo puede conservar copias temporales según sus propias condiciones.",
           "La eliminación suprime o anonimiza de forma irreversible la información de la cuenta en los sistemas activos. Algunas copias limitadas pueden permanecer temporalmente en copias de seguridad cifradas o registros de seguridad y se eliminan en el ciclo normal de las copias, salvo que deban conservarse más tiempo para impedir fraude, resolver una disputa o cumplir la ley. La información ya enviada a una empresa o portal debe eliminarse directamente con ese destinatario.",
         ] },
         { title: "9. Seguridad", paragraphs: ["Landeo utiliza almacenamiento privado, controles de acceso, solicitudes autenticadas y cifrado durante la transmisión. Las credenciales del servicio se mantienen en infraestructura protegida del servidor y no se exponen en la app. Aunque aplicamos medidas técnicas y organizativas razonables, ningún sistema de transmisión o almacenamiento en Internet es completamente seguro."] },

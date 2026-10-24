@@ -804,3 +804,25 @@ test("Lever and Ashby offers that leave a company's board are closed, and run da
   assert.match(cleaner, /process\.argv\.includes\("--write"\)/);
   assert.match(cleaner, /code === 404 \|\| code === 410/);
 });
+
+
+test("the privacy policy discloses how employer replies are processed, in both languages", async () => {
+  const legal = await readFile(new URL("lib/legal-documents.ts", root), "utf8");
+  // Spanish
+  assert.match(legal, /Respuestas de empresas a tus candidaturas enviadas por correo/);
+  assert.match(legal, /apply\+código@reply\.getlandeo\.com/);
+  assert.match(legal, /extracto de hasta 280 caracteres/);
+  assert.match(legal, /la recepción y reenvío de las respuestas de las empresas/);
+  assert.match(legal, /se eliminan al borrar la cuenta/);
+  // English
+  assert.match(legal, /Employer replies to applications sent by email/);
+  assert.match(legal, /apply\+code@reply\.getlandeo\.com/);
+  assert.match(legal, /preview of up to 280 characters/);
+  assert.match(legal, /receiving and forwarding employer replies/);
+  assert.match(legal, /are deleted when you delete your account/);
+  assert.match(legal, /last updated: 24 October 2026/);
+  assert.match(legal, /actualizada por última vez: 24 de octubre de 2026/);
+  // The preview limit stated to users must match what the function really stores.
+  const helper = await readFile(new URL("supabase/functions/_shared/inbound-reply.ts", root), "utf8");
+  assert.match(helper, /previewFromText\(text: unknown, max = 280\)/);
+});
