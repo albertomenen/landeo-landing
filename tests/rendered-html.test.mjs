@@ -6,7 +6,7 @@ import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
 import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
 import { classifyInbound, parseReplyToken, parseSender, previewFromText } from "../supabase/functions/_shared/inbound-reply.ts";
-import { calculateJobMatch, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
+import { calculateJobMatch, isJobProfessionallyRelevant, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -747,4 +747,28 @@ test("job sources can be refreshed by category, expire old ads and feed LatAm re
   assert.match(schedule, /revoke all on function public\.sync_job_sources/);
   assert.match(schedule, /sync-jobicy-daily/);
   assert.match(schedule, /sync-adzuna-mx-daily/);
+});
+
+
+test("matches Latin American roles in both Spanish and English across every onboarding category", () => {
+  const job = (title, extra = {}) => ({ title, summary: "", description: "", location: "Bogotá, Colombia", work_mode: "Presencial", salary_min: null, salary_max: null, seniority: null, metadata: {}, ...extra });
+  const profile = (role) => ({ role, location: "Bogotá, Colombia", skills: [], workModes: [], minSalary: null, maxSalary: null, yearsExperience: 4, country: "Colombia" });
+  const relevant = (role, title) => isJobProfessionallyRelevant(job(title), profile(role));
+  // Operations (the most chosen category) used to match almost nothing.
+  for (const title of ["Analista de Operaciones", "Operations Manager", "Coordinador de Logística", "Supply Chain Analyst", "Jefe de Compras", "Customer Success Manager", "Project Manager"]) {
+    assert.equal(relevant("Operaciones", title), true, title);
+  }
+  assert.equal(relevant("Project Management, Cadena de suministro", "Supply Chain Coordinator"), true);
+  // Finance, HR, sales and legal in Spanish.
+  assert.equal(relevant("Finanzas", "Contador Senior"), true);
+  assert.equal(relevant("Contabilidad, Auditoría", "Analista de Auditoría Interna"), true);
+  assert.equal(relevant("Recursos humanos", "Reclutador IT"), true);
+  assert.equal(relevant("Marketing y ventas", "Ejecutivo Comercial"), true);
+  assert.equal(relevant("Marketing y ventas", "Community Manager"), true);
+  assert.equal(relevant("Legal", "Abogado Corporativo"), true);
+  assert.equal(relevant("Salud", "Enfermero/a"), true);
+  // And it must not let unrelated families through.
+  assert.equal(relevant("Operaciones", "Senior Backend Engineer"), false);
+  assert.equal(relevant("Finanzas", "Diseñador UX"), false);
+  assert.equal(relevant("Recursos humanos", "Account Executive"), false);
 });

@@ -89,13 +89,18 @@ const jobSearchGroups:Array<{match:RegExp;terms:string[]}>= [
   {match:/design|disen|ux|ui/i,terms:["design","designer","ux","ui","product design","research"]},
   {match:/sales|ventas|comercial/i,terms:["sales","account executive","business development","partnerships","revenue"]},
   {match:/data|datos|analytics/i,terms:["data","analytics","analyst","machine learning","artificial intelligence"]},
-  {match:/human resources|recursos humanos|talent|people/i,terms:["recruiting","recruiter","talent","people","human resources"]},
+  {match:/human resources|recursos humanos|rrhh|talent|people/i,terms:["recruiting","recruiter","talent","people","human resources","reclutador","seleccion","talento"]},
+  {match:/finance|finanzas|accounting|contab|auditor|riesgo/i,terms:["finance","financial","accounting","accountant","contable","contabilidad","contador","financiero","auditoria","tesoreria"]},
+  {match:/operaciones|operations|supply|suministro|logistic|compras|procurement|project management|clientes|customer/i,terms:["operaciones","operations","logistica","logistics","supply chain","compras","procurement","coordinador","coordinator","administrativo","customer service","atencion al cliente","customer success","soporte"]},
+  {match:/legal|abogad|compliance|cumplimiento/i,terms:["legal","abogado","lawyer","counsel","compliance","cumplimiento"]},
+  {match:/salud|health|medic|enfermer|clinic|farmac|pharma/i,terms:["salud","health","medico","enfermero","nurse","clinical","farmacia","pharma"]},
 ];
 function searchTerms(value:string){
   const safe=value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[%_,().]/g," ").replace(/\s+/g," ").trim().slice(0,80);
   if(!safe)return[];
-  const group=jobSearchGroups.find(item=>item.match.test(safe));
-  return Array.from(new Set([safe,...(group?.terms??[])]));
+  // A role can list several specialties ("Cadena de suministro, Legal"): use every matching group.
+  const groups=jobSearchGroups.filter(item=>item.match.test(safe));
+  return Array.from(new Set([safe,...groups.flatMap(item=>item.terms)])).slice(0,24);
 }
 // An explicit search can also be a place ("Ciudad de México"): add the job
 // location, with the usual spellings of a city, on top of title/company/industry.

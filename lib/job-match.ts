@@ -46,24 +46,42 @@ const ROLE_ALIASES: Array<{ match: RegExp; terms: string }> = [
   { match: /sales|ventas|comercial/, terms: "sales account executive business development partnerships revenue" },
   { match: /data|datos|analytics/, terms: "data analytics analyst machine-learning artificial-intelligence" },
   { match: /human resources|recursos humanos|talent|people/, terms: "recruiting recruiter talent people human-resources hr" },
-  { match: /finance|finanzas|accounting/, terms: "finance financial accounting accountant controller" },
-  { match: /consult/, terms: "consulting consultant strategy operations" },
+  { match: /finance|finanzas|accounting|contab|auditor|fp&a|riesgo/, terms: "finance financial accounting accountant controller contabilidad contador financiero finanzas tesoreria auditoria audit risk riesgo" },
+  { match: /consult/, terms: "consulting consultant strategy consultor consultoria estrategia" },
+  { match: /operaciones|operations|supply|suministro|logistic|compras|procurement|project management|gestion de proyectos|clientes|customer/, terms: "operations operaciones logistics logistica supply-chain suministro procurement compras purchasing coordinator coordinador project-manager administrative administrativo customer-service atencion-al-cliente customer-success soporte support" },
+  { match: /legal|abogad|compliance|cumplimiento/, terms: "legal lawyer abogado counsel compliance cumplimiento paralegal contracts contratos" },
+  { match: /salud|health|medic|enfermer|clinic|farmac|pharma/, terms: "health salud medical medico nurse enfermero clinical clinico pharma farmaceutico" },
 ];
 
-type RoleFamily = "software" | "marketing" | "product" | "design" | "sales" | "data" | "people" | "finance" | "consulting";
+type RoleFamily = "software" | "marketing" | "product" | "design" | "sales" | "data" | "people" | "finance" | "consulting" | "operations" | "legal" | "health";
+
+const FAMILY_PATTERNS: Array<[RoleFamily, RegExp]> = [
+  ["software", /frontend|backend|full.?stack|software|developer|programador|devops|web development|mobile development/],
+  ["marketing", /marketing|mercadotecnia|comunicacion|growth|brand|content|seo|sem\b|publicidad|community manager|redes sociales/],
+  ["product", /product manager|product owner|product operations|producto/],
+  ["design", /product design|ux|ui\b|designer|disen/],
+  ["sales", /sales|ventas|vendedor|account executive|business development|comercial|ejecutivo de cuentas/],
+  ["data", /data|datos|analytics|machine learning|artificial intelligence|\bai\b/],
+  ["people", /human resources|recursos humanos|rrhh|talent|talento|recruit|reclutad|seleccion de personal|people operations|capital humano|gestion humana/],
+  ["finance", /finance|finanzas|financier|accounting|accountant|contab|contador|controller|tesorer|auditor|audit|impuesto|nomina|fp&a|riesgo|risk/],
+  ["consulting", /consulting|consultant|consultor|consultoria/],
+  ["legal", /\blegal\b|abogad|lawyer|counsel|compliance|cumplimiento|paralegal/],
+  ["health", /salud|health|medic|enfermer|nurse|clinic|farmac|pharma/],
+  ["operations", /operaciones|operations|logistic|supply|suministro|compras|procurement|purchasing|project manage|project management|gestion de proyectos|coordinador|coordinator|administrativ|customer service|atencion al cliente|servicio al cliente|soporte|customer success|customer support|customer operations|operaciones de clientes/],
+];
+
+function normalizedRole(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Every family a (possibly multi-specialty) role belongs to, in priority order. */
+function roleFamilies(value: string): RoleFamily[] {
+  const normalized = normalizedRole(value);
+  return FAMILY_PATTERNS.filter(([, pattern]) => pattern.test(normalized)).map(([family]) => family);
+}
 
 function roleFamily(value: string): RoleFamily | null {
-  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (/frontend|backend|full.?stack|software|developer|programador|devops|web development|mobile development/.test(normalized)) return "software";
-  if (/marketing|mercadotecnia|comunicacion|growth|brand|content|seo|sem/.test(normalized)) return "marketing";
-  if (/product manager|product owner|product operations|producto/.test(normalized)) return "product";
-  if (/product design|ux|ui|designer|disen/.test(normalized)) return "design";
-  if (/sales|ventas|account executive|business development|comercial/.test(normalized)) return "sales";
-  if (/data|datos|analytics|machine learning|artificial intelligence|\bai\b/.test(normalized)) return "data";
-  if (/human resources|recursos humanos|talent|recruit|people operations/.test(normalized)) return "people";
-  if (/finance|finanzas|accounting|accountant|controller/.test(normalized)) return "finance";
-  if (/consulting|consultant|consultor/.test(normalized)) return "consulting";
-  return null;
+  return roleFamilies(value)[0] ?? null;
 }
 
 function jobRoleFamily(row: MatchableJob): RoleFamily | null {
@@ -77,9 +95,10 @@ function jobRoleFamily(row: MatchableJob): RoleFamily | null {
 
 export function isJobProfessionallyRelevant(row: MatchableJob, profile: MatchProfile | null) {
   if (!profile?.role.trim()) return true;
-  const desiredFamily = roleFamily(profile.role);
-  if (!desiredFamily) return overlap(roleTokens(profile.role), tokens(`${row.title} ${row.metadata?.department ?? ""}`)) > 0;
-  if (jobRoleFamily(row) === desiredFamily) return true;
+  const desiredFamilies = roleFamilies(profile.role);
+  if (!desiredFamilies.length) return overlap(roleTokens(profile.role), tokens(`${row.title} ${row.metadata?.department ?? ""}`)) > 0;
+  const jobFamily = jobRoleFamily(row);
+  if (jobFamily && desiredFamilies.includes(jobFamily)) return true;
   const skillHits = overlap(tokens(profile.skills.join(" ")), tokens(`${row.title} ${clean(row.summary)}`));
   return skillHits > 0;
 }

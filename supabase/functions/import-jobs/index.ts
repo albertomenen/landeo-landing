@@ -57,6 +57,12 @@ const greenhouseBoards = [
   { token: "wise", company: "Wise", domain: "wise.com" },
   { token: "celonis", company: "Celonis", domain: "celonis.com" },
   { token: "cabify", company: "Cabify", domain: "cabify.com" },
+  { token: "clara", company: "Clara", domain: "clara.com" },
+  { token: "quintoandar", company: "QuintoAndar", domain: "quintoandar.com.br" },
+  { token: "wizeline", company: "Wizeline", domain: "wizeline.com" },
+  { token: "ebanx", company: "EBANX", domain: "ebanx.com" },
+  { token: "gympass", company: "Wellhub", domain: "wellhub.com" },
+  { token: "vtex", company: "VTEX", domain: "vtex.com" },
   { token: "aircallioinc", company: "Aircall", domain: "aircall.io" },
   { token: "neoris", company: "NEORIS", domain: "neoris.com" },
   { token: "soficonv", company: "Sofico", domain: "sofico.global" },
@@ -108,6 +114,17 @@ const leverBoards = [
   { token: "Qover", company: "Qover", domain: "qover.com" },
   { token: "octoenergy", company: "Octopus Energy", domain: "octopus.energy" },
   { token: "contentsquare", company: "Contentsquare", domain: "contentsquare.com" },
+  { token: "despegar", company: "Despegar", domain: "despegar.com" },
+  { token: "dlocal", company: "dLocal", domain: "dlocal.com" },
+  { token: "kavak", company: "Kavak", domain: "kavak.com" },
+] as const;
+
+// Ashby job boards (public posting API). Applications go to the employer's page.
+const ashbyBoards = [
+  { token: "addi", company: "Addi", domain: "addi.com" },
+  { token: "nubank", company: "Nubank", domain: "nubank.com.br" },
+  { token: "mural", company: "Mural", domain: "mural.co" },
+  { token: "belvo", company: "Belvo", domain: "belvo.com" },
 ] as const;
 
 const required = (name: string) => {
@@ -333,11 +350,22 @@ type TargetMarket =
   | "AR"
   | "AT"
   | "AU"
+  | "BO"
   | "BR"
   | "CA"
   | "CL"
   | "CO"
+  | "CR"
   | "DE"
+  | "DO"
+  | "EC"
+  | "GT"
+  | "HN"
+  | "NI"
+  | "PA"
+  | "PY"
+  | "SV"
+  | "UY"
   | "ES"
   | "FR"
   | "GB"
@@ -365,6 +393,17 @@ function targetMarket(value: string): TargetMarket | null {
   if (/argentina/i.test(value)) return "AR";
   if (/chile/i.test(value)) return "CL";
   if (/peru|perú/i.test(value)) return "PE";
+  if (/ecuador|quito|guayaquil/i.test(value)) return "EC";
+  if (/uruguay|montevideo/i.test(value)) return "UY";
+  if (/costa rica/i.test(value)) return "CR";
+  if (/panam[aá]/i.test(value)) return "PA";
+  if (/guatemala/i.test(value)) return "GT";
+  if (/dominican|dominicana/i.test(value)) return "DO";
+  if (/bolivia/i.test(value)) return "BO";
+  if (/paraguay/i.test(value)) return "PY";
+  if (/honduras/i.test(value)) return "HN";
+  if (/el salvador/i.test(value)) return "SV";
+  if (/nicaragua/i.test(value)) return "NI";
   if (/brazil|brasil/i.test(value)) return "BR";
   if (/australia|,\s*au\b/i.test(value)) return "AU";
   if (/austria|österreich/i.test(value)) return "AT";
@@ -379,6 +418,8 @@ function targetMarket(value: string): TargetMarket | null {
   if (/new zealand|aotearoa/i.test(value)) return "NZ";
   if (/poland|polska|polonia/i.test(value)) return "PL";
   if (/portugal/i.test(value)) return "PT";
+  // Remote roles open to the whole region keep their text ("Latin America") for eligibility.
+  if (/latam|latin america|latinoam[eé]rica|am[eé]rica latina/i.test(value)) return "REMOTE";
   if (/singapore|singapur/i.test(value)) return "SG";
   if (/south africa|sudáfrica|sudafrica/i.test(value)) return "ZA";
   if (
@@ -480,6 +521,13 @@ async function greenhouseJobs(
       "gusto", "waymo", "sigmacomputing", "nuro", "okta",
       "hubspotjobs", "alphasights", "feverup", "doordashusa",
     ]) {
+      effectiveBoards.add(token);
+    }
+  }
+  // Latin American boards ride along with the first cron shard (it already
+  // includes `cloudflare`), so no extra schedule is needed.
+  if (effectiveBoards?.has("cloudflare")) {
+    for (const token of ["clara", "quintoandar", "wizeline", "ebanx", "gympass", "vtex"]) {
       effectiveBoards.add(token);
     }
   }
@@ -695,6 +743,95 @@ async function leverJobs(): Promise<NormalizedJob[]> {
               mode: applyUrl ? "browser" : "external",
               apply_url: applyUrl,
               provider: applyUrl ? "lever" : null,
+              metadata: { site: board.token },
+            },
+          };
+        });
+    }),
+  );
+  return results.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : []
+  );
+}
+
+async function ashbyJobs(): Promise<NormalizedJob[]> {
+  const results = await Promise.allSettled(
+    ashbyBoards.map(async (board) => {
+      const response = await fetch(
+        `https://api.ashbyhq.com/posting-api/job-board/${board.token}`,
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20_000) },
+      );
+      if (!response.ok) throw new Error(`Ashby ${board.token} respondió ${response.status}`);
+      const payload = (await response.json()) as {
+        jobs?: Array<{
+          id?: string;
+          title?: string;
+          location?: string;
+          secondaryLocations?: Array<{ location?: string }>;
+          department?: string;
+          team?: string;
+          employmentType?: string;
+          isListed?: boolean;
+          isRemote?: boolean;
+          workplaceType?: string;
+          publishedAt?: string;
+          descriptionPlain?: string;
+          jobUrl?: string;
+          applyUrl?: string;
+          address?: { postalAddress?: { addressCountry?: string } };
+        }>;
+      };
+      return (payload.jobs ?? [])
+        .filter((job) => job.id && job.title && job.isListed !== false)
+        .filter((job) =>
+          targetMarket(
+            `${job.location ?? ""} ${(job.secondaryLocations ?? []).map((item) => item.location).join(" ")} ${job.address?.postalAddress?.addressCountry ?? ""}`,
+          )
+        )
+        .slice(0, 150)
+        .map((job): NormalizedJob => {
+          const location = job.location || job.address?.postalAddress?.addressCountry || "Latinoamérica";
+          const description = plainText(job.descriptionPlain ?? "");
+          const applyUrl = job.applyUrl || job.jobUrl || null;
+          const market = targetMarket(
+            `${location} ${job.address?.postalAddress?.addressCountry ?? ""}`,
+          ) ?? "REMOTE";
+          return {
+            source: "Empresa",
+            external_id: `ashby:${board.token}:${job.id}`,
+            company: board.company,
+            title: job.title!,
+            summary: description.slice(0, 500),
+            description,
+            location,
+            work_mode: job.isRemote || /remote/i.test(job.workplaceType ?? "")
+              ? "Remoto"
+              : /hybrid/i.test(job.workplaceType ?? "")
+              ? "Híbrido"
+              : "Presencial",
+            salary_min: null,
+            salary_max: null,
+            contract_type: job.employmentType ?? null,
+            seniority: inferredSeniority(job.title!, job.employmentType ?? ""),
+            industry: job.department ?? job.team ?? null,
+            apply_mode: "external",
+            status: "active",
+            published_at: job.publishedAt ?? null,
+            metadata: {
+              source_url: job.jobUrl ?? applyUrl,
+              canonical_apply_url: applyUrl,
+              requirements: [],
+              nice_to_have: [],
+              company_domain: board.domain,
+              easy_apply: false,
+              apply_provider: "external",
+              verified_source: "ashby_public_posting_api",
+              market_country: market,
+            },
+            target: {
+              mode: "external",
+              apply_url: applyUrl,
+              provider: null,
               metadata: { site: board.token },
             },
           };
@@ -1833,6 +1970,7 @@ Deno.serve(async (request) => {
       { name: "Lever", load: leverJobs },
       { name: "Remotive", load: remotiveJobs },
       { name: "Jobicy", load: jobicyJobs },
+      { name: "Ashby", load: ashbyJobs },
     ];
     if (Deno.env.get("RELIEFWEB_APP_NAME")) {
       sourceTasks.unshift({ name: "ReliefWeb", load: reliefWebJobs });

@@ -49,6 +49,8 @@ const countryAliases: Record<string, string[]> = {
   ZA: ["south africa", "sudafrica", "za"],
   CL: ["chile", "cl"], EC: ["ecuador", "ec"], UY: ["uruguay", "uy"],
   CR: ["costa rica", "cr"], PA: ["panama", "pa"],
+  GT: ["guatemala"], DO: ["republica dominicana", "dominican republic"], BO: ["bolivia"],
+  PY: ["paraguay"], HN: ["honduras"], SV: ["el salvador"], NI: ["nicaragua"],
 };
 
 function countryCode(country: string, location: string) {
