@@ -40,20 +40,20 @@ type NormalizedJob = {
 
 const greenhouseBoards = [
   { token: "figma", company: "Figma", domain: "figma.com" },
-  { token: "datadog", company: "Datadog", domain: "datadoghq.com" },
+  { token: "datadog", company: "Datadog", domain: "datadoghq.com", remote: true },
   { token: "cloudflare", company: "Cloudflare", domain: "cloudflare.com" },
   { token: "discord", company: "Discord", domain: "discord.com" },
   { token: "reddit", company: "Reddit", domain: "redditinc.com" },
-  { token: "gitlab", company: "GitLab", domain: "gitlab.com" },
-  { token: "coinbase", company: "Coinbase", domain: "coinbase.com" },
+  { token: "gitlab", company: "GitLab", domain: "gitlab.com", remote: true },
+  { token: "coinbase", company: "Coinbase", domain: "coinbase.com", remote: true },
   { token: "pinterest", company: "Pinterest", domain: "pinterest.com" },
   { token: "mongodb", company: "MongoDB", domain: "mongodb.com" },
   { token: "asana", company: "Asana", domain: "asana.com" },
-  { token: "twilio", company: "Twilio", domain: "twilio.com" },
+  { token: "twilio", company: "Twilio", domain: "twilio.com", remote: true },
   { token: "lyft", company: "Lyft", domain: "lyft.com" },
   { token: "elastic", company: "Elastic", domain: "elastic.co" },
-  { token: "monzo", company: "Monzo", domain: "monzo.com" },
-  { token: "canonical", company: "Canonical", domain: "canonical.com" },
+  { token: "monzo", company: "Monzo", domain: "monzo.com", remote: true },
+  { token: "canonical", company: "Canonical", domain: "canonical.com", remote: true },
   { token: "wise", company: "Wise", domain: "wise.com" },
   { token: "celonis", company: "Celonis", domain: "celonis.com" },
   { token: "cabify", company: "Cabify", domain: "cabify.com" },
@@ -63,6 +63,11 @@ const greenhouseBoards = [
   { token: "ebanx", company: "EBANX", domain: "ebanx.com" },
   { token: "gympass", company: "Wellhub", domain: "wellhub.com" },
   { token: "vtex", company: "VTEX", domain: "vtex.com" },
+  { token: "customerio", company: "Customer.io", domain: "customer.io", remote: true, regional: true },
+  { token: "jetbrains", company: "JetBrains", domain: "jetbrains.com", remote: true, regional: true },
+  { token: "fivetran", company: "Fivetran", domain: "fivetran.com", remote: true, regional: true },
+  { token: "planetscale", company: "PlanetScale", domain: "planetscale.com", remote: true, regional: true },
+  { token: "databricks", company: "Databricks", domain: "databricks.com", remote: true, regional: true },
   { token: "aircallioinc", company: "Aircall", domain: "aircall.io" },
   { token: "neoris", company: "NEORIS", domain: "neoris.com" },
   { token: "soficonv", company: "Sofico", domain: "sofico.global" },
@@ -74,7 +79,7 @@ const greenhouseBoards = [
     domain: "banyansoftware.com",
   },
   { token: "vonage", company: "Vonage", domain: "vonage.com" },
-  { token: "typeform", company: "Typeform", domain: "typeform.com" },
+  { token: "typeform", company: "Typeform", domain: "typeform.com", remote: true },
   { token: "wallapop", company: "Wallapop", domain: "wallapop.com" },
   { token: "remotecom", company: "Remote", domain: "remote.com" },
   { token: "clarityai", company: "Clarity AI", domain: "clarity.ai" },
@@ -95,7 +100,7 @@ const greenhouseBoards = [
   },
   { token: "nuro", company: "Nuro", domain: "nuro.ai" },
   { token: "okta", company: "Okta", domain: "okta.com" },
-  { token: "hubspotjobs", company: "HubSpot", domain: "hubspot.com" },
+  { token: "hubspotjobs", company: "HubSpot", domain: "hubspot.com", remote: true },
   { token: "alphasights", company: "AlphaSights", domain: "alphasights.com" },
   { token: "feverup", company: "Fever", domain: "feverup.com" },
   { token: "doordashusa", company: "DoorDash", domain: "doordash.com" },
@@ -125,6 +130,24 @@ const ashbyBoards = [
   { token: "nubank", company: "Nubank", domain: "nubank.com.br" },
   { token: "mural", company: "Mural", domain: "mural.co" },
   { token: "belvo", company: "Belvo", domain: "belvo.com" },
+  { token: "alan", company: "Alan", domain: "alan.com", remote: true, regional: true },
+  { token: "supabase", company: "Supabase", domain: "supabase.com", remote: true, regional: true },
+  { token: "clickhouse", company: "ClickHouse", domain: "clickhouse.com", remote: true, regional: true },
+  { token: "n8n", company: "n8n", domain: "n8n.io", remote: true, regional: true },
+  { token: "cohere", company: "Cohere", domain: "cohere.com", remote: true, regional: true },
+  { token: "pleo", company: "Pleo", domain: "pleo.io", remote: true, regional: true },
+  { token: "linear", company: "Linear", domain: "linear.app", remote: true, regional: true },
+  { token: "airwallex", company: "Airwallex", domain: "airwallex.com", remote: true, regional: true },
+  { token: "snowflake", company: "Snowflake", domain: "snowflake.com", remote: true, regional: true },
+  { token: "qonto", company: "Qonto", domain: "qonto.com", remote: true, regional: true },
+  { token: "webflow", company: "Webflow", domain: "webflow.com", remote: true, regional: true },
+  { token: "zapier", company: "Zapier", domain: "zapier.com", remote: true, regional: true },
+  { token: "posthog", company: "PostHog", domain: "posthog.com", remote: true, regional: true },
+  { token: "redis", company: "Redis", domain: "redis.io", remote: true, regional: true },
+  { token: "snyk", company: "Snyk", domain: "snyk.io", remote: true, regional: true },
+  { token: "amplitude", company: "Amplitude", domain: "amplitude.com", remote: true, regional: true },
+  { token: "mollie", company: "Mollie", domain: "mollie.com", remote: true, regional: true },
+  { token: "openai", company: "OpenAI", domain: "openai.com", remote: true, regional: true },
 ] as const;
 
 const required = (name: string) => {
@@ -159,6 +182,27 @@ const errorMessage = (error: unknown) => {
     return String(error);
   }
 };
+
+// Remote roles that explicitly welcome candidates from Europe, Latin America or
+// anywhere. Used only for boards flagged `remote: true` (remote-first employers).
+function isOpenRemote(value: string) {
+  // "Anywhere in Belgium" is a country restriction, not an open role.
+  if (/anywhere in (?!the world|europe|emea|latam|latin)/i.test(value)) return false;
+  return /anywhere|worldwide|\bglobal\b|emea|europe|europa|latam|latin america|am[eé]ricas|\bamer\b|\beu\b|distributed/i.test(value) &&
+    /remote|remoto|anywhere|worldwide|distributed|home/i.test(value);
+}
+
+// Boards flagged `regional` keep only Spain, Portugal, Latin America and open
+// remote roles: global employers list many US/Canada/UK offices that do not help.
+const REGIONAL_MARKETS = new Set<TargetMarket>([
+  "ES", "PT", "MX", "AR", "CO", "CL", "PE", "EC", "UY", "CR", "PA", "GT", "DO", "BO", "PY", "HN", "SV", "NI", "BR", "REMOTE",
+]);
+
+function boardMarket(value: string, openRemote: boolean, regional = false): TargetMarket | null {
+  const market = targetMarket(value);
+  if (market && (!regional || REGIONAL_MARKETS.has(market))) return market;
+  return openRemote && isOpenRemote(value) ? "REMOTE" : null;
+}
 
 function inferredSeniority(title: string, contractType = "") {
   const value = `${title} ${contractType}`.toLowerCase();
@@ -527,7 +571,7 @@ async function greenhouseJobs(
   // Latin American boards ride along with the first cron shard (it already
   // includes `cloudflare`), so no extra schedule is needed.
   if (effectiveBoards?.has("cloudflare")) {
-    for (const token of ["clara", "quintoandar", "wizeline", "ebanx", "gympass", "vtex"]) {
+    for (const token of ["clara", "quintoandar", "wizeline", "ebanx", "gympass", "vtex", "customerio", "jetbrains", "fivetran", "planetscale", "databricks"]) {
       effectiveBoards.add(token);
     }
   }
@@ -564,7 +608,7 @@ async function greenhouseJobs(
       };
       if (payload.jobs?.length) greenhouseLoadedBoards.add(board.token);
       return (payload.jobs ?? [])
-        .filter((job) => targetMarket(job.location?.name ?? ""))
+        .filter((job) => boardMarket(job.location?.name ?? "", (board as { remote?: boolean }).remote === true, (board as { regional?: boolean }).regional === true))
         .map((job): NormalizedJob => {
           const description = plainText(job.content ?? "");
           const location = job.location?.name || "España";
@@ -621,7 +665,9 @@ async function greenhouseJobs(
               salary_interval: "year",
               salary_source: payRange ? "employer" : null,
               salary_title: payRange?.title ?? null,
-              market_country: targetMarket(location),
+              market_country: boardMarket(location, (board as { remote?: boolean }).remote === true, (board as { regional?: boolean }).regional === true),
+              // Remote-first employers rank higher in the feed (see featuredScore).
+              ...((board as { remote?: boolean }).remote === true ? { top_company: true } : {}),
             },
             target: {
               mode: provider ? "browser" : "external",
@@ -754,6 +800,30 @@ async function leverJobs(): Promise<NormalizedJob[]> {
   );
 }
 
+// A listed country wins; otherwise a remote-first employer's role counts only
+// when its main location is open ("Remote, Global", "Europe"), not when a
+// secondary location happens to mention a region.
+function ashbyMarket(
+  job: {
+    location?: string;
+    secondaryLocations?: Array<{ location?: string }>;
+    isRemote?: boolean;
+    address?: { postalAddress?: { addressCountry?: string } };
+  },
+  openRemote: boolean,
+  regional = false,
+): TargetMarket | null {
+  const primary = (job.location ?? "").trim();
+  const secondary = (job.secondaryLocations ?? []).map((item) => item.location ?? "").join(" ");
+  const country = job.address?.postalAddress?.addressCountry ?? "";
+  const market = targetMarket(`${primary} ${secondary} ${country}`);
+  if (market && (!regional || REGIONAL_MARKETS.has(market))) return market;
+  if (!openRemote) return null;
+  const generic = !primary || /^(remote|remoto|anywhere|global|worldwide)[\s,.\-–]*$/i.test(primary);
+  const text = `${primary} ${generic ? secondary : ""}${job.isRemote ? " remote" : ""}`;
+  return isOpenRemote(text) ? "REMOTE" : null;
+}
+
 async function ashbyJobs(): Promise<NormalizedJob[]> {
   const results = await Promise.allSettled(
     ashbyBoards.map(async (board) => {
@@ -783,19 +853,13 @@ async function ashbyJobs(): Promise<NormalizedJob[]> {
       };
       return (payload.jobs ?? [])
         .filter((job) => job.id && job.title && job.isListed !== false)
-        .filter((job) =>
-          targetMarket(
-            `${job.location ?? ""} ${(job.secondaryLocations ?? []).map((item) => item.location).join(" ")} ${job.address?.postalAddress?.addressCountry ?? ""}`,
-          )
-        )
+        .filter((job) => ashbyMarket(job, (board as { remote?: boolean }).remote === true, (board as { regional?: boolean }).regional === true))
         .slice(0, 150)
         .map((job): NormalizedJob => {
           const location = job.location || job.address?.postalAddress?.addressCountry || "Latinoamérica";
           const description = plainText(job.descriptionPlain ?? "");
           const applyUrl = job.applyUrl || job.jobUrl || null;
-          const market = targetMarket(
-            `${location} ${job.address?.postalAddress?.addressCountry ?? ""}`,
-          ) ?? "REMOTE";
+          const market = ashbyMarket(job, (board as { remote?: boolean }).remote === true, (board as { regional?: boolean }).regional === true) ?? "REMOTE";
           return {
             source: "Empresa",
             external_id: `ashby:${board.token}:${job.id}`,
@@ -827,6 +891,7 @@ async function ashbyJobs(): Promise<NormalizedJob[]> {
               apply_provider: "external",
               verified_source: "ashby_public_posting_api",
               market_country: market,
+              ...((board as { remote?: boolean }).remote === true ? { top_company: true } : {}),
             },
             target: {
               mode: "external",

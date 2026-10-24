@@ -772,3 +772,19 @@ test("matches Latin American roles in both Spanish and English across every onbo
   assert.equal(relevant("Finanzas", "Diseñador UX"), false);
   assert.equal(relevant("Recursos humanos", "Account Executive"), false);
 });
+
+test("remote-first employers only bring roles open to Spain, Latin America or anywhere", async () => {
+  const importer = await readFile(new URL("supabase/functions/import-jobs/index.ts", root), "utf8");
+  assert.match(importer, /function isOpenRemote/);
+  // A country restriction is not an open role.
+  assert.match(importer, /anywhere in \(\?!the world\|europe\|emea\|latam\|latin\)/);
+  assert.match(importer, /const REGIONAL_MARKETS = new Set<TargetMarket>/);
+  assert.match(importer, /function ashbyMarket/);
+  // Ranking boost for the flagged employers.
+  assert.match(importer, /top_company: true/);
+  for (const token of ["alan", "supabase", "cohere", "snowflake", "customerio", "jetbrains"]) {
+    assert.match(importer, new RegExp(`token: "${token}"[^}]*remote: true, regional: true`), token);
+  }
+  // Existing boards keep every market: they are remote-first but not regional-only.
+  assert.match(importer, /token: "gitlab"[^}]*remote: true \}/);
+});
