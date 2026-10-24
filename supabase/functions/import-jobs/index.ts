@@ -7,6 +7,7 @@ type NormalizedJob = {
     | "Adzuna"
     | "ReliefWeb"
     | "Remotive"
+    | "Jobicy"
     | "Greenhouse"
     | "Empresa";
   external_id: string;
@@ -1064,12 +1065,32 @@ async function infoJobsJobs(): Promise<NormalizedJob[]> {
   );
 }
 
+// Per-run Adzuna options (set from the request body). Defaults keep the old
+// behaviour: every market, no category filter, ADZUNA_PAGES pages.
+const adzunaOptions: {
+  markets: string[] | null;
+  categories: string[] | null;
+  pages: number | null;
+} = { markets: null, categories: null, pages: null };
+
+// Adzuna ads usually stay open 30-60 days. Anything older than this that the
+// API no longer returns is treated as expired (their links answer 410).
+const ADZUNA_MAX_AGE_DAYS = 45;
+
+async function closeExpiredAdzuna(supabase: any): Promise<number> {
+  const cutoff = new Date(Date.now() - ADZUNA_MAX_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase.from("jobs").update({ status: "closed" })
+    .eq("source", "Adzuna").eq("status", "active").lt("published_at", cutoff).select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 async function adzunaJobs(): Promise<NormalizedJob[]> {
   const appId = required("ADZUNA_APP_ID");
   const appKey = required("ADZUNA_APP_KEY");
   const pages = Math.min(
     6,
-    Math.max(1, Number(Deno.env.get("ADZUNA_PAGES") || 2)),
+    Math.max(1, Number(adzunaOptions.pages ?? (Deno.env.get("ADZUNA_PAGES") || 2))),
   );
   const markets = [
     { endpoint: "es", code: "ES", currency: "EUR", defaultLocation: "España" },
@@ -1126,11 +1147,16 @@ async function adzunaJobs(): Promise<NormalizedJob[]> {
     },
   ] as const;
 
+  const selectedMarkets = adzunaOptions.markets
+    ? markets.filter((market) => adzunaOptions.markets!.includes(market.endpoint))
+    : markets;
   const marketResults = await Promise.allSettled(
-    markets.map(async (market) => {
+    selectedMarkets.map(async (market) => {
       const payloads: Array<{ results?: Array<Record<string, unknown>> }> = [];
+      let requestCount = 0;
+      for (const category of adzunaOptions.categories ?? [null]) {
       for (let index = 0; index < pages; index += 1) {
-        if (index) await new Promise((resolve) => setTimeout(resolve, 900));
+        if (requestCount++) await new Promise((resolve) => setTimeout(resolve, 900));
         const url = new URL(
           `https://api.adzuna.com/v1/api/jobs/${market.endpoint}/search/${
             index + 1
@@ -1141,6 +1167,7 @@ async function adzunaJobs(): Promise<NormalizedJob[]> {
         url.searchParams.set("results_per_page", "50");
         url.searchParams.set("sort_by", "date");
         url.searchParams.set("content-type", "application/json");
+        if (category) url.searchParams.set("category", category);
         let response: Response | null = null;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           response = await fetch(url, {
@@ -1171,6 +1198,7 @@ async function adzunaJobs(): Promise<NormalizedJob[]> {
             results?: Array<Record<string, unknown>>;
           },
         );
+      }
       }
       const uniqueOffers = [
         ...new Map(
@@ -1492,6 +1520,95 @@ async function remotiveJobs(): Promise<NormalizedJob[]> {
   });
 }
 
+// Remote jobs open to Latin America or to candidates anywhere, from Jobicy's
+// public API (attribution: every offer links back to its Jobicy page).
+async function jobicyJobs(): Promise<NormalizedJob[]> {
+  const industries = [
+    "marketing", "business", "supporting", "hr", "management", "accounting-finance",
+    "admin-support", "copywriting", "design-multimedia", "seller", "data-science",
+  ];
+  const queries: Array<[string, string | null]> = [
+    ["latam", null], ...industries.map((industry): [string, string | null] => ["latam", industry]), ["latam", "dev"],
+    ["anywhere", null], ...industries.map((industry): [string, string | null] => ["anywhere", industry]),
+  ];
+  type JobicyJob = {
+    id: number | string; url: string; jobTitle: string; companyName?: string;
+    jobIndustry?: string[] | string; jobType?: string[] | string; jobGeo?: string; jobLevel?: string;
+    jobExcerpt?: string; jobDescription?: string; pubDate?: string;
+    salaryMin?: number | string | null; salaryMax?: number | string | null; salaryCurrency?: string | null;
+  };
+  const offers = new Map<string, JobicyJob>();
+  let failures = 0;
+  for (const [geo, industry] of queries) {
+    const url = new URL("https://jobicy.com/api/v2/remote-jobs");
+    url.searchParams.set("count", "100");
+    url.searchParams.set("geo", geo);
+    if (industry) url.searchParams.set("industry", industry);
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json", "User-Agent": "Landeo job importer" },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) throw new Error(`Jobicy respondió ${response.status}`);
+      const payload = (await response.json()) as { jobs?: JobicyJob[] };
+      for (const job of payload.jobs ?? []) offers.set(String(job.id), job);
+    } catch (error) {
+      failures += 1;
+      console.error("jobicy", geo, industry, error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (!offers.size) throw new Error(`Jobicy no devolvió ofertas (${failures} consultas fallidas)`);
+  const first = (value: string[] | string | undefined) =>
+    (Array.isArray(value) ? value[0] : value)?.toString().trim() || null;
+  const amount = (value: unknown) => {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
+  };
+  return [...offers.values()].filter((job) => job.url && job.jobTitle).map((job): NormalizedJob => {
+    const geo = job.jobGeo?.trim() || "Anywhere";
+    const description = plainText(job.jobDescription ?? job.jobExcerpt ?? "");
+    const currency = (job.salaryCurrency || "USD").toUpperCase();
+    return {
+      source: "Jobicy",
+      external_id: `jobicy:${job.id}`,
+      company: job.companyName || "Company",
+      title: job.jobTitle,
+      summary: plainText(job.jobExcerpt ?? description).slice(0, 500),
+      description,
+      location: `Remote, ${geo}`,
+      work_mode: "Remoto",
+      salary_min: amount(job.salaryMin),
+      salary_max: amount(job.salaryMax),
+      contract_type: first(job.jobType),
+      seniority: job.jobLevel?.split(",")[0]?.trim() || null,
+      industry: first(job.jobIndustry),
+      apply_mode: "external",
+      status: "active",
+      published_at: job.pubDate ?? null,
+      metadata: {
+        source_url: job.url,
+        canonical_apply_url: job.url,
+        requirements: [],
+        nice_to_have: [],
+        easy_apply: false,
+        apply_provider: "external",
+        verified_source: "jobicy_public_api",
+        market_country: "REMOTE",
+        ...(amount(job.salaryMin) || amount(job.salaryMax)
+          ? { salary_currency: currency, salary_interval: "year" }
+          : {}),
+      },
+      target: {
+        mode: "external",
+        apply_url: job.url,
+        provider: null,
+        metadata: { source_url: job.url, market_country: "REMOTE" },
+      },
+    };
+  });
+}
+
 // Statements run through PostgREST have an 8s limit. Right after the other
 // cron shards the database can be briefly slow, so retry a timed-out
 // statement a couple of times instead of dropping the whole shard.
@@ -1668,7 +1785,20 @@ Deno.serve(async (request) => {
     const payload = await request.json().catch(() => ({})) as {
       sources?: string[];
       boards?: string[];
+      adzunaMarkets?: string[];
+      adzunaCategories?: string[];
+      adzunaPages?: number;
     };
+    adzunaOptions.markets = Array.isArray(payload.adzunaMarkets)
+      ? payload.adzunaMarkets.map((market) => String(market).toLowerCase()).filter((market) => /^[a-z]{2}$/.test(market))
+      : null;
+    adzunaOptions.categories = Array.isArray(payload.adzunaCategories)
+      ? payload.adzunaCategories.map((category) => String(category).toLowerCase()).filter((category) => /^[a-z-]+-jobs$/.test(category))
+      : null;
+    if (adzunaOptions.categories && !adzunaOptions.categories.length) adzunaOptions.categories = null;
+    adzunaOptions.pages = Number.isFinite(Number(payload.adzunaPages)) && Number(payload.adzunaPages) > 0
+      ? Number(payload.adzunaPages)
+      : null;
     const requestedSources = Array.isArray(payload.sources)
       ? new Set(payload.sources.map((source) => source.toLowerCase()))
       : null;
@@ -1702,6 +1832,7 @@ Deno.serve(async (request) => {
       },
       { name: "Lever", load: leverJobs },
       { name: "Remotive", load: remotiveJobs },
+      { name: "Jobicy", load: jobicyJobs },
     ];
     if (Deno.env.get("RELIEFWEB_APP_NAME")) {
       sourceTasks.unshift({ name: "ReliefWeb", load: reliefWebJobs });
@@ -1727,6 +1858,9 @@ Deno.serve(async (request) => {
       try {
         const jobs = await source.load();
         imported[source.name] = await saveJobs(supabase, jobs);
+        if (source.name === "Adzuna") {
+          deactivated[source.name] = await closeExpiredAdzuna(supabase);
+        }
         if (source.name === "Greenhouse") {
           const requested = requestedGreenhouseBoards ??
             new Set(greenhouseBoards.map((board) => board.token));

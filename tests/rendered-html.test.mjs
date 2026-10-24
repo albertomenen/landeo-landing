@@ -733,3 +733,18 @@ test("reply tracking is opt-in, private and does not break the current flow", as
   const config = await readFile(new URL("supabase/config.toml", root), "utf8");
   assert.match(config, /\[functions\.resend-inbound\]\s*verify_jwt = false/);
 });
+
+test("job sources can be refreshed by category, expire old ads and feed LatAm remote roles", async () => {
+  const importer = await readFile(new URL("supabase/functions/import-jobs/index.ts", root), "utf8");
+  assert.match(importer, /adzunaCategories/);
+  assert.match(importer, /adzunaMarkets/);
+  assert.match(importer, /category", category/);
+  // Expired Adzuna ads (their links answer 410) are closed on every Adzuna run.
+  assert.match(importer, /closeExpiredAdzuna\(supabase\)/);
+  assert.match(importer, /async function jobicyJobs/);
+  assert.match(importer, /name: "Jobicy", load: jobicyJobs/);
+  const schedule = await readFile(new URL("supabase/migrations/20261024120000_schedule_job_source_syncs.sql", root), "utf8");
+  assert.match(schedule, /revoke all on function public\.sync_job_sources/);
+  assert.match(schedule, /sync-jobicy-daily/);
+  assert.match(schedule, /sync-adzuna-mx-daily/);
+});
