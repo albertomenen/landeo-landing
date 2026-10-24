@@ -694,7 +694,42 @@ async function greenhouseJobs(
   );
 }
 
+// Boards that answered with offers in the last Lever / Ashby run. Only those may
+// have missing offers closed, so an outage never closes a whole company.
+let leverLoadedBoards = new Set<string>();
+let ashbyLoadedBoards = new Set<string>();
+
+async function closeMissingBoardJobs(
+  supabase: any,
+  prefix: "lever" | "ashby",
+  jobs: NormalizedJob[],
+  loadedBoards: Set<string>,
+): Promise<number> {
+  const current = new Set(jobs.map((job) => job.external_id));
+  const staleIds: string[] = [];
+  const pageSize = 1000;
+  for (let start = 0;; start += pageSize) {
+    const { data, error } = await supabase.from("jobs").select("id,external_id")
+      .eq("source", "Empresa").eq("status", "active").like("external_id", `${prefix}:%`)
+      .range(start, start + pageSize - 1);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const board = String(row.external_id).split(":")[1];
+      if (loadedBoards.has(board) && !current.has(row.external_id)) staleIds.push(row.id);
+    }
+    if ((data?.length ?? 0) < pageSize) break;
+  }
+  for (let start = 0; start < staleIds.length; start += 200) {
+    const { error } = await retryOnStatementTimeout(() =>
+      supabase.from("jobs").update({ status: "closed" }).in("id", staleIds.slice(start, start + 200))
+    );
+    if (error) throw error;
+  }
+  return staleIds.length;
+}
+
 async function leverJobs(): Promise<NormalizedJob[]> {
+  leverLoadedBoards = new Set();
   const results = await Promise.allSettled(
     leverBoards.map(async (board) => {
       const response = await fetch(
@@ -704,6 +739,7 @@ async function leverJobs(): Promise<NormalizedJob[]> {
       if (!response.ok) {
         throw new Error(`Lever ${board.token} respondió ${response.status}`);
       }
+      leverLoadedBoards.add(board.token);
       const payload = (await response.json()) as Array<{
         id: string;
         text?: string;
@@ -825,6 +861,7 @@ function ashbyMarket(
 }
 
 async function ashbyJobs(): Promise<NormalizedJob[]> {
+  ashbyLoadedBoards = new Set();
   const results = await Promise.allSettled(
     ashbyBoards.map(async (board) => {
       const response = await fetch(
@@ -832,6 +869,7 @@ async function ashbyJobs(): Promise<NormalizedJob[]> {
         { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20_000) },
       );
       if (!response.ok) throw new Error(`Ashby ${board.token} respondió ${response.status}`);
+      ashbyLoadedBoards.add(board.token);
       const payload = (await response.json()) as {
         jobs?: Array<{
           id?: string;
@@ -2061,6 +2099,12 @@ Deno.serve(async (request) => {
       try {
         const jobs = await source.load();
         imported[source.name] = await saveJobs(supabase, jobs);
+        if (source.name === "Lever") {
+          deactivated[source.name] = await closeMissingBoardJobs(supabase, "lever", jobs, leverLoadedBoards);
+        }
+        if (source.name === "Ashby") {
+          deactivated[source.name] = await closeMissingBoardJobs(supabase, "ashby", jobs, ashbyLoadedBoards);
+        }
         if (source.name === "Adzuna") {
           deactivated[source.name] = await closeExpiredAdzuna(supabase);
         }

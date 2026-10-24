@@ -788,3 +788,19 @@ test("remote-first employers only bring roles open to Spain, Latin America or an
   // Existing boards keep every market: they are remote-first but not regional-only.
   assert.match(importer, /token: "gitlab"[^}]*remote: true \}/);
 });
+
+test("Lever and Ashby offers that leave a company's board are closed, and run daily", async () => {
+  const importer = await readFile(new URL("supabase/functions/import-jobs/index.ts", root), "utf8");
+  assert.match(importer, /async function closeMissingBoardJobs/);
+  assert.match(importer, /closeMissingBoardJobs\(supabase, "lever"/);
+  assert.match(importer, /closeMissingBoardJobs\(supabase, "ashby"/);
+  // Only boards that answered in this run may close offers, so an outage cannot close a company.
+  assert.match(importer, /loadedBoards\.has\(board\)/);
+  const schedule = await readFile(new URL("supabase/migrations/20261024180000_schedule_ashby_lever_syncs.sql", root), "utf8");
+  assert.match(schedule, /sync-ashby-daily/);
+  assert.match(schedule, /sync-lever-daily/);
+  const cleaner = await readFile(new URL("scripts/close-dead-job-links.mjs", root), "utf8");
+  // Dry run unless --write, and only a definite 404/410 closes an offer by link.
+  assert.match(cleaner, /process\.argv\.includes\("--write"\)/);
+  assert.match(cleaner, /code === 404 \|\| code === 410/);
+});
