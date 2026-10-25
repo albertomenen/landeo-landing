@@ -17,7 +17,7 @@ type ProductEventDetail = {
 
 declare global {
   interface Window {
-    dataLayer?: unknown[][];
+    dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
     clarity?: ClarityFunction;
     [key: `ga-disable-${string}`]: boolean | undefined;
@@ -29,15 +29,17 @@ const CONSENT_KEY = "landeo-analytics-consent";
 function startAnalytics(measurementId: string) {
   window[`ga-disable-${measurementId}`] = false;
   window.dataLayer = window.dataLayer ?? [];
-  window.gtag = window.gtag ?? ((...args: unknown[]) => window.dataLayer?.push(args));
-  window.gtag("consent", "default", {
+  // gtag.js distinguishes Arguments commands from ordinary data-layer arrays.
+  window.gtag = window.gtag ?? function () { window.dataLayer?.push(arguments); };
+  const installed = document.querySelector(`script[data-landeo-ga="${measurementId}"]`);
+  window.gtag("consent", installed ? "update" : "default", {
     analytics_storage: "granted",
     ad_storage: "denied",
     ad_user_data: "denied",
     ad_personalization: "denied",
   });
 
-  if (!document.querySelector(`script[data-landeo-ga="${measurementId}"]`)) {
+  if (!installed) {
     const script = document.createElement("script");
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
