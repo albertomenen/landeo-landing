@@ -1,11 +1,12 @@
-import {FunctionsHttpError,type User} from "@supabase/supabase-js";
+import {createClient,FunctionsHttpError,type User} from "@supabase/supabase-js";
 import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client";
 import type {ApplyCapability,Job} from "./fixtures";
 import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,citySearchTerms,isJobLocationCompatible} from "./job-location";
 import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
 import {requestBillingAcceptance} from "./billing-consent";
 import {trackProductEvent} from "./analytics";
-import {resumeFormat,uploadCvWithRetry} from "./cv-upload";
+import {resumeFormat} from "./cv-upload";
+import {onboardingOperation,reuseUploadedCv,type OnboardingStage} from "./onboarding-operation";
 import {calculateJobMatch,isJobProfessionallyRelevant,isJobWorkAuthorizationCompatible,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -340,16 +341,30 @@ export type WebOnboardingAnswers={
   blocker:string;outcome:string;source:string;promoCode:string;
 };
 
-export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en";onUploadAttempt?:(attempt:number)=>void}){
+export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en";onUploadAttempt?:(attempt:number)=>void;onStage?:(stage:OnboardingStage,attempt:number)=>void}){
   const client=createSupabaseBrowserClient();
   let session:Awaited<ReturnType<typeof getResilientSession>>;
-  try{session=await getResilientSession(600)}catch{throw new Error(input.locale==="es"?"No hemos podido verificar tu sesión ahora mismo. Tus respuestas siguen guardadas; espera unos segundos y vuelve a intentarlo.":"We couldn't verify your session right now. Your answers are still saved; wait a few seconds and try again.")}
+  session=await onboardingOperation("session",()=>getResilientSession(600),{locale:input.locale,attempts:1,timeoutMs:20_000,onAttempt:n=>input.onStage?.("session",n)});
   const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
   const {extension,contentType}=resumeFormat(input.resume,input.locale);
-  const cvPath=`${user.id}/cv.${extension}`;
-  await uploadCvWithRetry(()=>client.storage.from("cvs").upload(cvPath,input.resume,{contentType,upsert:true}),input.locale,input.onUploadAttempt);
+  const cvPath=await reuseUploadedCv(input.resume,user.id,async()=>{
+    const path=`${user.id}/cv.${extension}`;
+    await onboardingOperation("upload",async signal=>{
+      // A scoped client lets us abort Storage uploads without changing global requests or auth storage.
+      const uploader=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,{
+        accessToken:async()=>session!.access_token,
+        global:{fetch:(url,options)=>fetch(url,{...options,signal})},
+      });
+      const result=await uploader.storage.from("cvs").upload(path,input.resume,{contentType,upsert:true});
+      if(result.error)throw result.error;
+    },{locale:input.locale,attempts:3,timeoutMs:30_000,onAttempt:n=>{input.onUploadAttempt?.(n);input.onStage?.("upload",n)}});
+    return path;
+  });
   input.onUploadAttempt?.(0);
-  const{data:existing,error:profileError}=await client.from("profiles").select("full_name,email,phone,universal_profile,privacy_consent_at,automatic_application_consent_at").eq("id",user.id).maybeSingle();if(profileError)throw profileError;
+  const existing=await onboardingOperation("profile_read",async signal=>{
+    const{data,error}=await client.from("profiles").select("full_name,email,phone,universal_profile,privacy_consent_at,automatic_application_consent_at").eq("id",user.id).abortSignal(signal).maybeSingle();
+    if(error)throw error;return data;
+  },{locale:input.locale,onAttempt:n=>input.onStage?.("profile_read",n)});
   const metadataName=String(user.user_metadata?.full_name??user.user_metadata?.name??"");const fullName=existing?.full_name||metadataName;
   const experienceYears:Record<string,number>={internship:0,entry:0,junior:2,mid:4,senior:7,expert:10};
   const previous=(existing?.universal_profile as UniversalProfile|null)??defaultUniversal(user);
@@ -358,7 +373,10 @@ export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;
   const visaRequirement=input.answers.workAuthorization==="sponsorship"?"Requires sponsorship":input.answers.workAuthorization==="unsure"?"Unknown":"No sponsorship required";
   const universal:UniversalProfile={...previous,city:input.answers.city,country:targetCountry,salaryCurrency:input.answers.currency,yearsExperience:experienceYears[input.answers.experience]??0,workAuthorizationCountries:authorized?[targetCountry]:[],visaRequirement,version:1};
   const now=new Date().toISOString();const onboardingAnswers={...input.answers,promoCode:input.answers.promoCode.trim().toUpperCase(),locale:input.locale,completedFrom:"web",completedAt:now};
-  const{error}=await client.from("profiles").upsert({id:user.id,full_name:fullName,email:existing?.email||user.email||null,phone:existing?.phone||null,role:input.answers.specialtyLabels.join(", ")||input.answers.categoryLabel,location:input.answers.city,skills:input.answers.specialtyLabels,work_modes:input.answers.priorities.includes("remote")?["Remoto","Híbrido"]:[],min_salary:input.answers.salaryMin,max_salary:input.answers.salaryMax,cv_path:cvPath,universal_profile:universal,onboarding_answers:onboardingAnswers,onboarding_completed_at:now,updated_at:now},{onConflict:"id"});if(error)throw error;
+  await onboardingOperation("profile_save",async signal=>{
+    const{error}=await client.from("profiles").upsert({id:user.id,full_name:fullName,email:existing?.email||user.email||null,phone:existing?.phone||null,role:input.answers.specialtyLabels.join(", ")||input.answers.categoryLabel,location:input.answers.city,skills:input.answers.specialtyLabels,work_modes:input.answers.priorities.includes("remote")?["Remoto","Híbrido"]:[],min_salary:input.answers.salaryMin,max_salary:input.answers.salaryMax,cv_path:cvPath,universal_profile:universal,onboarding_answers:onboardingAnswers,onboarding_completed_at:now,updated_at:now},{onConflict:"id"}).abortSignal(signal);
+    if(error)throw error;
+  },{locale:input.locale,onAttempt:n=>input.onStage?.("profile_save",n)});
   clearDashboardCaches();
 }
 

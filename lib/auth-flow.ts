@@ -1,4 +1,25 @@
 export const AUTH_EMAIL_CODE_LENGTH = 8;
+export const AUTH_PENDING_KEY = "landeo-auth-pending";
+export const AUTH_PENDING_TTL_MS = 15 * 60 * 1000;
+export const AUTH_RESEND_SECONDS = 60;
+
+/**
+ * A code was already requested in this tab. Restoring the "enter your code"
+ * screen after a refresh matters because Supabase will not send another code to
+ * the same address for 60 seconds, while the one already in the inbox still works.
+ */
+export function parsePendingCode(raw: string | null, mode: string, now = Date.now()) {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as { email?: unknown; mode?: unknown; at?: unknown };
+    const at = Number(value.at);
+    if (typeof value.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) return null;
+    if (value.mode !== mode || !Number.isFinite(at) || at > now || now - at > AUTH_PENDING_TTL_MS) return null;
+    return { email: value.email, resendIn: Math.max(0, AUTH_RESEND_SECONDS - Math.floor((now - at) / 1000)) };
+  } catch {
+    return null;
+  }
+}
 export function safeAuthNext(value:string|null,fallback="/app/jobs"){
   return value?.startsWith("/")&&!value.startsWith("//")&&!/[\\\u0000-\u001f\u007f]/.test(value)?value:fallback;
 }

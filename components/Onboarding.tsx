@@ -14,6 +14,7 @@ import { completeWebOnboarding } from "../lib/landeo";
 import { CvUploadError, resumeFormat } from "../lib/cv-upload";
 import { createSupabaseBrowserClient, getResilientSession } from "../lib/supabase/client";
 import { trackProductEvent } from "../lib/analytics";
+import { onboardingOperation, OnboardingOperationError, safeErrorCode, type OnboardingStage } from "../lib/onboarding-operation";
 
 type Locale = "es" | "en";
 type Step =
@@ -641,6 +642,8 @@ export default function Onboarding() {
     [resume, setResume] = useState<File | null>(null),
     [saving, setSaving] = useState(false),
     [uploadAttempt, setUploadAttempt] = useState(0),
+    [saveStage, setSaveStage] = useState<OnboardingStage>("session"),
+    [saveAttempt, setSaveAttempt] = useState(1),
     [error, setError] = useState(""),
     [cityOpen, setCityOpen] = useState(false),
     [cityResults, setCityResults] = useState<WorldCity[]>([]),
@@ -649,6 +652,7 @@ export default function Onboarding() {
     [completionChecked, setCompletionChecked] = useState(false),
     [completionError, setCompletionError] = useState(false),
     [sessionMissing, setSessionMissing] = useState(false);
+  const finishing = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null),
     step = steps[index],
     t = copy[locale],
@@ -660,7 +664,7 @@ export default function Onboarding() {
       let redirecting = false;
       try {
         const client = createSupabaseBrowserClient();
-        const session = await getResilientSession();
+        const session = await onboardingOperation("session", () => getResilientSession(), {locale, attempts:1, timeoutMs:20_000});
         const user = session?.user;
         if (!user) {
           if (active) {
@@ -670,9 +674,10 @@ export default function Onboarding() {
           return;
         }
         if (user) {
-          const { data: profile, error: profileError } = await client.from("profiles")
-            .select("onboarding_completed_at").eq("id", user.id).maybeSingle();
-          if (profileError) throw profileError;
+          const profile = await onboardingOperation("profile_read", async signal => {
+            const {data,error} = await client.from("profiles").select("onboarding_completed_at").eq("id",user.id).abortSignal(signal).maybeSingle();
+            if(error)throw error;return data;
+          }, {locale});
           if (!active) return;
           if (profile?.onboarding_completed_at) {
             redirecting = true;
@@ -682,7 +687,8 @@ export default function Onboarding() {
           }
         }
         if (active && !redirecting) setCompletionChecked(true);
-      } catch {
+      } catch (reason) {
+        trackProductEvent("onboarding_initialization_failed", {error_code:safeErrorCode(reason),stage:reason instanceof OnboardingOperationError?reason.stage:"unknown"});
         if (active) setCompletionError(true);
       }
     }
@@ -690,16 +696,17 @@ export default function Onboarding() {
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (!completionChecked || sessionMissing) return;
+    if (!completionChecked || sessionMissing || !draftReady) return;
     trackProductEvent("onboarding_step_viewed", {
       step,
       step_number: index + 1,
       total_steps: steps.length,
     });
-  }, [completionChecked, index, sessionMissing, step]);
+    trackProductEvent(`onboarding_step_${index + 1}_viewed`, {step_number:index+1});
+  }, [completionChecked, index, sessionMissing, step, draftReady]);
   useEffect(() => {
-    const saved = localStorage.getItem("landeo-locale"),
-      draft = localStorage.getItem("landeo-onboarding-draft");
+    let saved: string | null = null, draft: string | null = null;
+    try { saved=localStorage.getItem("landeo-locale"); draft=localStorage.getItem("landeo-onboarding-draft"); } catch { /* Storage restrictions must not block onboarding. */ }
     queueMicrotask(() => {
       if (saved === "es" || saved === "en") setLocale(saved);
       else if (!navigator.language.toLowerCase().startsWith("es")) {
@@ -723,7 +730,7 @@ export default function Onboarding() {
               Math.min(Math.max(0, parsed.index), steps.indexOf("resume")),
             );
         } catch {
-          localStorage.removeItem("landeo-onboarding-draft");
+          try { localStorage.removeItem("landeo-onboarding-draft"); } catch { /* Optional storage. */ }
         }
       }
       setDraftReady(true);
@@ -731,14 +738,15 @@ export default function Onboarding() {
   }, []);
   useEffect(() => {
     document.documentElement.lang = locale;
-    localStorage.setItem("landeo-locale", locale);
+    try { localStorage.setItem("landeo-locale", locale); } catch { /* Optional storage. */ }
   }, [locale]);
   useEffect(() => {
-    if (draftReady)
+    if (draftReady) try {
       localStorage.setItem(
         "landeo-onboarding-draft",
         JSON.stringify({ answers, index }),
       );
+    } catch { /* Keep answers in memory even when browser storage is unavailable. */ }
   }, [answers, index, draftReady]);
   useEffect(() => {
     const query = normalizeSearch(answers.city);
@@ -879,10 +887,12 @@ export default function Onboarding() {
       step_number: index + 1,
       total_steps: steps.length,
     });
+    trackProductEvent(`onboarding_step_${index + 1}_completed`, {step_number:index+1});
     moveTo(index + 1);
   };
   const finish = async () => {
-    if (!resume || saving) return;
+    if (!resume || finishing.current) return;
+    finishing.current=true;
     setSaving(true);
     setError("");
     trackProductEvent("onboarding_completion_started", { total_steps: steps.length });
@@ -901,18 +911,28 @@ export default function Onboarding() {
         resume,
         locale,
         onUploadAttempt: setUploadAttempt,
+        onStage:(stage,attempt)=>{
+          setSaveStage(stage);setSaveAttempt(attempt);
+          trackProductEvent("onboarding_save_stage",{stage,attempt});
+        },
       });
       try { localStorage.removeItem("landeo-onboarding-draft"); } catch { /* Optional draft cleanup must not block navigation. */ }
       trackProductEvent("onboarding_completed", { total_steps: steps.length });
+      trackProductEvent("onboarding_step_21_completed", {step_number:21});
       window.location.assign("/app/jobs?welcome=1");
     } catch (reason) {
       const message=reason instanceof Error ? reason.message : t.error;
       const sessionError=!(reason instanceof CvUploadError)&&/sesión ha caducado|session has expired/i.test(message);
-      trackProductEvent("onboarding_completion_failed", { reason: sessionError ? "session" : "save" });
+      trackProductEvent("onboarding_completion_failed", {
+        reason:sessionError?"session":"save",
+        stage:reason instanceof OnboardingOperationError?reason.stage:reason instanceof CvUploadError?"file_validation":"unknown",
+        error_code:safeErrorCode(reason),
+      });
       if(sessionError)setSessionMissing(true);
       else setError(message);
       setSaving(false);
       setUploadAttempt(0);
+      finishing.current=false;
     }
   };
   const renderChoices = (
@@ -1506,7 +1526,8 @@ export default function Onboarding() {
                 {saving && <p role="status" aria-live="polite">{uploadAttempt > 1
                   ? (locale === "es" ? `La subida se ha interrumpido. Reintentando CV (${uploadAttempt}/3)…` : `Upload interrupted. Retrying résumé (${uploadAttempt}/3)…`)
                   : uploadAttempt === 1 ? (locale === "es" ? "Subiendo tu CV…" : "Uploading your résumé…")
-                  : t.saving}</p>}
+                  : saveStage === "session" ? (locale === "es" ? "Comprobando tu sesión…" : "Checking your session…")
+                  : (locale === "es" ? `Guardando tu perfil${saveAttempt > 1 ? " · reintentando" : ""}… Tu CV ya está subido; no cierres esta página.` : `Saving your profile${saveAttempt > 1 ? " · retrying" : ""}… Your résumé is uploaded; keep this page open.`)}</p>}
                 {error && (
                   <m.p
                     className="onboarding-error"
@@ -1554,6 +1575,8 @@ export default function Onboarding() {
                       className="skip-button"
                       onClick={() => {
                         setOne("promoCode", "");
+                        trackProductEvent("onboarding_step_completed",{step,step_number:index+1,total_steps:steps.length,skipped:true});
+                        trackProductEvent(`onboarding_step_${index+1}_completed`,{step_number:index+1,skipped:true});
                         moveTo(index + 1);
                       }}
                     >

@@ -4,8 +4,9 @@ import Link from "./SafeLink";
 import {useEffect,useRef,useState,type FormEvent} from "react";
 import {Brand} from "./Brand";
 import {createSupabaseBrowserClient,getOAuthProviderAvailability,type OAuthProviderAvailability} from "../lib/supabase/client";
-import {AUTH_EMAIL_CODE_LENGTH,authDestination,authErrorCategory,readableAuthError,safeAuthNext} from "../lib/auth-flow";
+import {AUTH_EMAIL_CODE_LENGTH,AUTH_PENDING_KEY,AUTH_RESEND_SECONDS,authDestination,authErrorCategory,parsePendingCode,readableAuthError,safeAuthNext} from "../lib/auth-flow";
 import {trackProductEvent} from "../lib/analytics";
+import {safeErrorCode} from "../lib/onboarding-operation";
 
 const OAUTH_REDIRECT_TIMEOUT_MS=10_000;
 
@@ -17,6 +18,9 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
   const[oauthProviders,setOauthProviders]=useState<OAuthProviderAvailability>({google:false,apple:false});
   const redirectTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const operation=useRef(false);
+  const codeForm=useRef<HTMLFormElement|null>(null);
+  const rememberPending=(address:string)=>{try{window.sessionStorage.setItem(AUTH_PENDING_KEY,JSON.stringify({email:address,mode,at:Date.now()}))}catch{/* Private mode: the screen simply will not survive a refresh. */}};
+  const forgetPending=()=>{try{window.sessionStorage.removeItem(AUTH_PENDING_KEY)}catch{/* Nothing to clear. */}};
   const nextPath=()=>safeAuthNext(new URLSearchParams(window.location.search).get("next"),mode==="signup"?"/onboarding":"/app/jobs");
   const callback=()=>`${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath())}`;
   async function finishAccess(userId:string){
@@ -31,6 +35,10 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
     let active=true;
     const authError=new URLSearchParams(window.location.search).get("error");
     trackProductEvent("auth_viewed",{mode,has_error:Boolean(authError)});
+    try{
+      const pending=parsePendingCode(window.sessionStorage.getItem(AUTH_PENDING_KEY),mode);
+      if(pending){setEmail(pending.email);setRequestedEmail(pending.email);setSent(true);setResendIn(pending.resendIn);trackProductEvent("auth_code_step_restored",{mode})}
+    }catch{/* Storage can be unavailable; the form starts empty. */}
     if(authError){setError(readableAuthError(authError));trackProductEvent("auth_error_shown",{mode,reason:authErrorCategory(authError)})}
     setInAppBrowser(/Instagram|FBAN|FBAV|MicroMessenger|TikTok|LinkedInApp|\bLine\//i.test(navigator.userAgent));
     try{
@@ -53,11 +61,11 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
     try{
       const{error:authError}=await createSupabaseBrowserClient().auth.signInWithOtp({email:address,options:{emailRedirectTo:callback(),shouldCreateUser:mode==="signup"}});
       if(authError)throw authError;
-      setRequestedEmail(address);setSent(true);setCode("");setResendIn(60);
+      setRequestedEmail(address);setSent(true);setCode("");setResendIn(AUTH_RESEND_SECONDS);rememberPending(address);
       trackProductEvent("auth_link_sent",{mode});trackProductEvent("auth_code_sent",{mode});
     }catch(authError){
       const reason=authErrorCategory(authError);if(reason==="rate_limited")setResendIn(60);
-      trackProductEvent("auth_submit_failed",{mode,reason});setError(readableAuthError(authError));
+      trackProductEvent("auth_submit_failed",{mode,reason,error_code:safeErrorCode(authError)});setError(readableAuthError(authError));
     }finally{operation.current=false;setLoading(false)}
   }
   async function verifyEmailCode(event:FormEvent){
@@ -68,8 +76,8 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
       const{data,error:authError}=await createSupabaseBrowserClient().auth.verifyOtp({email:requestedEmail,token:code,type:"email"});
       if(authError)throw authError;
       if(!data.session||!data.user)throw new Error("No se pudo establecer la sesión.");
-      trackProductEvent("auth_code_verified",{mode});await finishAccess(data.user.id);
-    }catch(authError){trackProductEvent("auth_code_failed",{mode,reason:authErrorCategory(authError)});setError(readableAuthError(authError))}
+      trackProductEvent("auth_code_verified",{mode});forgetPending();await finishAccess(data.user.id);
+    }catch(authError){trackProductEvent("auth_code_failed",{mode,reason:authErrorCategory(authError),error_code:safeErrorCode(authError)});setError(readableAuthError(authError))}
     finally{operation.current=false;setLoading(false)}
   }
   async function emailLogin(event:FormEvent){event.preventDefault();await sendEmailCode()}
@@ -91,17 +99,19 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
     {inAppBrowser&&<p className="auth-browser-hint">Estás dentro del navegador de otra aplicación. Para usar Google, abre Landeo en Chrome o Safari desde el menú ⋮. También puedes acceder aquí con tu código por email.</p>}
     {sent?<div className="magic-sent" data-clarity-mask="true"><h2>Revisa tu correo</h2>
       <p role="status">Introduce el código de {AUTH_EMAIL_CODE_LENGTH} dígitos enviado a <strong>{requestedEmail}</strong>. Puedes consultar el correo en otra aplicación y volver aquí.</p>
-      <form onSubmit={verifyEmailCode} aria-busy={loading}>
+      <form ref={codeForm} onSubmit={verifyEmailCode} aria-busy={loading}>
         <label htmlFor="auth-email-code">Código de acceso</label>
-        <input id="auth-email-code" className="auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern={`[0-9]{${AUTH_EMAIL_CODE_LENGTH}}`} maxLength={AUTH_EMAIL_CODE_LENGTH} value={code} onChange={event=>setCode(event.target.value.replace(/\D/g,"").slice(0,AUTH_EMAIL_CODE_LENGTH))} placeholder="00000000" required autoFocus disabled={loading} aria-describedby="auth-code-help"/>
-        <button className="button button-primary" type="submit" disabled={loading||code.length!==AUTH_EMAIL_CODE_LENGTH}>{loading?"Verificando…":"Verificar y continuar →"}</button>
+        <input id="auth-email-code" className="auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern={`[0-9]{${AUTH_EMAIL_CODE_LENGTH}}`} maxLength={AUTH_EMAIL_CODE_LENGTH} value={code} onChange={event=>{const next=event.target.value.replace(/\D/g,"").slice(0,AUTH_EMAIL_CODE_LENGTH);setCode(next);if(next.length===AUTH_EMAIL_CODE_LENGTH)window.setTimeout(()=>codeForm.current?.requestSubmit(),0)}} placeholder="00000000" required autoFocus disabled={loading} aria-describedby="auth-code-help"/>
+        <small className="auth-code-count" aria-live="polite">{code.length}/{AUTH_EMAIL_CODE_LENGTH}</small>
+        <button className="button button-primary" type="submit" disabled={loading}>{loading?"Verificando…":"Verificar y continuar →"}</button>
       </form>
       <p id="auth-code-help">Usa el código del último correo. Revisa también la carpeta de spam. Si prefieres el enlace del correo, ábrelo en el navegador donde lo solicitaste.</p>
       <button className="button button-ghost" type="button" disabled={loading||resendIn>0} onClick={sendEmailCode}>{resendIn>0?`Reenviar en ${resendIn}s`:"Reenviar código"}</button>
-      <button className="text-button" type="button" disabled={loading} onClick={()=>{setSent(false);setCode("");setError("")}}>Usar otro email</button>
+      <button className="text-button" type="button" disabled={loading} onClick={()=>{setSent(false);setCode("");setError("");setResendIn(0);forgetPending()}}>Usar otro email</button>
     </div>:<form onSubmit={emailLogin} aria-busy={loading}>
       <label htmlFor="auth-email">Email</label><input id="auth-email" type="email" required autoComplete="email" disabled={loading} value={email} onChange={event=>setEmail(event.target.value)} placeholder="tu@email.com"/>
       <button className="button button-primary" type="submit" disabled={loading||resendIn>0}>{loading?"Enviando…":resendIn>0?`Espera ${resendIn}s`:"Recibir código por email →"}</button>
+      <button className="text-button" type="button" disabled={loading} onClick={()=>{const address=email.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)){setError("Escribe tu email y pulsa de nuevo «Ya tengo un código».");return}setError("");setRequestedEmail(address);setSent(true);setCode("");rememberPending(address);trackProductEvent("auth_has_code_clicked",{mode})}}>Ya tengo un código</button>
     </form>}
     {error&&<p className="form-error" role="alert">{error}</p>}
     {hasOAuth&&<><div className="or"><span/>o<span/></div>{oauthProviders.google&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("google")}><b>G</b>Continuar con Google</button>}{oauthProviders.apple&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("apple")}><b></b>Continuar con Apple</button>}</>}

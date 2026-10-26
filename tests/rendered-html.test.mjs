@@ -4,6 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
+import { AUTH_RESEND_SECONDS, parsePendingCode } from "../lib/auth-flow.ts";
 import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
 import { classifyInbound, parseReplyToken, parseSender, previewFromText } from "../supabase/functions/_shared/inbound-reply.ts";
 import { calculateJobMatch, isJobProfessionallyRelevant, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
@@ -825,4 +826,31 @@ test("the privacy policy discloses how employer replies are processed, in both l
   // The preview limit stated to users must match what the function really stores.
   const helper = await readFile(new URL("supabase/functions/_shared/inbound-reply.ts", root), "utf8");
   assert.match(helper, /previewFromText\(text: unknown, max = 280\)/);
+});
+
+
+test("the access code screen survives a refresh and never blocks the person with a dead button", async () => {
+  const now = Date.parse("2026-10-26T12:00:00Z");
+  const pending = (extra = {}) => JSON.stringify({ email: "ana@gmail.com", mode: "signup", at: now - 20_000, ...extra });
+  // A refresh 20 s after asking for the code keeps the screen and the remaining cooldown.
+  assert.deepEqual(parsePendingCode(pending(), "signup", now), { email: "ana@gmail.com", resendIn: AUTH_RESEND_SECONDS - 20 });
+  assert.equal(parsePendingCode(pending({ at: now - 120_000 }), "signup", now)?.resendIn, 0);
+  // It does not leak across modes, expire late, or accept broken data.
+  assert.equal(parsePendingCode(pending(), "login", now), null);
+  assert.equal(parsePendingCode(pending({ at: now - 16 * 60_000 }), "signup", now), null);
+  assert.equal(parsePendingCode(pending({ at: now + 60_000 }), "signup", now), null);
+  assert.equal(parsePendingCode(pending({ email: "no-es-un-email" }), "signup", now), null);
+  assert.equal(parsePendingCode("{not json", "signup", now), null);
+  assert.equal(parsePendingCode(null, "signup", now), null);
+
+  const card = await readFile(new URL("components/AuthCard.tsx", root), "utf8");
+  // The verify button is only disabled while loading: a short code gets an explanation, not a dead click.
+  assert.doesNotMatch(card, /disabled=\{loading\|\|code\.length!==AUTH_EMAIL_CODE_LENGTH\}/);
+  assert.match(card, /Introduce los \$\{AUTH_EMAIL_CODE_LENGTH\} dígitos/);
+  // Pasting or typing the last digit submits by itself.
+  assert.match(card, /requestSubmit\(\)/);
+  // Someone who already has a code can enter it, and changing email clears the countdown.
+  assert.match(card, /Ya tengo un código/);
+  assert.match(card, /setResendIn\(0\);forgetPending\(\)/);
+  assert.match(card, /parsePendingCode\(window\.sessionStorage/);
 });
