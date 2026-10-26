@@ -920,3 +920,16 @@ test("a background refresh of the profile never wipes what is being typed", asyn
   const app = await readFile(new URL("components/ProductApp.tsx", root), "utf8");
   assert.match(app, /nextProfileForm\(saved,/);
 });
+
+test("job imports only write offers that are new or changed, to protect the database's disk budget", async () => {
+  const importer = await readFile(new URL("supabase/functions/import-jobs/index.ts", root), "utf8");
+  assert.match(importer, /async function contentHash\(job: NormalizedJob\)/);
+  // Offers are compared with the fingerprint stored in their metadata, and only active ones are skipped.
+  assert.match(importer, /current\.status === "active" && current\.metadata\?\.content_hash === hashes\.get\(key\)/);
+  assert.match(importer, /content_hash: hashes\.get\(key\)/);
+  // Only changed offers are upserted, and their application targets only when they changed too.
+  assert.match(importer, /const changedJobs = batch\.filter\(\(job\) => !unchanged\(job\)\)/);
+  assert.match(importer, /const targets = changedJobs\.flatMap/);
+  // The response says how many rows were really written.
+  assert.match(importer, /json\(\{ imported, written, deactivated, errors \}\)/);
+});

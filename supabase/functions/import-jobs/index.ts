@@ -1863,13 +1863,26 @@ async function retryOnStatementTimeout(
   return result;
 }
 
+// Every import used to rewrite every offer even when nothing had changed, which
+// is what drained the database's Disk IO budget (the jobs table had ~45 updates
+// per live row). Each offer now carries a fingerprint of its content and is
+// only written when it is new, changed, or was closed.
+const saveStats = { seen: 0, written: 0 };
+
+async function contentHash(job: NormalizedJob): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(job)));
+  return [...new Uint8Array(digest)].slice(0, 12).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
+  saveStats.seen = 0;
+  saveStats.written = 0;
   if (!jobs.length) return 0;
   let saved = 0;
   const batchSize = 100;
   for (let start = 0; start < jobs.length; start += batchSize) {
     const batch = jobs.slice(start, start + batchSize);
-    const existingRows: Array<{source:string;external_id:string;metadata:Record<string,unknown>|null}> = [];
+    const existingRows: Array<{source:string;external_id:string;status:string|null;metadata:Record<string,unknown>|null}> = [];
     const bySource = new Map<string, string[]>();
     for (const job of batch) {
       const ids = bySource.get(job.source) ?? [];
@@ -1879,18 +1892,30 @@ async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
     for (const [source, externalIds] of bySource) {
       const { data: current, error: currentError } = await retryOnStatementTimeout(() =>
         supabase.from("jobs")
-          .select("source,external_id,metadata")
+          .select("source,external_id,status,metadata")
           .eq("source", source)
           .in("external_id", externalIds)
       );
       if (currentError) throw currentError;
       existingRows.push(...(current ?? []));
     }
-    const existingMetadata = new Map(existingRows.map((row) => [`${row.source}:${row.external_id}`, row.metadata ?? {}]));
-    const rows = batch.map(({ target: _target, ...job }) => {
-      const previous = existingMetadata.get(`${job.source}:${job.external_id}`) ?? {};
-      const protectedEntries = Object.entries(previous).filter(([key]) => key.startsWith("company_office_") || key.startsWith("company_address_"));
-      return { ...job, metadata: { ...job.metadata, ...Object.fromEntries(protectedEntries) } };
+    const existingByKey = new Map(existingRows.map((row) => [`${row.source}:${row.external_id}`, row]));
+    const hashes = new Map<string, string>();
+    for (const job of batch) hashes.set(`${job.source}:${job.external_id}`, await contentHash(job));
+    const unchanged = (job: NormalizedJob) => {
+      const key = `${job.source}:${job.external_id}`;
+      const current = existingByKey.get(key);
+      return Boolean(current && current.status === "active" && current.metadata?.content_hash === hashes.get(key));
+    };
+    const changedJobs = batch.filter((job) => !unchanged(job));
+    saveStats.seen += batch.length;
+    saved += batch.length - changedJobs.length;
+    if (!changedJobs.length) continue;
+    const rows = changedJobs.map(({ target: _target, ...job }) => {
+      const key = `${job.source}:${job.external_id}`;
+      const previous = existingByKey.get(key)?.metadata ?? {};
+      const protectedEntries = Object.entries(previous).filter(([entry]) => entry.startsWith("company_office_") || entry.startsWith("company_address_"));
+      return { ...job, metadata: { ...job.metadata, ...Object.fromEntries(protectedEntries), content_hash: hashes.get(key) } };
     });
     const { data, error } = await retryOnStatementTimeout(() =>
       supabase
@@ -1909,7 +1934,8 @@ async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
         ],
       ),
     );
-    const targets = batch.flatMap((job) => {
+    saveStats.written += changedJobs.length;
+    const targets = changedJobs.flatMap((job) => {
       const jobId = ids.get(`${job.source}:${job.external_id}`);
       return jobId ? [{ job_id: jobId, ...job.target }] : [];
     });
@@ -1942,6 +1968,7 @@ async function saveJobs(supabase: any, jobs: NormalizedJob[]) {
     }
     saved += data?.length ?? 0;
   }
+  console.log("saveJobs", JSON.stringify(saveStats));
   return saved;
 }
 
@@ -2094,11 +2121,13 @@ Deno.serve(async (request) => {
     }
     const imported: Record<string, number> = {};
     const deactivated: Record<string, number> = {};
+    const written: Record<string, number> = {};
     const errors: string[] = [];
     for (const source of selectedTasks) {
       try {
         const jobs = await source.load();
         imported[source.name] = await saveJobs(supabase, jobs);
+        written[source.name] = saveStats.written;
         if (source.name === "Lever") {
           deactivated[source.name] = await closeMissingBoardJobs(supabase, "lever", jobs, leverLoadedBoards);
         }
@@ -2121,7 +2150,7 @@ Deno.serve(async (request) => {
         errors.push(`${source.name}: ${errorMessage(sourceError)}`);
       }
     }
-    return json({ imported, deactivated, errors });
+    return json({ imported, written, deactivated, errors });
   } catch (error) {
     return json(
       {
