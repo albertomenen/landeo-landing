@@ -4,6 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
+import { nextProfileForm } from "../lib/profile-form.ts";
 import { AUTH_RESEND_SECONDS, authErrorCategory, isValidAuthCode, parsePendingCode, readableAuthError, withTimeout } from "../lib/auth-flow.ts";
 import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
 import { classifyInbound, parseReplyToken, parseSender, previewFromText } from "../supabase/functions/_shared/inbound-reply.ts";
@@ -893,4 +894,29 @@ test("a request that never answers cannot freeze the access form", async () => {
   // Browsers without requestSubmit (older Safari, some in-app browsers) still submit.
   assert.match(card, /typeof form\.requestSubmit==="function"/);
   assert.match(card, /dispatchEvent\(new Event\("submit"/);
+});
+
+
+test("a background refresh of the profile never wipes what is being typed", async () => {
+  const saved = { firstName: "Ana", lastName: "Gil", email: "ana@x.com", phone: "", city: "Madrid", country: "España", role: "Ventas", authorization: "España", privacy: false, automatic: false };
+  // First load fills the form from the saved profile.
+  let step = nextProfileForm(saved, { ...saved, firstName: "", lastName: "" }, null);
+  assert.equal(step.apply, true);
+  const baseline = step.baseline;
+  // Untouched form: a changed saved profile is applied.
+  assert.equal(nextProfileForm({ ...saved, city: "Sevilla" }, saved, baseline).apply, true);
+  // The person typed a phone and ticked both consents, then the tab regained focus and the
+  // profile was refreshed with the old saved values: keep what they typed.
+  const typed = { ...saved, phone: "600123123", privacy: true, automatic: true };
+  step = nextProfileForm(saved, typed, baseline);
+  assert.equal(step.apply, false);
+  // ...and again on the next refresh.
+  assert.equal(nextProfileForm(saved, typed, step.baseline).apply, false);
+  // Once it is saved, the refresh brings the same values and the form follows the new baseline.
+  step = nextProfileForm(typed, typed, step.baseline);
+  assert.equal(step.apply, true);
+  assert.deepEqual(step.baseline, typed);
+  assert.equal(nextProfileForm({ ...typed, city: "Bilbao" }, typed, step.baseline).apply, true);
+  const app = await readFile(new URL("components/ProductApp.tsx", root), "utf8");
+  assert.match(app, /nextProfileForm\(saved,/);
 });

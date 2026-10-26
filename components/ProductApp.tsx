@@ -56,6 +56,7 @@ import { DashboardTour } from "./DashboardTour";
 import { dashboardCopy, type DashboardLocale } from "../lib/dashboard-i18n";
 import { marketingDemoApplications, marketingDemoJobs } from "../lib/marketing-demo";
 import { applicationGuide, deliveryState, type DeliveryKey } from "../lib/application-guidance";
+import { nextProfileForm, type ProfileFormValues } from "../lib/profile-form";
 import { trackProductEvent } from "../lib/analytics";
 
 export type ProductView =
@@ -3541,22 +3542,42 @@ function UniversalProfile({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [profileStep, setProfileStep] = useState(0);
+  const formBaseline = useRef<{ userId: string; values: ProfileFormValues } | null>(null);
   useEffect(() => {
     if (!user) return;
     const universal = profile?.universal;
     const names = (
       profile?.fullName || String(user.user_metadata?.full_name ?? "")
     ).split(/\s+/);
-    setFirstName(universal?.firstName || names[0] || "");
-    setLastName(universal?.lastName || names.slice(1).join(" "));
-    setEmail(profile?.email || user.email || "");
-    setPhone(profile?.phone || "");
-    setCity(universal?.city || profile?.location || "");
-    setCountry(universal?.country || "España");
-    setRole(profile?.role || "");
-    setAuthorization(universal?.workAuthorizationCountries?.[0] || "España");
-    setPrivacy(Boolean(universal?.privacyConsent));
-    setAutomatic(Boolean(universal?.automaticApplicationConsent));
+    const saved: ProfileFormValues = {
+      firstName: universal?.firstName || names[0] || "",
+      lastName: universal?.lastName || names.slice(1).join(" "),
+      email: profile?.email || user.email || "",
+      phone: profile?.phone || "",
+      city: universal?.city || profile?.location || "",
+      country: universal?.country || "España",
+      role: profile?.role || "",
+      authorization: universal?.workAuthorizationCountries?.[0] || "España",
+      privacy: Boolean(universal?.privacyConsent),
+      automatic: Boolean(universal?.automaticApplicationConsent),
+    };
+    // A background refresh of the profile must not wipe what is being typed.
+    const previous = formBaseline.current?.userId === user.id ? formBaseline.current.values : null;
+    const decision = nextProfileForm(saved, { firstName, lastName, email, phone, city, country, role, authorization, privacy, automatic }, previous);
+    formBaseline.current = { userId: user.id, values: decision.baseline };
+    if (!decision.apply) return;
+    setFirstName(saved.firstName);
+    setLastName(saved.lastName);
+    setEmail(saved.email);
+    setPhone(saved.phone);
+    setCity(saved.city);
+    setCountry(saved.country);
+    setRole(saved.role);
+    setAuthorization(saved.authorization);
+    setPrivacy(saved.privacy);
+    setAutomatic(saved.automatic);
+    // The form values are intentionally read, not tracked: only a new saved profile re-runs this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile]);
   useEffect(() => {
     const stepByHash: Record<string, number> = {
