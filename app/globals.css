@@ -12005,3 +12005,4 @@ h1 em:after {
 .application-reply-preview { white-space: pre-wrap; }
 .application-reply-note { margin-top: 4px !important; }
 .auth-code-count { display: block; text-align: center; margin: 4px 0 10px; color: var(--muted, #5c6b60); font-variant-numeric: tabular-nums; }
+.auth-card .social-button-primary { border-width: 2px; border-color: #357e59; font-weight: 800; }

@@ -4,7 +4,7 @@ import Link from "./SafeLink";
 import {useEffect,useRef,useState,type FormEvent} from "react";
 import {Brand} from "./Brand";
 import {createSupabaseBrowserClient,getOAuthProviderAvailability,type OAuthProviderAvailability} from "../lib/supabase/client";
-import {AUTH_EMAIL_CODE_LENGTH,AUTH_PENDING_KEY,AUTH_RESEND_SECONDS,authDestination,authErrorCategory,parsePendingCode,readableAuthError,safeAuthNext} from "../lib/auth-flow";
+import {AUTH_EMAIL_CODE_LENGTH,AUTH_LEGACY_CODE_LENGTH,AUTH_MAX_CODE_LENGTH,AUTH_PENDING_KEY,AUTH_RESEND_SECONDS,isValidAuthCode,authDestination,authErrorCategory,parsePendingCode,readableAuthError,safeAuthNext} from "../lib/auth-flow";
 import {trackProductEvent} from "../lib/analytics";
 import {safeErrorCode} from "../lib/onboarding-operation";
 
@@ -19,6 +19,7 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
   const redirectTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const operation=useRef(false);
   const codeForm=useRef<HTMLFormElement|null>(null);
+  const autoSubmit=useRef<ReturnType<typeof setTimeout>|null>(null);
   const rememberPending=(address:string)=>{try{window.sessionStorage.setItem(AUTH_PENDING_KEY,JSON.stringify({email:address,mode,at:Date.now()}))}catch{/* Private mode: the screen simply will not survive a refresh. */}};
   const forgetPending=()=>{try{window.sessionStorage.removeItem(AUTH_PENDING_KEY)}catch{/* Nothing to clear. */}};
   const nextPath=()=>safeAuthNext(new URLSearchParams(window.location.search).get("next"),mode==="signup"?"/onboarding":"/app/jobs");
@@ -70,7 +71,7 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
   }
   async function verifyEmailCode(event:FormEvent){
     event.preventDefault();if(operation.current)return;
-    if(!new RegExp(`^\\d{${AUTH_EMAIL_CODE_LENGTH}}$`).test(code)){setError(`Introduce los ${AUTH_EMAIL_CODE_LENGTH} dígitos del último correo.`);return}
+    if(!isValidAuthCode(code)){setError("Introduce el código completo del último correo (son 6 u 8 dígitos).");return}
     operation.current=true;setLoading(true);setError("");trackProductEvent("auth_code_submitted",{mode});
     try{
       const{data,error:authError}=await createSupabaseBrowserClient().auth.verifyOtp({email:requestedEmail,token:code,type:"email"});
@@ -98,23 +99,25 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
     <p>{mode==="login"?"Accede con Google o con un código por email, sin contraseña.":"Explora y guarda empleos gratis. Solo pagarás si decides postularte."}</p>
     {inAppBrowser&&<p className="auth-browser-hint">Estás dentro del navegador de otra aplicación. Para usar Google, abre Landeo en Chrome o Safari desde el menú ⋮. También puedes acceder aquí con tu código por email.</p>}
     {sent?<div className="magic-sent" data-clarity-mask="true"><h2>Revisa tu correo</h2>
-      <p role="status">Introduce el código de {AUTH_EMAIL_CODE_LENGTH} dígitos enviado a <strong>{requestedEmail}</strong>. Puedes consultar el correo en otra aplicación y volver aquí.</p>
+      <p role="status">Introduce el código que te hemos enviado a <strong>{requestedEmail}</strong>. Puedes consultar el correo en otra aplicación y volver aquí.</p>
       <form ref={codeForm} onSubmit={verifyEmailCode} aria-busy={loading}>
         <label htmlFor="auth-email-code">Código de acceso</label>
-        <input id="auth-email-code" className="auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern={`[0-9]{${AUTH_EMAIL_CODE_LENGTH}}`} maxLength={AUTH_EMAIL_CODE_LENGTH} value={code} onChange={event=>{const next=event.target.value.replace(/\D/g,"").slice(0,AUTH_EMAIL_CODE_LENGTH);setCode(next);if(next.length===AUTH_EMAIL_CODE_LENGTH)window.setTimeout(()=>codeForm.current?.requestSubmit(),0)}} placeholder="00000000" required autoFocus disabled={loading} aria-describedby="auth-code-help"/>
-        <small className="auth-code-count" aria-live="polite">{code.length}/{AUTH_EMAIL_CODE_LENGTH}</small>
+        <input id="auth-email-code" className="auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}|[0-9]{8}" maxLength={AUTH_MAX_CODE_LENGTH} value={code} onChange={event=>{const next=event.target.value.replace(/\D/g,"").slice(0,AUTH_MAX_CODE_LENGTH);setCode(next);if(autoSubmit.current)clearTimeout(autoSubmit.current);if(next.length===AUTH_LEGACY_CODE_LENGTH)autoSubmit.current=setTimeout(()=>codeForm.current?.requestSubmit(),0);else if(next.length===AUTH_EMAIL_CODE_LENGTH)autoSubmit.current=setTimeout(()=>codeForm.current?.requestSubmit(),900)}} placeholder="000000" required autoFocus disabled={loading} aria-describedby="auth-code-help"/>
+        <small className="auth-code-count" aria-live="polite">{code.length?`${code.length} dígitos`:"Escribe o pega el código del correo"}</small>
         <button className="button button-primary" type="submit" disabled={loading}>{loading?"Verificando…":"Verificar y continuar →"}</button>
       </form>
       <p id="auth-code-help">Usa el código del último correo. Revisa también la carpeta de spam. Si prefieres el enlace del correo, ábrelo en el navegador donde lo solicitaste.</p>
       <button className="button button-ghost" type="button" disabled={loading||resendIn>0} onClick={sendEmailCode}>{resendIn>0?`Reenviar en ${resendIn}s`:"Reenviar código"}</button>
       <button className="text-button" type="button" disabled={loading} onClick={()=>{setSent(false);setCode("");setError("");setResendIn(0);forgetPending()}}>Usar otro email</button>
-    </div>:<form onSubmit={emailLogin} aria-busy={loading}>
+    </div>:<>
+    {hasOAuth&&<>{oauthProviders.google&&<button className="social-button social-button-primary" type="button" disabled={loading} onClick={()=>oauth("google")}><b>G</b>Continuar con Google</button>}{oauthProviders.apple&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("apple")}><b></b>Continuar con Apple</button>}<div className="or"><span/>o con tu email<span/></div></>}
+    <form onSubmit={emailLogin} aria-busy={loading}>
       <label htmlFor="auth-email">Email</label><input id="auth-email" type="email" required autoComplete="email" disabled={loading} value={email} onChange={event=>setEmail(event.target.value)} placeholder="tu@email.com"/>
       <button className="button button-primary" type="submit" disabled={loading||resendIn>0}>{loading?"Enviando…":resendIn>0?`Espera ${resendIn}s`:"Recibir código por email →"}</button>
       <button className="text-button" type="button" disabled={loading} onClick={()=>{const address=email.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)){setError("Escribe tu email y pulsa de nuevo «Ya tengo un código».");return}setError("");setRequestedEmail(address);setSent(true);setCode("");rememberPending(address);trackProductEvent("auth_has_code_clicked",{mode})}}>Ya tengo un código</button>
-    </form>}
+    </form></>}
     {error&&<p className="form-error" role="alert">{error}</p>}
-    {hasOAuth&&<><div className="or"><span/>o<span/></div>{oauthProviders.google&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("google")}><b>G</b>Continuar con Google</button>}{oauthProviders.apple&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("apple")}><b></b>Continuar con Apple</button>}</>}
+    {sent&&hasOAuth&&<><div className="or"><span/>o<span/></div>{oauthProviders.google&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("google")}><b>G</b>Continuar con Google</button>}{oauthProviders.apple&&<button className="social-button" type="button" disabled={loading} onClick={()=>oauth("apple")}><b></b>Continuar con Apple</button>}</>}
     <small>Al continuar aceptas los <Link href="/terms">Términos</Link> y la <Link href="/privacy">Política de privacidad</Link>.</small>
     <p className="auth-switch">{mode==="login"?"¿Aún no tienes cuenta?":"¿Ya tienes cuenta?"} <Link href={mode==="login"?"/signup":"/login"}>{mode==="login"?"Crear perfil":"Entrar"}</Link></p>
   </section></main>;

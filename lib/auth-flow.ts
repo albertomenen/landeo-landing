@@ -1,4 +1,12 @@
-export const AUTH_EMAIL_CODE_LENGTH = 8;
+// New emails carry 6 digits; codes issued earlier have 8 and stay valid for up to
+// an hour, so both are accepted (this also keeps sign-in working while Supabase's
+// setting and the published site are switched in two separate steps).
+export const AUTH_EMAIL_CODE_LENGTH = 6;
+export const AUTH_LEGACY_CODE_LENGTH = 8;
+export const AUTH_MAX_CODE_LENGTH = AUTH_LEGACY_CODE_LENGTH;
+export function isValidAuthCode(value: string) {
+  return /^\d+$/.test(value) && (value.length === AUTH_EMAIL_CODE_LENGTH || value.length === AUTH_LEGACY_CODE_LENGTH);
+}
 export const AUTH_PENDING_KEY = "landeo-auth-pending";
 export const AUTH_PENDING_TTL_MS = 15 * 60 * 1000;
 export const AUTH_RESEND_SECONDS = 60;

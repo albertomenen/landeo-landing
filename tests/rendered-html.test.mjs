@@ -4,7 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
-import { AUTH_RESEND_SECONDS, parsePendingCode } from "../lib/auth-flow.ts";
+import { AUTH_RESEND_SECONDS, isValidAuthCode, parsePendingCode } from "../lib/auth-flow.ts";
 import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
 import { classifyInbound, parseReplyToken, parseSender, previewFromText } from "../supabase/functions/_shared/inbound-reply.ts";
 import { calculateJobMatch, isJobProfessionallyRelevant, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
@@ -846,11 +846,32 @@ test("the access code screen survives a refresh and never blocks the person with
   const card = await readFile(new URL("components/AuthCard.tsx", root), "utf8");
   // The verify button is only disabled while loading: a short code gets an explanation, not a dead click.
   assert.doesNotMatch(card, /disabled=\{loading\|\|code\.length!==AUTH_EMAIL_CODE_LENGTH\}/);
-  assert.match(card, /Introduce los \$\{AUTH_EMAIL_CODE_LENGTH\} dígitos/);
+  assert.match(card, /Introduce el código completo del último correo/);
   // Pasting or typing the last digit submits by itself.
   assert.match(card, /requestSubmit\(\)/);
   // Someone who already has a code can enter it, and changing email clears the countdown.
   assert.match(card, /Ya tengo un código/);
   assert.match(card, /setResendIn\(0\);forgetPending\(\)/);
   assert.match(card, /parsePendingCode\(window\.sessionStorage/);
+});
+
+
+test("access codes of 6 digits (new) and 8 digits (issued before the switch) both work", async () => {
+  assert.equal(isValidAuthCode("123456"), true);
+  assert.equal(isValidAuthCode("12345678"), true);
+  for (const bad of ["", "12345", "1234567", "123456789", "12 456", "abcdef", "12345a"]) assert.equal(isValidAuthCode(bad), false, bad);
+  const card = await readFile(new URL("components/AuthCard.tsx", root), "utf8");
+  // 8 digits submit at once; 6 wait a moment in case the person is still typing an older 8-digit code.
+  assert.match(card, /AUTH_LEGACY_CODE_LENGTH\)autoSubmit\.current=setTimeout\(\(\)=>codeForm\.current\?\.requestSubmit\(\),0\)/);
+  assert.match(card, /AUTH_EMAIL_CODE_LENGTH\)autoSubmit\.current=setTimeout\(\(\)=>codeForm\.current\?\.requestSubmit\(\),900\)/);
+  // The page never states the length, so it is right before and after Supabase switches.
+  assert.doesNotMatch(card, /código de \{AUTH_EMAIL_CODE_LENGTH\} dígitos/);
+  // Google first, on top, when it is available.
+  assert.ok(card.indexOf("social-button-primary") < card.indexOf("Recibir código por email"));
+  const template = await readFile(new URL("supabase/templates/email-code.html", root), "utf8");
+  assert.doesNotMatch(template.replace(/<[^>]*>/g, " "), /\b(ocho|seis|eight|six)\b/i);
+  assert.match(template, /\{\{ \.Token \}\}/);
+  assert.match(template, /Entrar con un clic/);
+  const script = await readFile(new URL("scripts/configure-email-otp.mjs", root), "utf8");
+  assert.match(script, /--length=6/);
 });
