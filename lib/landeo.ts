@@ -225,7 +225,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   ]:[activeJobs().order("published_at",{ascending:false}).limit(24),activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(24),...salaryQueries];
   const primaryResults=await Promise.all(primaryQueries);
   const knownTargets=new Set<string>();const checkedTargets=new Set<string>();
-  const prepareJobs=async(results:typeof primaryResults)=>{
+  const prepareJobs=async(results:typeof primaryResults,allowRemoteFallback=false)=>{
   const failed=results.find(result=>result.error);
   if(failed?.error)throw failed.error;
   const hiddenFingerprints=await hiddenFingerprintsReady;
@@ -233,7 +233,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     .filter(row=>!hidden.has(row.id)&&!hiddenFingerprints.has(jobFingerprint(row)))
     .filter(row=>searchedMarket||isJobWorkAuthorizationCompatible(row,matchProfile))
     .filter(row=>isJobLocationCompatible({location:row.location||"",market:String(row.metadata?.market_country||""),workMode:workMode(row.work_mode),metadata:row.metadata??{}},candidateCity,candidateCountry))
-    .filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile));
+    .filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile)||(allowRemoteFallback&&workMode(row.work_mode)==="remote"));
   // The expansion pass re-sees the primary rows; only ask about new ones.
   const uncheckedIds=rows.map(row=>row.id).filter(id=>!checkedTargets.has(id));
   const targetResults=await Promise.all(chunks(uncheckedIds).map(ids=>client.functions.invoke("available-job-targets",{body:{jobIds:ids}})));
@@ -243,7 +243,11 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
   const targetIds=knownTargets;
   const rank:Record<ApplyCapability,number>={automatic:0,assisted:1,external:2};
   const seenFingerprints=new Set<string>();
-  const available=rows.filter(row=>targetIds.has(row.id)).map(row=>mapJobForProfile(row,matchProfile)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
+  const actionable=rows.filter(row=>targetIds.has(row.id));
+  const matching=actionable.filter(row=>Boolean(options.search||options.careerLevel)||isJobProfessionallyRelevant(row,matchProfile));
+  const generalRemote=!matching.length&&allowRemoteFallback;
+  const chosen=generalRemote?actionable.filter(row=>workMode(row.work_mode)==="remote"):matching;
+  const available=chosen.map(row=>mapJobForProfile(generalRemote?{...row,metadata:{...row.metadata,feed_fallback:"remote_general"}}:row,matchProfile)).sort((a,b)=>featuredScore(b)-featuredScore(a)||b.match-a.match||rank[a.applyCapability]-rank[b.applyCapability]||new Date(b.publishedAt).getTime()-new Date(a.publishedAt).getTime()).filter(job=>{const fingerprint=jobFingerprint(job);if(seenFingerprints.has(fingerprint))return false;seenFingerprints.add(fingerprint);return true});
   if(candidateCity){
     return prioritizeHighSalaryRemote(prioritizeJobsWithRemoteFallback(available,candidateCity,candidateCountry,Boolean(options.includeWorldwide||options.search)),candidateCity,candidateCountry,await salaryRatesPromise).slice(0,limit);
   }
@@ -257,7 +261,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     const results=await Promise.all(careerFocused?[
       activeJobs().or(options.careerLevel==="internship"?internshipFilter:juniorFilter).order("published_at",{ascending:false}).limit(100),
     ]:defaultQueries);
-    return await prepareJobs([...primaryResults,...results]);
+    return await prepareJobs([...primaryResults,...results],true);
   }catch(error){if(initialJobs.length)return initialJobs;throw error}
 }
 

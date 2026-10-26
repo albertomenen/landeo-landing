@@ -965,7 +965,6 @@ function JobsView({
       // Refill shortly before the current page runs out. Already handled
       // jobs are excluded in Supabase, so this reveals the next catalogue
       // page without downloading the complete database up front.
-      if (jobs.length - 1 <= 5) refill();
       setIndex(0);
     },
     [job, jobs.length, refill],
@@ -1006,11 +1005,12 @@ function JobsView({
     setNotice(t.notices.discarded);
     try {
       await recordSwipe(job.id, "left");
+      if (jobs.length - 1 <= 5) refill();
     } catch (error) {
       restoreJob(job);
       setNotice(error instanceof Error ? error.message : t.notices.swipeError);
     }
-  }, [job, demo, removeCurrent, restoreJob, t.notices, verifiedIdentity]);
+  }, [job, jobs.length, refill, demo, removeCurrent, restoreJob, t.notices, verifiedIdentity]);
   const save = useCallback(async () => {
     if (!job) return;
     if (demo) {
@@ -1050,6 +1050,7 @@ function JobsView({
       const application = (await loadApplications()).find((item) => item.jobId === jobId);
       triggerConfetti();
       removeCurrent(1, targetJob);
+      if (jobs.length - 1 <= 5) refill();
       setApplicationFlow((current) => ({
         job: targetJob,
         phase: "result",
@@ -1076,7 +1077,7 @@ function JobsView({
     } finally {
       pendingApplications.current.delete(jobId);
     }
-  }, [refresh, removeCurrent, t.notices.applyError, triggerConfetti]);
+  }, [refresh, refill, jobs.length, removeCurrent, t.notices.applyError, triggerConfetti]);
   const apply = useCallback(async () => {
     if (!job) return;
     if (demo) {
@@ -1338,6 +1339,7 @@ function JobsView({
         </m.aside>
         <section className="deck-panel">
           {searchFallback&&<div className="jobs-feed-error" role="status">{localized(locale,`No hay ofertas para «${query.trim()}». Te mostramos primero las remotas.`,`No jobs for “${query.trim()}”. Showing remote roles first.`)}</div>}
+          {!searchFallback&&job?.metadata?.feed_fallback==="remote_general"&&<div className="jobs-feed-error" role="status">{localized(locale,"No hemos encontrado ofertas nuevas que encajen con tu perfil. Te mostramos otras oportunidades en remoto para que puedas explorarlas.","We couldn't find new jobs matching your profile. Here are other remote opportunities you can explore.")}</div>}
           {feedError&&job&&<div className="jobs-feed-error" role="alert">{localized(locale,"No hemos podido actualizar las ofertas. Puedes seguir viendo las que ya cargaron.","We couldn’t refresh jobs. You can still browse the jobs already loaded.")} <button type="button" onClick={()=>refresh()}>{localized(locale,"Reintentar","Retry")}</button></div>}
           <div className="deck-count">
             <span>
@@ -1533,14 +1535,14 @@ function JobsView({
                     ? showAutomaticArchive
                       ? t.jobs.automaticArchiveEmpty
                       : t.jobs.automaticEmpty
-                    : t.jobs.upToDate}
+                    : localized(locale,"No hay más ofertas con estos criterios","No more jobs with these criteria")}
                 </h2>
                 <p>
                   {mode === "automatic"
                     ? showAutomaticArchive
                       ? t.jobs.automaticArchiveEmptyDetail
                       : t.jobs.automaticEmptyDetail
-                    : t.jobs.upToDateDetail}
+                    : localized(locale,"Hemos ampliado la búsqueda a otras ubicaciones y oportunidades remotas. Prueba a cambiar los filtros o vuelve a actualizar más tarde.","We've expanded the search to other locations and remote opportunities. Try changing your filters or refresh again later.")}
                 </p>
                 {mode === "automatic" && (
                   <div className="automatic-empty-actions">
