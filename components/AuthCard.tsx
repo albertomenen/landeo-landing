@@ -4,7 +4,7 @@ import Link from "./SafeLink";
 import {useEffect,useRef,useState,type FormEvent} from "react";
 import {Brand} from "./Brand";
 import {createSupabaseBrowserClient,getOAuthProviderAvailability,type OAuthProviderAvailability} from "../lib/supabase/client";
-import {AUTH_EMAIL_CODE_LENGTH,AUTH_LEGACY_CODE_LENGTH,AUTH_MAX_CODE_LENGTH,AUTH_PENDING_KEY,AUTH_RESEND_SECONDS,isValidAuthCode,authDestination,authErrorCategory,parsePendingCode,readableAuthError,safeAuthNext} from "../lib/auth-flow";
+import {AUTH_EMAIL_CODE_LENGTH,AUTH_LEGACY_CODE_LENGTH,AUTH_MAX_CODE_LENGTH,AUTH_PENDING_KEY,AUTH_RESEND_SECONDS,isValidAuthCode,withTimeout,authDestination,authErrorCategory,parsePendingCode,readableAuthError,safeAuthNext} from "../lib/auth-flow";
 import {trackProductEvent} from "../lib/analytics";
 import {safeErrorCode} from "../lib/onboarding-operation";
 
@@ -20,6 +20,8 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
   const operation=useRef(false);
   const codeForm=useRef<HTMLFormElement|null>(null);
   const autoSubmit=useRef<ReturnType<typeof setTimeout>|null>(null);
+  // requestSubmit is missing in older Safari and some in-app browsers.
+  const submitCode=()=>{const form=codeForm.current;if(!form)return;if(typeof form.requestSubmit==="function")form.requestSubmit();else form.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true}))};
   const rememberPending=(address:string)=>{try{window.sessionStorage.setItem(AUTH_PENDING_KEY,JSON.stringify({email:address,mode,at:Date.now()}))}catch{/* Private mode: the screen simply will not survive a refresh. */}};
   const forgetPending=()=>{try{window.sessionStorage.removeItem(AUTH_PENDING_KEY)}catch{/* Nothing to clear. */}};
   const nextPath=()=>safeAuthNext(new URLSearchParams(window.location.search).get("next"),mode==="signup"?"/onboarding":"/app/jobs");
@@ -27,7 +29,7 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
   async function finishAccess(userId:string){
     let completed:boolean|null=null;
     try{
-      const{data,error:profileError}=await createSupabaseBrowserClient().from("profiles").select("onboarding_completed_at").eq("id",userId).maybeSingle();
+      const{data,error:profileError}=await withTimeout(Promise.resolve(createSupabaseBrowserClient().from("profiles").select("onboarding_completed_at").eq("id",userId).maybeSingle()),6_000,"profile");
       if(!profileError)completed=Boolean(data?.onboarding_completed_at);
     }catch{/* A profile outage must not invalidate a successful sign-in. */}
     window.location.replace(authDestination(nextPath(),completed));
@@ -60,7 +62,7 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
     const address=(sent?requestedEmail:email).trim().toLowerCase();
     trackProductEvent("auth_email_submitted",{mode});
     try{
-      const{error:authError}=await createSupabaseBrowserClient().auth.signInWithOtp({email:address,options:{emailRedirectTo:callback(),shouldCreateUser:mode==="signup"}});
+      const{error:authError}=await withTimeout(Promise.resolve(createSupabaseBrowserClient().auth.signInWithOtp({email:address,options:{emailRedirectTo:callback(),shouldCreateUser:mode==="signup"}})),20_000,"send");
       if(authError)throw authError;
       setRequestedEmail(address);setSent(true);setCode("");setResendIn(AUTH_RESEND_SECONDS);rememberPending(address);
       trackProductEvent("auth_link_sent",{mode});trackProductEvent("auth_code_sent",{mode});
@@ -74,7 +76,7 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
     if(!isValidAuthCode(code)){setError("Introduce el código completo del último correo (son 6 u 8 dígitos).");return}
     operation.current=true;setLoading(true);setError("");trackProductEvent("auth_code_submitted",{mode});
     try{
-      const{data,error:authError}=await createSupabaseBrowserClient().auth.verifyOtp({email:requestedEmail,token:code,type:"email"});
+      const{data,error:authError}=await withTimeout(Promise.resolve(createSupabaseBrowserClient().auth.verifyOtp({email:requestedEmail,token:code,type:"email"})),20_000,"verify");
       if(authError)throw authError;
       if(!data.session||!data.user)throw new Error("No se pudo establecer la sesión.");
       trackProductEvent("auth_code_verified",{mode});forgetPending();await finishAccess(data.user.id);
@@ -102,7 +104,7 @@ export default function AuthCard({mode}:{mode:"login"|"signup"}){
       <p role="status">Introduce el código que te hemos enviado a <strong>{requestedEmail}</strong>. Puedes consultar el correo en otra aplicación y volver aquí.</p>
       <form ref={codeForm} onSubmit={verifyEmailCode} aria-busy={loading}>
         <label htmlFor="auth-email-code">Código de acceso</label>
-        <input id="auth-email-code" className="auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}|[0-9]{8}" maxLength={AUTH_MAX_CODE_LENGTH} value={code} onChange={event=>{const next=event.target.value.replace(/\D/g,"").slice(0,AUTH_MAX_CODE_LENGTH);setCode(next);if(autoSubmit.current)clearTimeout(autoSubmit.current);if(next.length===AUTH_LEGACY_CODE_LENGTH)autoSubmit.current=setTimeout(()=>codeForm.current?.requestSubmit(),0);else if(next.length===AUTH_EMAIL_CODE_LENGTH)autoSubmit.current=setTimeout(()=>codeForm.current?.requestSubmit(),900)}} placeholder="000000" required autoFocus disabled={loading} aria-describedby="auth-code-help"/>
+        <input id="auth-email-code" className="auth-code-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}|[0-9]{8}" maxLength={AUTH_MAX_CODE_LENGTH} value={code} onChange={event=>{const next=event.target.value.replace(/\D/g,"").slice(0,AUTH_MAX_CODE_LENGTH);setCode(next);if(autoSubmit.current)clearTimeout(autoSubmit.current);if(next.length===AUTH_LEGACY_CODE_LENGTH)autoSubmit.current=setTimeout(submitCode,0);else if(next.length===AUTH_EMAIL_CODE_LENGTH)autoSubmit.current=setTimeout(submitCode,900)}} placeholder="000000" required autoFocus disabled={loading} aria-describedby="auth-code-help"/>
         <small className="auth-code-count" aria-live="polite">{code.length?`${code.length} dígitos`:"Escribe o pega el código del correo"}</small>
         <button className="button button-primary" type="submit" disabled={loading}>{loading?"Verificando…":"Verificar y continuar →"}</button>
       </form>

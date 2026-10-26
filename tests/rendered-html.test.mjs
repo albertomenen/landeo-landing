@@ -4,7 +4,7 @@ import test from "node:test";
 import { prioritizeJobsByLocation } from "../lib/job-location.ts";
 import { dashboardCopy } from "../lib/dashboard-i18n.ts";
 import { marketingDemoJobs } from "../lib/marketing-demo.ts";
-import { AUTH_RESEND_SECONDS, isValidAuthCode, parsePendingCode } from "../lib/auth-flow.ts";
+import { AUTH_RESEND_SECONDS, authErrorCategory, isValidAuthCode, parsePendingCode, readableAuthError, withTimeout } from "../lib/auth-flow.ts";
 import { applicationGuide, deliveryState } from "../lib/application-guidance.ts";
 import { classifyInbound, parseReplyToken, parseSender, previewFromText } from "../supabase/functions/_shared/inbound-reply.ts";
 import { calculateJobMatch, isJobProfessionallyRelevant, isJobWorkAuthorizationCompatible } from "../lib/job-match.ts";
@@ -862,8 +862,8 @@ test("access codes of 6 digits (new) and 8 digits (issued before the switch) bot
   for (const bad of ["", "12345", "1234567", "123456789", "12 456", "abcdef", "12345a"]) assert.equal(isValidAuthCode(bad), false, bad);
   const card = await readFile(new URL("components/AuthCard.tsx", root), "utf8");
   // 8 digits submit at once; 6 wait a moment in case the person is still typing an older 8-digit code.
-  assert.match(card, /AUTH_LEGACY_CODE_LENGTH\)autoSubmit\.current=setTimeout\(\(\)=>codeForm\.current\?\.requestSubmit\(\),0\)/);
-  assert.match(card, /AUTH_EMAIL_CODE_LENGTH\)autoSubmit\.current=setTimeout\(\(\)=>codeForm\.current\?\.requestSubmit\(\),900\)/);
+  assert.match(card, /AUTH_LEGACY_CODE_LENGTH\)autoSubmit\.current=setTimeout\(submitCode,0\)/);
+  assert.match(card, /AUTH_EMAIL_CODE_LENGTH\)autoSubmit\.current=setTimeout\(submitCode,900\)/);
   // The page never states the length, so it is right before and after Supabase switches.
   assert.doesNotMatch(card, /código de \{AUTH_EMAIL_CODE_LENGTH\} dígitos/);
   // Google first, on top, when it is available.
@@ -874,4 +874,23 @@ test("access codes of 6 digits (new) and 8 digits (issued before the switch) bot
   assert.match(template, /Entrar con un clic/);
   const script = await readFile(new URL("scripts/configure-email-otp.mjs", root), "utf8");
   assert.match(script, /--length=6/);
+});
+
+
+test("a request that never answers cannot freeze the access form", async () => {
+  // Resolves normally and keeps the original rejection.
+  assert.equal(await withTimeout(Promise.resolve(7), 50, "x"), 7);
+  await assert.rejects(withTimeout(Promise.reject(new Error("boom")), 50, "x"), /boom/);
+  // A promise that never settles is rejected with a recognisable timeout.
+  const never = new Promise(() => {});
+  await assert.rejects(withTimeout(never, 20, "verify"), /timeout:verify/);
+  let category = "";
+  try { await withTimeout(never, 10, "verify"); } catch (error) { category = authErrorCategory(error); }
+  assert.equal(category, "timeout");
+  assert.match(readableAuthError(new Error("timeout:verify")), /tardando más de lo normal/);
+  const card = await readFile(new URL("components/AuthCard.tsx", root), "utf8");
+  for (const label of ["verify", "send", "profile"]) assert.match(card, new RegExp(`"${label}"\\)`), label);
+  // Browsers without requestSubmit (older Safari, some in-app browsers) still submit.
+  assert.match(card, /typeof form\.requestSubmit==="function"/);
+  assert.match(card, /dispatchEvent\(new Event\("submit"/);
 });
