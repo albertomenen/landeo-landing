@@ -645,6 +645,8 @@ export default function Onboarding() {
     [saveStage, setSaveStage] = useState<OnboardingStage>("session"),
     [saveAttempt, setSaveAttempt] = useState(1),
     [error, setError] = useState(""),
+    [reportOpen, setReportOpen] = useState(false),
+    [reportDescription, setReportDescription] = useState(""),
     [cityOpen, setCityOpen] = useState(false),
     [cityResults, setCityResults] = useState<WorldCity[]>([]),
     [cityLoading, setCityLoading] = useState(false),
@@ -1416,7 +1418,8 @@ export default function Onboarding() {
       </m.div>,
     );
   else body = <Welcome locale={locale} />;
-  const supportHref = `mailto:careers@haired.app?subject=${encodeURIComponent(locale === "es" ? "Problema durante el onboarding de Landeo" : "Problem during Landeo onboarding")}&body=${encodeURIComponent(locale === "es" ? `Hola, he encontrado un problema en el paso ${index + 1} del onboarding. Mensaje: ${error}\nDescripción:` : `Hi, I found a problem on step ${index + 1} of onboarding. Message: ${error}\nDescription:`)}`;
+  const reportReady=reportDescription.trim().length>=10;
+  const supportHref = `mailto:careers@haired.app?subject=${encodeURIComponent(locale === "es" ? "Problema durante el onboarding de Landeo" : "Problem during Landeo onboarding")}&body=${encodeURIComponent(locale === "es" ? `Hola, he encontrado un problema en el paso ${index + 1} del onboarding.\n\nDescripción:\n${reportDescription.trim()}\n\nMensaje técnico:\n${error||"Sin mensaje visible"}` : `Hi, I found a problem on step ${index + 1} of onboarding.\n\nDescription:\n${reportDescription.trim()}\n\nTechnical message:\n${error||"No visible message"}`)}`;
   if (sessionMissing) {
     return (
       <main className="onboarding-page onboarding-v2 onboarding-checking" role="alert" aria-live="polite">
@@ -1456,9 +1459,10 @@ export default function Onboarding() {
                   {t.step} {index + 1} {t.of} {steps.length}
                 </m.span>
               </AnimatePresence>
-              <a
+              <button
+                type="button"
                 className="onboarding-report-link"
-                href={supportHref}
+                onClick={() => setReportOpen(true)}
                 title={
                   locale === "es" ? "Informar de un error" : "Report an issue"
                 }
@@ -1467,7 +1471,7 @@ export default function Onboarding() {
                 <b>
                   {locale === "es" ? "Informar de un error" : "Report an issue"}
                 </b>
-              </a>
+              </button>
               <div
                 className="language-switcher"
                 role="group"
@@ -1523,7 +1527,9 @@ export default function Onboarding() {
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
                 {body}
-                {saving && <p role="status" aria-live="polite">{uploadAttempt > 1
+                {saving && <p role="status" aria-live="polite">{uploadAttempt > 3
+                  ? (locale === "es" ? `La conexión directa no ha respondido. Probando una vía alternativa (${uploadAttempt-3}/2)…` : `The direct connection did not respond. Trying an alternative route (${uploadAttempt-3}/2)…`)
+                  : uploadAttempt > 1
                   ? (locale === "es" ? `La subida se ha interrumpido. Reintentando CV (${uploadAttempt}/3)…` : `Upload interrupted. Retrying résumé (${uploadAttempt}/3)…`)
                   : uploadAttempt === 1 ? (locale === "es" ? "Subiendo tu CV…" : "Uploading your résumé…")
                   : saveStage === "session" ? (locale === "es" ? "Comprobando tu sesión…" : "Checking your session…")
@@ -1536,11 +1542,11 @@ export default function Onboarding() {
                     animate={{ opacity: 1, y: 0 }}
                   >
                     {error}{" "}
-                    <a href={supportHref}>
+                    <button type="button" onClick={() => setReportOpen(true)}>
                       {locale === "es"
-                        ? "Escríbenos a careers@haired.app"
-                        : "Email careers@haired.app"}
-                    </a>
+                        ? "Explícanos qué ha pasado"
+                        : "Tell us what happened"}
+                    </button>
                   </m.p>
                 )}
               </m.div>
@@ -1597,6 +1603,26 @@ export default function Onboarding() {
               )}
             </div>
           </section>
+          <AnimatePresence>
+            {reportOpen && (
+              <m.div className="onboarding-report-backdrop" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onMouseDown={event=>{if(event.currentTarget===event.target)setReportOpen(false)}}>
+                <m.div className="onboarding-report-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-report-title" initial={{opacity:0,y:16,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:10,scale:.98}}>
+                  <button type="button" className="onboarding-report-close" aria-label={locale==="es"?"Cerrar":"Close"} onClick={()=>setReportOpen(false)}>×</button>
+                  <small>{locale==="es"?"SOPORTE DE LANDEO":"LANDEO SUPPORT"}</small>
+                  <h2 id="onboarding-report-title">{locale==="es"?"Cuéntanos qué ha ocurrido":"Tell us what happened"}</h2>
+                  <p>{locale==="es"?"Indica qué estabas haciendo, qué botón pulsaste y si estabas usando móvil u ordenador. No incluyas contraseñas.":"Tell us what you were doing, which button you pressed, and whether you were on mobile or desktop. Do not include passwords."}</p>
+                  {error && <code>{locale==="es"?"Referencia técnica":"Technical reference"}: {error}</code>}
+                  <label htmlFor="onboarding-report-description">{locale==="es"?"Descripción del problema":"Problem description"}</label>
+                  <textarea id="onboarding-report-description" value={reportDescription} onChange={event=>setReportDescription(event.target.value)} maxLength={1200} rows={5} placeholder={locale==="es"?"Por ejemplo: seleccioné mi CV en PDF desde un móvil Android y el error apareció al pulsar Encontrar empleo…":"For example: I selected my PDF résumé on an Android phone and the error appeared after pressing Find jobs…"} />
+                  <div className="onboarding-report-actions">
+                    <button type="button" onClick={()=>setReportOpen(false)}>{locale==="es"?"Cancelar":"Cancel"}</button>
+                    <a href={reportReady?supportHref:undefined} aria-disabled={!reportReady} onClick={event=>{if(!reportReady)event.preventDefault()}}>{locale==="es"?"Abrir correo con la explicación":"Open email with details"}</a>
+                  </div>
+                  {!reportReady && <em>{locale==="es"?"Escribe al menos 10 caracteres para que podamos entender el problema.":"Write at least 10 characters so we can understand the problem."}</em>}
+                </m.div>
+              </m.div>
+            )}
+          </AnimatePresence>
         </main>
       </MotionConfig>
     </LazyMotion>

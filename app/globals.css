@@ -7129,8 +7129,13 @@ h1 em:after {
   align-items: center;
   gap: 6px;
   padding: 6px 9px;
+  border: 0;
   border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   text-decoration: none;
+  cursor: pointer;
   transition:
     color 0.16s ease,
     background 0.16s ease;
@@ -8185,10 +8190,141 @@ h1 em:after {
   color: #a83e38 !important;
   font-size: 9px !important;
 }
-.onboarding-error a {
+.onboarding-error a,
+.onboarding-error button {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: inherit;
+  font: inherit;
   font-weight: 850;
   text-decoration: underline;
+  cursor: pointer;
+}
+.onboarding-report-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(14, 39, 28, 0.5);
+  backdrop-filter: blur(6px);
+}
+.onboarding-report-dialog {
+  position: relative;
+  width: min(100%, 520px);
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(59, 127, 90, 0.18);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(13, 45, 30, 0.24);
+  color: var(--ink);
+}
+.onboarding-report-dialog > small {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 1.5px;
+}
+.onboarding-report-dialog h2 {
+  margin: 8px 36px 8px 0;
+  font-size: clamp(23px, 5vw, 34px);
+  line-height: 1.06;
+}
+.onboarding-report-dialog > p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.onboarding-report-dialog code {
+  display: block;
+  max-height: 92px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #f5f7f4;
+  color: #5d6d63;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.onboarding-report-dialog label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.onboarding-report-dialog textarea {
+  width: 100%;
+  min-height: 128px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid #cbd7cd;
+  border-radius: 12px;
+  background: #fbfcfa;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.onboarding-report-dialog textarea:focus {
+  outline: 3px solid rgba(59, 127, 90, 0.14);
+  border-color: var(--green);
+}
+.onboarding-report-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #f0f5f0;
+  color: var(--ink);
+  font-size: 24px;
+  cursor: pointer;
+}
+.onboarding-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.onboarding-report-actions button,
+.onboarding-report-actions a {
+  padding: 11px 15px;
+  border: 1px solid #cbd7cd;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+.onboarding-report-actions a {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+.onboarding-report-actions a[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.onboarding-report-dialog > em {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+@media (max-width: 520px) {
+  .onboarding-report-backdrop { padding: 12px; }
+  .onboarding-report-dialog { padding: 24px 18px 20px; border-radius: 18px; }
+  .onboarding-report-actions { flex-direction: column-reverse; }
+  .onboarding-report-actions button,
+  .onboarding-report-actions a { width: 100%; text-align: center; }
 }
 .onboarding-v2 .onboarding-actions {
   margin-top: auto;

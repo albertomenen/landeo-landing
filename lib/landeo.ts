@@ -6,7 +6,7 @@ import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
 import {requestBillingAcceptance} from "./billing-consent";
 import {trackProductEvent} from "./analytics";
 import {resumeFormat} from "./cv-upload";
-import {onboardingOperation,reuseUploadedCv,type OnboardingStage} from "./onboarding-operation";
+import {onboardingOperation,OnboardingOperationError,reuseUploadedCv,type OnboardingStage} from "./onboarding-operation";
 import {calculateJobMatch,isJobProfessionallyRelevant,isJobWorkAuthorizationCompatible,type MatchProfile} from "./job-match";
 
 export type SwipeDirection="left"|"right"|"save";
@@ -343,21 +343,35 @@ export type WebOnboardingAnswers={
 
 export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en";onUploadAttempt?:(attempt:number)=>void;onStage?:(stage:OnboardingStage,attempt:number)=>void}){
   const client=createSupabaseBrowserClient();
-  let session:Awaited<ReturnType<typeof getResilientSession>>;
-  session=await onboardingOperation("session",()=>getResilientSession(600),{locale:input.locale,attempts:1,timeoutMs:20_000,onAttempt:n=>input.onStage?.("session",n)});
+  const session:Awaited<ReturnType<typeof getResilientSession>>=await onboardingOperation("session",()=>getResilientSession(600),{locale:input.locale,attempts:1,timeoutMs:20_000,onAttempt:n=>input.onStage?.("session",n)});
   const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
   const {extension,contentType}=resumeFormat(input.resume,input.locale);
   const cvPath=await reuseUploadedCv(input.resume,user.id,async()=>{
     const path=`${user.id}/cv.${extension}`;
-    await onboardingOperation("upload",async signal=>{
-      // A scoped client lets us abort Storage uploads without changing global requests or auth storage.
-      const uploader=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,{
-        accessToken:async()=>session!.access_token,
-        global:{fetch:(url,options)=>fetch(url,{...options,signal})},
-      });
-      const result=await uploader.storage.from("cvs").upload(path,input.resume,{contentType,upsert:true});
-      if(result.error)throw result.error;
-    },{locale:input.locale,attempts:3,timeoutMs:30_000,onAttempt:n=>{input.onUploadAttempt?.(n);input.onStage?.("upload",n)}});
+    try {
+      await onboardingOperation("upload",async signal=>{
+        // A scoped client lets us abort Storage uploads without changing global requests or auth storage.
+        const uploader=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,{
+          accessToken:async()=>session!.access_token,
+          global:{fetch:(url,options)=>fetch(url,{...options,signal})},
+        });
+        const result=await uploader.storage.from("cvs").upload(path,input.resume,{contentType,upsert:true});
+        if(result.error)throw result.error;
+      },{locale:input.locale,attempts:3,timeoutMs:30_000,onAttempt:n=>{input.onUploadAttempt?.(n);input.onStage?.("upload",n)}});
+    } catch (reason) {
+      const useFallback=reason instanceof OnboardingOperationError&&reason.stage==="upload"&&["network","timeout"].includes(reason.code);
+      if(!useFallback)throw reason;
+      // Some mobile networks intermittently block the cross-origin Storage request. The same-origin
+      // fallback verifies the session and forwards the file to the same private Supabase bucket.
+      await onboardingOperation("upload",async signal=>{
+        const form=new FormData();form.set("file",input.resume);
+        const response=await fetch("/api/onboarding/cv-upload",{method:"POST",headers:{Authorization:`Bearer ${session!.access_token}`},body:form,signal});
+        if(!response.ok){
+          const detail=await response.json().catch(()=>({})) as {error?:string};
+          throw Object.assign(new Error(detail.error||"Fallback upload failed"),{status:response.status});
+        }
+      },{locale:input.locale,attempts:2,timeoutMs:45_000,onAttempt:n=>{const attempt=3+n;input.onUploadAttempt?.(attempt);input.onStage?.("upload",attempt)}});
+    }
     return path;
   });
   input.onUploadAttempt?.(0);
