@@ -13,8 +13,8 @@ test('both policies preserve withdrawal, defect and bank dispute rights',()=>{
 });
 test('confirmation contains actual checkout totals, consent and immutable contract copies',()=>{
   const acceptance={locale:'es',plan:'pro',policy_version:BILLING_POLICY_VERSION,accepted_at:'2026-10-21T10:00:00Z',consent_text:'CONSENT SNAPSHOT',policy_snapshot:'REFUND SNAPSHOT',terms_snapshot:'TERMS SNAPSHOT'};
-  const text=confirmationText(acceptance,{id:'cs_test',amount_total:3499,currency:'eur',payment_status:'paid'},{items:{data:[{price:{unit_amount:3499,currency:'eur',recurring:{interval:'month',interval_count:1}}}]}},'https://getlandeo.com');
-  for(const expected of ['34,99','cs_test','CONSENT SNAPSHOT','REFUND SNAPSHOT','TERMS SNAPSHOT','Confirmado','/app/profile'])assert.ok(text.includes(expected));
+  const text=confirmationText(acceptance,{id:'cs_test',amount_total:4234,currency:'eur',payment_status:'paid',total_details:{amount_tax:735}},{items:{data:[{price:{unit_amount:3499,currency:'eur',recurring:{interval:'month',interval_count:1}}}]}},'https://getlandeo.com');
+  for(const expected of ['42,34','7,35','Impuestos calculados por Stripe','cs_test','CONSENT SNAPSHOT','REFUND SNAPSHOT','TERMS SNAPSHOT','Confirmado','/app/profile'])assert.ok(text.includes(expected));
   assert.match(confirmationText(acceptance,{payment_status:'unpaid'},null,'https://getlandeo.com'),/Pendiente de confirmación/);
 });
 test('legacy and already-confirmed checkouts do not send duplicate emails',async()=>{
@@ -25,6 +25,8 @@ test('checkout is fail-closed, portal remains separate and evidence is server-on
   const checkout=await readFile(new URL('../supabase/functions/create-stripe-checkout/index.ts',import.meta.url),'utf8');
   assert.ok(checkout.indexOf('!validBillingConsent')<checkout.indexOf('stripeRequest("/customers"'));
   assert.match(checkout,/body.action!=="portal"/);assert.match(checkout,/acceptanceError\)throw/);assert.match(checkout,/billing_acceptance_id/);
+  for(const setting of ['automatic_tax[enabled]','billing_address_collection','customer_update[address]','customer_update[name]','tax_id_collection[enabled]'])assert.ok(checkout.includes(setting),`missing Stripe Tax setting: ${setting}`);
+  assert.doesNotMatch(checkout,/tax_rates\[/);
   const schema=await readFile(new URL('../supabase/migrations/20261021120000_add_billing_acceptances.sql',import.meta.url),'utf8');
   assert.match(schema,/enable row level security/);assert.match(schema,/revoke all.*anon,authenticated/);assert.match(schema,/default now\(\)/);
 });

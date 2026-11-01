@@ -168,6 +168,14 @@ Deno.serve(async (request) => {
     params.set("line_items[0][price]", priceFor(plan));
     params.set("line_items[0][quantity]", "1");
     params.set("locale", body.locale === "es" ? "es" : "en");
+    // Enabling Stripe Tax in the Dashboard does not opt individual Checkout
+    // Sessions in. Stripe uses the billing address below to determine the
+    // customer's tax location and carries the setting onto the subscription.
+    params.set("automatic_tax[enabled]", "true");
+    params.set("billing_address_collection", "required");
+    params.set("customer_update[address]", "auto");
+    params.set("customer_update[name]", "auto");
+    params.set("tax_id_collection[enabled]", "true");
     params.set("success_url", `${siteUrl}/app/jobs?checkout=success`);
     params.set("cancel_url", safeReturnUrl(siteUrl, body.returnTo, "/pricing?checkout=cancelled"));
     const promotionCode = String(body.promotionCode ?? "").trim().toUpperCase();

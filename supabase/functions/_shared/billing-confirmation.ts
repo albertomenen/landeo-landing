@@ -7,6 +7,7 @@ export function confirmationText(acceptance:Acceptance,session:any,subscription:
     return format.format(amount/10**(format.resolvedOptions().maximumFractionDigits??2));
   }
   const first=typeof session.amount_total==="number"&&session.currency?money(session.amount_total,session.currency):(es?"Consulta el recibo de Stripe":"See your Stripe receipt");
+  const tax=typeof session.total_details?.amount_tax==="number"&&session.currency?money(session.total_details.amount_tax,session.currency):null;
   const recurring=price?.recurring;
   const interval=recurring?`${recurring.interval_count??1} ${recurring.interval}`:(es?"según el periodo contratado":"according to the purchased period");
   const regular=typeof price?.unit_amount==="number"&&price.currency?`${money(price.unit_amount,price.currency)} / ${interval}`:interval;
@@ -17,6 +18,7 @@ export function confirmationText(acceptance:Acceptance,session:any,subscription:
     `${es?"Plan":"Plan"}: ${acceptance.plan}`,
     `${es?"Referencia de compra":"Purchase reference"}: ${session.id}`,
     `${es?"Importe de este checkout":"This checkout amount"}: ${first}`,
+    ...(tax!==null?[`${es?"Impuestos calculados por Stripe":"Taxes calculated by Stripe"}: ${tax}`]:[]),
     `${es?"Estado del pago":"Payment status"}: ${paid?(es?"Confirmado":"Confirmed"):(es?"Pendiente de confirmación; el acceso depende de su confirmación":"Awaiting confirmation; access depends on confirmation")}`,
     `${es?"Precio base recurrente (descuentos e impuestos según recibo)":"Recurring base price (discounts and taxes as shown on your receipt)"}: ${regular}`,
     ...(periodEnd?[`${es?"Fin del periodo actual":"Current period end"}: ${new Date(periodEnd*1000).toISOString()}`]:[]),
