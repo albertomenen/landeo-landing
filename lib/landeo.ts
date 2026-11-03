@@ -3,7 +3,6 @@ import {createSupabaseBrowserClient,getResilientSession} from "./supabase/client
 import type {ApplyCapability,Job} from "./fixtures";
 import {prioritizeJobsWithRemoteFallback,resolveCountryCode,cityLocationFilter,citySearchTerms,isJobLocationCompatible} from "./job-location";
 import {loadSalaryRates,prioritizeHighSalaryRemote} from "./job-salary-ranking";
-import {requestBillingAcceptance} from "./billing-consent";
 import {trackProductEvent} from "./analytics";
 import {resumeFormat} from "./cv-upload";
 import {onboardingOperation,OnboardingOperationError,reuseUploadedCv,type OnboardingStage} from "./onboarding-operation";
@@ -444,18 +443,16 @@ export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"s
   const locale=typeof window!=="undefined"&&window.localStorage.getItem("landeo-locale")==="en"?"en":"es";
   const returnTo=typeof window!=="undefined"?`${window.location.pathname}${window.location.search}${window.location.hash}`:"/pricing";
   let promotionCode="";
-  const acceptance=action==="checkout"?await requestBillingAcceptance(selectedPlan,locale):null;
-  if(action==="checkout"&&!acceptance)return false;
   if(action==="checkout"){
     const user=await currentUser();
     if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}
   }
-  const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo,acceptance}});
+  const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo}});
   if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}
   if(error)throw error;
   if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");
   try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}
-  if(action==="checkout")trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"billing_confirmation"});
+  if(action==="checkout")trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"stripe_redirect"});
   window.location.assign(data.url);return true;
 }
 

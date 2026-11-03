@@ -24,7 +24,7 @@ export function confirmationText(acceptance:Acceptance,session:any,subscription:
     ...(periodEnd?[`${es?"Fin del periodo actual":"Current period end"}: ${new Date(periodEnd*1000).toISOString()}`]:[]),
     es?"La renovación es automática hasta que la canceles. Puedes gestionarla desde Perfil → Gestionar suscripción en Stripe. Cancelar la renovación no solicita por sí solo un reembolso.":"Renewal is automatic until cancelled. Manage it through Profile → Manage subscription in Stripe. Cancelling renewal alone does not request a refund.",
     `${siteUrl}/app/profile`,
-    `${es?"Aceptación registrada":"Acceptance recorded"}: ${acceptance.accepted_at} · ${acceptance.policy_version}`,
+    `${es?"Condiciones mostradas":"Conditions shown"}: ${acceptance.accepted_at} · ${acceptance.policy_version}`,
     acceptance.consent_text,
     acceptance.policy_snapshot,
     acceptance.terms_snapshot,
@@ -39,7 +39,8 @@ export async function sendBillingConfirmation(admin:any,session:any,subscription
   if(error||!acceptance)throw new Error("Billing acceptance unavailable.");
   if(acceptance.stripe_checkout_id!==session.id||acceptance.user_id!==(session.client_reference_id||session.metadata?.supabase_user_id))throw new Error("Billing acceptance does not match checkout.");
   if(acceptance.confirmation_sent_at)return;
-  const {error:completedError}=await admin.from("billing_acceptances").update({stripe_subscription_id:subscription?.id??null,completed_at:new Date().toISOString()}).eq("id",acceptanceId);
+  const now=new Date().toISOString();
+  const {error:completedError}=await admin.from("billing_acceptances").update({stripe_subscription_id:subscription?.id??null,completed_at:now}).eq("id",acceptanceId);
   if(completedError)throw completedError;
   const {data:user,error:userError}=await admin.auth.admin.getUserById(acceptance.user_id);
   if(userError||!user?.user?.email)throw new Error("Billing confirmation recipient unavailable.");

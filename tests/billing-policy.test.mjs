@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {BILLING_POLICY_VERSION,billingPolicyText,validBillingConsent} from '../supabase/functions/_shared/billing-policy.ts';
+import {BILLING_POLICY_VERSION,billingPolicyText,stripeNoticeMessage} from '../supabase/functions/_shared/billing-policy.ts';
 import {confirmationText,sendBillingConfirmation} from '../supabase/functions/_shared/billing-confirmation.ts';
-test('requires current explicit consents, not strings, old versions or implied usage',()=>{
-  for(const value of [null,{},true,{version:BILLING_POLICY_VERSION,termsAccepted:true},{version:'old',termsAccepted:true,immediateStart:true},{version:BILLING_POLICY_VERSION,termsAccepted:'true',immediateStart:true}])assert.equal(validBillingConsent(value),false);
-  assert.equal(validBillingConsent({version:BILLING_POLICY_VERSION,termsAccepted:true,immediateStart:true}),true);
+test('Stripe notice is passive, short, links the policies and mentions renewal',()=>{
+  for(const locale of ['es','en']){
+    const text=stripeNoticeMessage(locale,'https://getlandeo.com');
+    assert.ok(text.length<=1200);assert.match(text,/https:\/\/getlandeo\.com\/terms/);assert.match(text,new RegExp(`/refunds/${BILLING_POLICY_VERSION}`));
+  }
+  assert.match(stripeNoticeMessage('es','x'),/renovación automática/);
 });
 test('both policies preserve withdrawal, defect and bank dispute rights',()=>{
   for(const locale of ['es','en'])assert.ok(billingPolicyText(locale).length>4000);
@@ -23,8 +26,7 @@ test('legacy and already-confirmed checkouts do not send duplicate emails',async
 });
 test('checkout is fail-closed, portal remains separate and evidence is server-only',async()=>{
   const checkout=await readFile(new URL('../supabase/functions/create-stripe-checkout/index.ts',import.meta.url),'utf8');
-  assert.ok(checkout.indexOf('!validBillingConsent')<checkout.indexOf('stripeRequest("/customers"'));
-  assert.match(checkout,/body.action!=="portal"/);assert.match(checkout,/acceptanceError\)throw/);assert.match(checkout,/billing_acceptance_id/);
+  assert.doesNotMatch(checkout,/consent_collection/);assert.match(checkout,/custom_text\[submit\]/);assert.doesNotMatch(checkout,/validBillingConsent/);assert.match(checkout,/acceptanceError\)throw/);assert.match(checkout,/billing_acceptance_id/);
   for(const setting of ['automatic_tax[enabled]','billing_address_collection','customer_update[address]','customer_update[name]','tax_id_collection[enabled]'])assert.ok(checkout.includes(setting),`missing Stripe Tax setting: ${setting}`);
   assert.doesNotMatch(checkout,/tax_rates\[/);
   const schema=await readFile(new URL('../supabase/migrations/20261021120000_add_billing_acceptances.sql',import.meta.url),'utf8');

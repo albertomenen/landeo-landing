@@ -49,8 +49,9 @@ export function billingPolicyText(locale:BillingLocale){
   const doc=billingPolicy[locale];
   return [doc.title,doc.updated,doc.intro,doc.notice,...doc.sections.flatMap(section=>[section.title,...section.paragraphs])].join("\n\n");
 }
-export function validBillingConsent(value:unknown):value is {version:string;termsAccepted:true;immediateStart:true}{
-  if(!value||typeof value!=="object")return false;
-  const item=value as Record<string,unknown>;
-  return item.version===BILLING_POLICY_VERSION&&item.termsAccepted===true&&item.immediateStart===true;
+// Passive notice under Stripe's pay button (custom_text.submit). No checkbox, no extra step.
+export function stripeNoticeMessage(locale:BillingLocale,siteUrl:string){
+  return locale==="es"
+    ?`Suscripción con renovación automática hasta que la canceles desde tu perfil. Al suscribirte aceptas los [Términos](${siteUrl}/terms?lang=es) y la [política de pagos y reembolsos](${siteUrl}/refunds/${BILLING_POLICY_VERSION}?lang=es). Conservas tus derechos legales.`
+    :`Subscription renews automatically until you cancel it from your profile. By subscribing you accept the [Terms](${siteUrl}/terms?lang=en) and the [payments and refunds policy](${siteUrl}/refunds/${BILLING_POLICY_VERSION}?lang=en). Your statutory rights remain.`;
 }
