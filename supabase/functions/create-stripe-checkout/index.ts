@@ -43,18 +43,20 @@ function safeReturnUrl(siteUrl: string, value: unknown, fallback: string) {
   }
 }
 
-async function stripeRequest(path: string, body: URLSearchParams) {
+async function stripeRequest(path: string, body: URLSearchParams, version?: string) {
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${required("STRIPE_SECRET_KEY")}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...(version ? { "Stripe-Version": version } : {}),
     },
     body,
   });
   const payload = await response.json() as {
     id?: string;
     url?: string;
+    client_secret?: string;
     error?: { message?: string };
   };
   if (!response.ok) {
@@ -110,10 +112,14 @@ Deno.serve(async (request) => {
       promotionCode?: string;
       plan?: Plan;
       locale?: "es" | "en";
+      embedded?: boolean;
       returnTo?: string;
     };
     const plan = selectedPlan(body.plan);
-    const { data: existingCustomer } = await admin.from("stripe_customers")
+    // With a Stripe TEST key (local testing) the stored customer belongs to live mode, so it is ignored and
+    // nothing test-related is written back to stripe_customers or checked against live subscriptions.
+    const testMode = required("STRIPE_SECRET_KEY").startsWith("sk_test_");
+    const { data: existingCustomer } = testMode ? { data: null } : await admin.from("stripe_customers")
       .select("stripe_customer_id").eq("user_id", userData.user.id)
       .maybeSingle();
     let customerId = existingCustomer?.stripe_customer_id as string | undefined;
@@ -127,12 +133,14 @@ Deno.serve(async (request) => {
         throw new Error("Stripe no devolvió un cliente válido.");
       }
       customerId = customer.id;
-      const { error } = await admin.from("stripe_customers").upsert({
-        user_id: userData.user.id,
-        stripe_customer_id: customerId,
-        updated_at: new Date().toISOString(),
-      });
-      if (error) throw error;
+      if (!testMode) {
+        const { error } = await admin.from("stripe_customers").upsert({
+          user_id: userData.user.id,
+          stripe_customer_id: customerId,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+      }
     }
 
     const siteUrl = required("SITE_URL").replace(/\/$/, "");
@@ -145,7 +153,7 @@ Deno.serve(async (request) => {
       return json({ url: portal.url });
     }
 
-    if (await hasActiveStripeSubscription(admin, userData.user.id)) {
+    if (!testMode && await hasActiveStripeSubscription(admin, userData.user.id)) {
       return json({
         message: "Ya tienes un plan de Landeo activo.",
         alreadyActive: true,
@@ -176,8 +184,17 @@ Deno.serve(async (request) => {
     params.set("customer_update[address]", "auto");
     params.set("customer_update[name]", "auto");
     params.set("tax_id_collection[enabled]", "true");
-    params.set("success_url", `${siteUrl}/app/jobs?checkout=success`);
-    params.set("cancel_url", safeReturnUrl(siteUrl, body.returnTo, "/pricing?checkout=cancelled"));
+    // Popup (Embedded Checkout) only when the browser asked for it AND a publishable key is configured;
+    // otherwise keep the hosted redirect so older clients and unconfigured projects keep working.
+    const publishableKey = Deno.env.get("STRIPE_PUBLISHABLE_KEY") ?? "";
+    const embedded = body.embedded === true && publishableKey.startsWith("pk_");
+    if (embedded) {
+      params.set("ui_mode", "embedded");
+      params.set("return_url", `${siteUrl}/app/jobs?checkout=success&session_id={CHECKOUT_SESSION_ID}`);
+    } else {
+      params.set("success_url", `${siteUrl}/app/jobs?checkout=success`);
+      params.set("cancel_url", safeReturnUrl(siteUrl, body.returnTo, "/pricing?checkout=cancelled"));
+    }
     const promotionCode = String(body.promotionCode ?? "").trim().toUpperCase();
     if (promotionCode) {
       const promotionQuery = new URLSearchParams();
@@ -201,11 +218,11 @@ Deno.serve(async (request) => {
     params.set("subscription_data[metadata][plan]", plan);
     params.set("subscription_data[metadata][application_limit]", limit);
     params.set("subscription_data[metadata][billing_acceptance_id]",acceptanceId);
-    const session = await stripeRequest("/checkout/sessions", params);
-    if (!session.url) throw new Error("Stripe no devolvió la URL de pago.");
+    const session = await stripeRequest("/checkout/sessions", params, embedded ? "2025-08-27.basil" : undefined);
+    if (embedded ? !session.client_secret : !session.url) throw new Error("Stripe no devolvió la URL de pago.");
     const {error:linkError}=await admin.from("billing_acceptances").update({stripe_checkout_id:session.id}).eq("id",acceptanceId);
     if(linkError)throw new Error("No pudimos asociar el checkout. No se ha realizado ningún cobro.");
-    return json({ url: session.url });
+    return embedded ? json({ clientSecret: session.client_secret, publishableKey }) : json({ url: session.url });
   } catch (error) {
     return json({
       message: error instanceof Error

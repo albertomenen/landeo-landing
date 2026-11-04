@@ -139,7 +139,8 @@ Deno.serve(async (request) => {
       const userId = object.client_reference_id ||
         object.metadata?.supabase_user_id;
       const customerId = id(object.customer);
-      if (userId && customerId) {
+      // Local testing with sk_test_ keys must not overwrite the user's live customer mapping.
+      if (userId && customerId && !required("STRIPE_SECRET_KEY").startsWith("sk_test_")) {
         await admin.from("stripe_customers").upsert({
           user_id: userId,
           stripe_customer_id: customerId,

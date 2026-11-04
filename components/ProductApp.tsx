@@ -2155,6 +2155,7 @@ export function AutoApplyView({
       <section className="auto-apply-summary" aria-live="polite">
         {statItems.map(([label, value]) => <article key={String(label)}><span>{label}</span><strong>{value}</strong></article>)}
       </section>
+      {form?.enabled&&dashboard&&<AutoApplyLive locale={locale} dashboard={dashboard} searching={saving} missing={readiness.ready?[]:readiness.missing}/>}
       <div className="auto-apply-grid">
         <section className="auto-apply-form-card">
           <div className="auto-apply-section-heading"><span className="overline">{localized(locale,"1 · PREFERENCIAS","1 · PREFERENCES")}</span><h2>{localized(locale, "Define dónde debe postularte Landeo", "Tell Landeo where to apply")}</h2></div>
@@ -2166,6 +2167,7 @@ export function AutoApplyView({
             <fieldset><legend>{localized(locale, "Nivel", "Seniority")}</legend>{["Prácticas", "Junior", "Mid", "Senior"].map((level) => <label key={level}><input type="checkbox" checked={form.seniorityLevels.includes(level)} onChange={(event) => update("seniorityLevels", event.target.checked ? [...form.seniorityLevels, level] : form.seniorityLevels.filter((item) => item !== level))} /><span>{level}</span></label>)}</fieldset>
             <label><span>{localized(locale, "Coincidencia mínima", "Minimum match")} · {form.minimumMatch}%</span><input type="range" min="50" max="95" step="5" value={form.minimumMatch} onChange={(event) => update("minimumMatch", Number(event.target.value))} /></label>
             <label><span>{localized(locale, "Máximo diario", "Daily maximum")}</span><select value={form.dailyLimit} onChange={(event) => update("dailyLimit", Number(event.target.value))}>{[1,2,3,4,5,6,7,8,9,10].map((value) => <option key={value} value={value}>{value} {localized(locale, "candidaturas", "applications")}</option>)}</select></label>
+            <label className="wide auto-apply-consent"><input type="checkbox" checked={form.broadenSearch===true} onChange={(event) => update("broadenSearch", event.target.checked)} /><span><strong>{localized(locale,"Ampliar a ofertas cercanas","Include nearby jobs")}</strong> — {localized(locale,"si no hay suficientes ofertas que cumplan todos tus filtros, también aplicaremos a puestos relacionados con tu perfil (otro nivel, sector o modalidad), sin superar tu máximo diario. Nunca a empresas excluidas.","if not enough jobs match all your filters, we will also apply to roles related to your profile (other level, industry or work setup), within your daily maximum. Never to excluded companies.")}</span></label>
             <label className="wide"><span>{localized(locale, "Empresas excluidas", "Excluded companies")}</span><input value={drafts.excludedCompanies} onChange={(event) => updateList("excludedCompanies",event.target.value)} placeholder={localized(locale, "Empresa A, Empresa B", "Company A, Company B")} /></label>
           </div>}
         </section>
@@ -2189,6 +2191,54 @@ export function AutoApplyView({
       </div>
     </div>
   );
+}
+
+// Live activity panel: shows that Auto Apply is on, what it is doing now, when it searches next and what
+// previous searches found. Only real data is shown; the animation reflects the scheduled/active state.
+function AutoApplyLive({locale,dashboard,searching,missing=[]}:{locale:DashboardLocale;dashboard:AutoApplyDashboard;searching:boolean;missing?:string[]}){
+  const [now,setNow]=useState(()=>Date.now());
+  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(timer)},[]);
+  const {settings,lastRun}=dashboard,runs=dashboard.recentRuns??[];
+  const running=searching||(lastRun?.status==="running"&&now-new Date(lastRun.startedAt).getTime()<10*60_000);
+  const steps=[localized(locale,"Analizando tu perfil y tu CV","Reading your profile and résumé"),localized(locale,"Buscando ofertas nuevas","Searching new jobs"),localized(locale,"Calculando compatibilidad","Scoring your match"),localized(locale,"Preparando candidaturas","Preparing applications")];
+  const step=Math.floor(now/2200)%steps.length;
+  const ago=(iso:string)=>{
+    const seconds=Math.max(0,Math.round((now-new Date(iso).getTime())/1000));
+    if(seconds<60)return localized(locale,"hace unos segundos","a few seconds ago");
+    const minutes=Math.round(seconds/60);if(minutes<60)return localized(locale,`hace ${minutes} min`,`${minutes} min ago`);
+    const hours=Math.round(minutes/60);if(hours<24)return localized(locale,`hace ${hours} h`,`${hours} h ago`);
+    const days=Math.round(hours/24);return localized(locale,`hace ${days} d`,`${days} d ago`);
+  };
+  const remaining=settings.nextRunAt?new Date(settings.nextRunAt).getTime()-now:null;
+  const countdown=remaining===null?localized(locale,"La primera búsqueda se hará en unos minutos","The first search will start in a few minutes"):remaining<=0?localized(locale,"La próxima búsqueda empieza en unos minutos","The next search starts in a few minutes"):(()=>{const total=Math.floor(remaining/1000),h=Math.floor(total/3600),m=Math.floor(total%3600/60),sec=total%60;return localized(locale,`Próxima búsqueda en ${h?`${h} h `:""}${m} min ${String(sec).padStart(2,"0")} s`,`Next search in ${h?`${h} h `:""}${m} min ${String(sec).padStart(2,"0")} s`)})();
+  const describe=(run:NonNullable<AutoApplyDashboard["recentRuns"]>[number])=>{
+    if(run.status==="running")return localized(locale,"Buscando…","Searching…");
+    if(run.status==="failed")return run.errorMessage||localized(locale,"La búsqueda no se completó","The search did not complete");
+    if(run.status==="skipped")return run.errorMessage||localized(locale,"Búsqueda omitida","Search skipped");
+    if(run.matched===0)return localized(locale,"Sin ofertas compatibles con tus filtros","No jobs matched your filters");
+    return localized(locale,`${run.matched} compatibles · ${run.sent} enviadas${run.failed?` · ${run.failed} fallidas`:""}`,`${run.matched} matched · ${run.sent} sent${run.failed?` · ${run.failed} failed`:""}`);
+  };
+  const finished=lastRun&&lastRun.status!=="running"?lastRun:null;
+  const emptyHint=finished&&finished.status==="completed"&&dashboard.stats.matched===0;
+  return <section className="auto-apply-live" aria-label={localized(locale,"Actividad en vivo","Live activity")}>
+    <div className={`auto-apply-radar${running?" busy":""}`} aria-hidden="true"><i/><i/><i/><b/></div>
+    <div className="auto-apply-live-main">
+      <span className="overline">{localized(locale,"EN VIVO","LIVE")}</span>
+      <h2 aria-live="polite">{running?steps[step]+"…":localized(locale,"Vigilando ofertas nuevas para ti","Watching for new jobs for you")}</h2>
+      {running
+        ?<ol className="auto-apply-steps">{steps.map((label,index)=><li key={label} className={index<step?"done":index===step?"current":""}>{label}</li>)}</ol>
+        :<p className="auto-apply-countdown">{countdown}</p>}
+      {!running&&finished&&<p className="auto-apply-live-last">{localized(locale,"Última búsqueda","Last search")} {ago(finished.completedAt??finished.startedAt)}: {describe({status:finished.status,matched:dashboard.stats.matched,eligible:0,reviewed:0,attempted:0,sent:0,failed:0,startedAt:finished.startedAt,completedAt:finished.completedAt,errorMessage:finished.errorMessage})}</p>}
+      {missing.length>0&&<p className="auto-apply-live-hint auto-apply-live-missing" role="alert">{localized(locale,`Necesitamos más información para seguir buscando: ${missing.join(", ")}.`,"We need more information to keep searching.")} <Link href="/app/profile/universal">{localized(locale,"Completar perfil","Complete profile")} →</Link></p>}
+      {!running&&runs[0]&&runs[0].status==="completed"&&<p className="auto-apply-funnel" aria-label={localized(locale,"Resultado de la última búsqueda","Last search funnel")}>
+        <span><strong>{runs[0].eligible}</strong>{localized(locale,"con email verificado","with verified email")}</span>→<span><strong>{runs[0].reviewed}</strong>{localized(locale,"activas revisadas","active reviewed")}</span>→<span><strong>{runs[0].matched}</strong>{localized(locale,"compatibles contigo","matching you")}</span>→<span><strong>{runs[0].sent}</strong>{localized(locale,"enviadas","sent")}</span>
+      </p>}
+      {!running&&emptyHint&&<p className="auto-apply-live-hint">{localized(locale,`Solo se envía a ofertas con correo oficial verificado y compatibilidad de al menos ${settings.minimumMatch}%. Prueba a bajar la coincidencia mínima o ampliar ubicaciones y puestos.`,`We only apply to jobs with a verified official email and a match of at least ${settings.minimumMatch}%. Try lowering the minimum match or widening locations and roles.`)}</p>}
+    </div>
+    {runs.length>0&&<ul className="auto-apply-feed" aria-label={localized(locale,"Búsquedas recientes","Recent searches")}>
+      {runs.slice(0,5).map((run,index)=><li key={`${run.startedAt}-${index}`} className={run.status}><time dateTime={run.startedAt}>{ago(run.startedAt)}</time><span>{describe(run)}</span></li>)}
+    </ul>}
+  </section>;
 }
 
 function DemoUnavailable({ locale }: { locale: DashboardLocale }) {

@@ -65,15 +65,43 @@ function jobScore(job: any, profile: any, settings: any) {
   if (!roleTerms.length || !containsAny(`${title} ${description}`, roleTerms)) return -1;
   if (locationTerms.length && !containsAny(location, locationTerms) && !workMode.includes("remot")) return -1;
   if (workModeTerms.length && !containsAny(workMode, workModeTerms)) return -1;
-  if (industryTerms.length && !containsAny(industry, industryTerms)) return -1;
-  if (seniorityTerms.length && !containsAny(`${seniority} ${title}`, seniorityTerms)) return -1;
+  // Seniority only excludes a job that states a different level; most postings state none, and rejecting
+  // those hid nearly the whole pool. Industry is a preference (the catalogue's labels rarely match the
+  // user's wording, e.g. "SaaS" vs "Tecnología"), so it only adds score.
+  const seniorityKnown = Boolean(seniority) || /\b(?:junior|jr|senior|sr|lead|staff|principal|mid|intern|trainee|head)\b/.test(title);
+  if (seniorityTerms.length && seniorityKnown && !containsAny(`${seniority} ${title}`, seniorityTerms)) return -1;
 
+  // A title that names the wanted role ("Software Engineer") is the strongest signal, and many profiles list
+  // few or no skills, so without this bonus a perfect title match could never reach a high minimum.
+  const roleNames: string[] = (settings.roles?.length ? settings.roles : [profile.role]).map((role: unknown) => normalized(role)).filter(Boolean);
+  const roleInTitle = roleNames.some((role) => terms([role]).length > 0 && terms([role]).every((word) => title.includes(word)));
   let score = 45;
+  // "Senior Swift Engineer" does not contain "software" but is still an engineer role: the role's last word
+  // (its head noun) in the title counts for a smaller bonus.
+  const roleHeadInTitle = roleNames.some((role) => { const words = terms([role]); return words.length > 1 && title.includes(words[words.length - 1]); });
+  if (roleInTitle) score += 15;
+  else if (roleHeadInTitle) score += 10;
   score += Math.min(25, skillTerms.filter((term) => description.includes(term) || title.includes(term)).length * 5);
   if (!locationTerms.length || containsAny(location, locationTerms) || workMode.includes("remot")) score += 15;
-  if (!seniorityTerms.length || containsAny(`${seniority} ${title}`, seniorityTerms)) score += 10;
+  if (!seniorityTerms.length || containsAny(`${seniority} ${title}`, seniorityTerms)) score += seniorityKnown ? 10 : 7;
   if (!industryTerms.length || containsAny(industry, industryTerms)) score += 5;
   return Math.min(100, score);
+}
+
+// Opt-in "broaden search": jobs outside the stated filters but still related to the candidate. Seniority,
+// industry, work mode and location preferences are relaxed; excluded companies, country restrictions and a
+// relevance requirement (role words in the title, or at least two profile skills in title/summary) are NOT.
+function adjacentScore(job: any, profile: any, settings: any) {
+  if (!autoApplyGeographyCompatible(job, profile)) return -1;
+  const company = normalized(job.company);
+  if ((settings.excluded_companies ?? []).map(normalized).some((value: string) => value && company.includes(value))) return -1;
+  const title = normalized(job.title);
+  const text = `${title} ${normalized(job.summary)}`;
+  const roleTerms = terms(settings.roles?.length ? settings.roles : [profile.role]);
+  const skillHits = terms(profile.skills).filter((term) => text.includes(term)).length;
+  const roleInTitle = roleTerms.length > 0 && containsAny(title, roleTerms);
+  if (!roleInTitle && skillHits < 2) return -1;
+  return Math.min(70, 40 + (roleInTitle ? 15 : 0) + Math.min(15, skillHits * 5));
 }
 
 // Stay well inside the Edge Function wall-clock limit: stop starting new
@@ -152,7 +180,7 @@ async function processUser(admin: any, settings: any, deadline: number) {
     if (targetError) throw targetError;
     const targetIds = (targets ?? []).map((row: any) => row.job_id).filter((id: string) => !existingIds.has(id)).slice(0, 320);
     if (!targetIds.length) {
-      await admin.from("auto_apply_runs").update({ status: "completed", completed_at: now.toISOString() }).eq("id", run.id);
+      await admin.from("auto_apply_runs").update({ status: "completed", eligible_count: 0, reviewed_count: 0, completed_at: now.toISOString() }).eq("id", run.id);
       return { userId: settings.user_id, matched, attempted, sent, actionRequired, failed };
     }
 
@@ -169,9 +197,19 @@ async function processUser(admin: any, settings: any, deadline: number) {
       .map((job: any) => ({ job, score: jobScore(job, profile, settings) }))
       .filter(({ score }: any) => score >= Number(settings.minimum_match ?? 75))
       .sort((left: any, right: any) => right.score - left.score);
-    matched = candidates.length;
+    const strictIds = new Set(candidates.map(({ job }: any) => job.id));
+    const adjacent = settings.broaden_search === true && candidates.length < remaining
+      ? jobs
+        .filter((job: any) => !strictIds.has(job.id))
+        .map((job: any) => ({ job, score: adjacentScore(job, profile, settings), tier: "adjacent" }))
+        .filter(({ score }: any) => score >= 40)
+        .sort((left: any, right: any) => right.score - left.score)
+        .slice(0, remaining - candidates.length)
+      : [];
+    const queue = [...candidates.map((item: any) => ({ ...item, tier: "match" })), ...adjacent];
+    matched = queue.length;
 
-    for (const { job, score } of candidates.slice(0, remaining)) {
+    for (const { job, score, tier } of queue.slice(0, remaining)) {
       if (Date.now() > deadline) break;
       attempted += 1;
       await admin.from("swipes").upsert({ user_id: settings.user_id, job_id: job.id, direction: "right" }, { onConflict: "user_id,job_id" });
@@ -187,7 +225,7 @@ async function processUser(admin: any, settings: any, deadline: number) {
           userId: settings.user_id,
           autoApply: true,
           platform: "web",
-          answers: { autoApply: true, autoApplyRunId: run.id, autoApplyMatch: score },
+          answers: { autoApply: true, autoApplyRunId: run.id, autoApplyMatch: score, autoApplyTier: tier },
         }),
         signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
       }).catch((error) => {
@@ -207,6 +245,8 @@ async function processUser(admin: any, settings: any, deadline: number) {
     await Promise.all([
       admin.from("auto_apply_runs").update({
         status: "completed",
+        eligible_count: targetIds.length,
+        reviewed_count: jobs.length,
         matched_count: matched,
         attempted_count: attempted,
         sent_count: sent,

@@ -34,11 +34,12 @@ export type CandidateProfile={
 };
 export type AutoApplySettings={
   enabled:boolean;roles:string[];locations:string[];workModes:string[];industries:string[];seniorityLevels:string[];
-  excludedCompanies:string[];minimumMatch:number;dailyLimit:number;lastRunAt:string|null;nextRunAt:string|null;
+  excludedCompanies:string[];broadenSearch?:boolean;minimumMatch:number;dailyLimit:number;lastRunAt:string|null;nextRunAt:string|null;
 };
 export type AutoApplyDashboard={
   settings:AutoApplySettings;stats:{matched:number;queued:number;sent:number;delivered:number;actionRequired:number;failed:number};
   lastRun:{status:string;startedAt:string;completedAt:string|null;errorMessage:string|null}|null;
+  recentRuns?:Array<{status:string;eligible:number;reviewed:number;matched:number;attempted:number;sent:number;failed:number;startedAt:string;completedAt:string|null;errorMessage:string|null}>;
 };
 export type LiveApplication={
   id:string;jobId:string;status:ApplicationStatus;appliedAt:string;updatedAt:string;actionUrl:string|null;
@@ -340,7 +341,15 @@ export type WebOnboardingAnswers={
   blocker:string;outcome:string;source:string;promoCode:string;
 };
 
+/** Copies a picked file into memory. On phones a file chosen from Drive/Photos/Downloads is only a lazy handle:
+ * streaming it during an upload often fails mid-way ("network"), so read it once up front instead. */
+async function snapshotFile(file:File,locale:"es"|"en"){
+  try{return new File([await file.arrayBuffer()],file.name,{type:file.type,lastModified:file.lastModified});}
+  catch{throw new Error(locale==="es"?"No hemos podido leer el archivo del CV. Descárgalo a tu dispositivo (no desde Drive o la nube) y vuelve a seleccionarlo.":"We couldn't read the CV file. Save it to your device (not cloud storage) and select it again.");}
+}
+
 export async function completeWebOnboarding(input:{answers:WebOnboardingAnswers;resume:File;locale:"es"|"en";onUploadAttempt?:(attempt:number)=>void;onStage?:(stage:OnboardingStage,attempt:number)=>void}){
+  input={...input,resume:await snapshotFile(input.resume,input.locale)};
   const client=createSupabaseBrowserClient();
   const session:Awaited<ReturnType<typeof getResilientSession>>=await onboardingOperation("session",()=>getResilientSession(600),{locale:input.locale,attempts:1,timeoutMs:20_000,onAttempt:n=>input.onStage?.("session",n)});
   const user=session?.user;if(!user)throw new Error(input.locale==="es"?"Tu sesión ha caducado. Vuelve a iniciar sesión.":"Your session has expired. Please log in again.");
@@ -447,12 +456,31 @@ export async function startStripe(action:"checkout"|"portal"="checkout",plan?:"s
     const user=await currentUser();
     if(user){const{data}=await client.from("profiles").select("onboarding_answers").eq("id",user.id).maybeSingle();const answers=data?.onboarding_answers as Record<string,unknown>|null;promotionCode=typeof answers?.promoCode==="string"?answers.promoCode:""}
   }
-  const{data,error}=await client.functions.invoke("create-stripe-checkout",{body:{action,promotionCode,plan:selectedPlan,locale,returnTo}});
+  const checkoutBody={action,promotionCode,plan:selectedPlan,locale,returnTo,embedded:action==="checkout"};
+  // Dev only: on localhost, NEXT_PUBLIC_LOCAL_CHECKOUT_URL points at a local copy of the function that uses Stripe test keys.
+  const localCheckout=process.env.NEXT_PUBLIC_LOCAL_CHECKOUT_URL;
+  let data:{url?:string;clientSecret?:string;publishableKey?:string;message?:string}|null,error:unknown=null;
+  if(localCheckout&&typeof window!=="undefined"&&window.location.hostname==="localhost"){
+    const{data:session}=await client.auth.getSession();
+    const response=await fetch(localCheckout,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${session.session?.access_token??""}`},body:JSON.stringify(checkoutBody)});
+    data=await response.json().catch(()=>null) as typeof data;
+    if(!response.ok)throw new Error(data?.message||"No se pudo iniciar Stripe (local).");
+  }else{
+    const result=await client.functions.invoke("create-stripe-checkout",{body:checkoutBody});
+    data=result.data as typeof data;error=result.error;
+  }
   if(error instanceof FunctionsHttpError){const payload=await error.context.json().catch(()=>null)as{message?:string}|null;throw new Error(payload?.message||"No se pudo iniciar Stripe.")}
   if(error)throw error;
-  if(!data?.url)throw new Error(data?.message||"Stripe no devolvió un enlace.");
+  if(!data)throw new Error("Stripe no devolvió datos.");
+  if(!data?.url&&!data?.clientSecret)throw new Error(data?.message||"Stripe no devolvió un enlace.");
   try{const marker=JSON.stringify({at:Date.now(),action,returnTo});window.sessionStorage.setItem("landeo-stripe-return-pending",marker);window.localStorage.setItem("landeo-stripe-return-pending",marker)}catch{/* Session recovery marker is optional. */}
   if(action==="checkout")trackProductEvent("stripe_checkout_started",{plan:selectedPlan,source:"stripe_redirect"});
+  if(data.clientSecret){
+    const opened=await new Promise<boolean>(resolve=>{const event=new CustomEvent("landeo:stripe-embedded",{cancelable:true,detail:{clientSecret:data.clientSecret,publishableKey:data.publishableKey,locale,resolve}});window.dispatchEvent(event);if(!event.defaultPrevented)resolve(false)});
+    if(opened)return true;
+    throw new Error(locale==="es"?"No se pudo abrir el pago. Recarga la página e inténtalo de nuevo.":"Checkout could not be opened. Reload the page and try again.");
+  }
+  if(!data.url)throw new Error("Stripe no devolvió un enlace.");
   window.location.assign(data.url);return true;
 }
 
@@ -472,25 +500,25 @@ export async function loadAutoApplyDashboard(profile?:CandidateProfile|null):Pro
   const[{data:settings,error:settingsError},{data:applications,error:applicationsError},{data:runs,error:runsError}]=await Promise.all([
     client.from("auto_apply_settings").select("*").eq("user_id",user.id).maybeSingle(),
     client.from("applications").select("status,delivery_status").eq("user_id",user.id).contains("answers",{autoApply:true}),
-    client.from("auto_apply_runs").select("status,matched_count,started_at,completed_at,error_message").eq("user_id",user.id).order("started_at",{ascending:false}).limit(1),
+    client.from("auto_apply_runs").select("status,eligible_count,reviewed_count,matched_count,attempted_count,sent_count,failed_count,started_at,completed_at,error_message").eq("user_id",user.id).order("started_at",{ascending:false}).limit(6),
   ]);
   if(settingsError)throw settingsError;if(applicationsError)throw applicationsError;if(runsError)throw runsError;
   const fallback=defaultAutoApplySettings(profile);const row=settings as Record<string,unknown>|null;
   const mapped:AutoApplySettings=row?{
     enabled:Boolean(row.enabled),roles:Array.isArray(row.roles)?row.roles as string[]:fallback.roles,locations:Array.isArray(row.locations)?row.locations as string[]:fallback.locations,
     workModes:Array.isArray(row.work_modes)?row.work_modes as string[]:[],industries:Array.isArray(row.industries)?row.industries as string[]:[],seniorityLevels:Array.isArray(row.seniority_levels)?row.seniority_levels as string[]:[],
-    excludedCompanies:Array.isArray(row.excluded_companies)?row.excluded_companies as string[]:[],minimumMatch:Number(row.minimum_match??75),dailyLimit:Number(row.daily_limit??3),
+    excludedCompanies:Array.isArray(row.excluded_companies)?row.excluded_companies as string[]:[],broadenSearch:row.broaden_search===true,minimumMatch:Number(row.minimum_match??75),dailyLimit:Number(row.daily_limit??3),
     lastRunAt:typeof row.last_run_at==="string"?row.last_run_at:null,nextRunAt:typeof row.next_run_at==="string"?row.next_run_at:null,
   }:fallback;
   const rows=(applications??[]) as Array<{status:string;delivery_status:string|null}>;const latest=(runs??[])[0] as Record<string,unknown>|undefined;
-  return{settings:mapped,stats:{matched:Number(latest?.matched_count??0),queued:rows.filter(item=>item.status==="queued"||item.status==="processing").length,sent:rows.filter(item=>item.status==="sent").length,delivered:rows.filter(item=>item.delivery_status==="delivered").length,actionRequired:rows.filter(item=>item.status==="action_required").length,failed:rows.filter(item=>item.status==="failed").length},lastRun:latest?{status:String(latest.status),startedAt:String(latest.started_at),completedAt:typeof latest.completed_at==="string"?latest.completed_at:null,errorMessage:typeof latest.error_message==="string"?latest.error_message:null}:null};
+  return{settings:mapped,stats:{matched:Number(latest?.matched_count??0),queued:rows.filter(item=>item.status==="queued"||item.status==="processing").length,sent:rows.filter(item=>item.status==="sent").length,delivered:rows.filter(item=>item.delivery_status==="delivered").length,actionRequired:rows.filter(item=>item.status==="action_required").length,failed:rows.filter(item=>item.status==="failed").length},lastRun:latest?{status:String(latest.status),startedAt:String(latest.started_at),completedAt:typeof latest.completed_at==="string"?latest.completed_at:null,errorMessage:typeof latest.error_message==="string"?latest.error_message:null}:null,recentRuns:((runs??[])as Array<Record<string,unknown>>).map(run=>({status:String(run.status),eligible:Number(run.eligible_count??0),reviewed:Number(run.reviewed_count??0),matched:Number(run.matched_count??0),attempted:Number(run.attempted_count??0),sent:Number(run.sent_count??0),failed:Number(run.failed_count??0),startedAt:String(run.started_at),completedAt:typeof run.completed_at==="string"?run.completed_at:null,errorMessage:typeof run.error_message==="string"?run.error_message:null}))};
 }
 
 export async function saveAutoApplySettings(input:AutoApplySettings){
   const client=createSupabaseBrowserClient();const user=await currentUser();if(!user)throw new Error("Inicia sesión para configurar Auto Apply.");
   const clean=(values:string[])=>Array.from(new Set(values.map(value=>value.trim()).filter(Boolean))).slice(0,20);
   if(input.enabled&&!clean(input.roles).length)throw new Error("Añade al menos un puesto objetivo.");
-  const now=new Date().toISOString();const{error}=await client.from("auto_apply_settings").upsert({user_id:user.id,enabled:input.enabled,roles:clean(input.roles),locations:clean(input.locations),work_modes:clean(input.workModes),industries:clean(input.industries),seniority_levels:clean(input.seniorityLevels),excluded_companies:clean(input.excludedCompanies),minimum_match:Math.max(50,Math.min(100,Math.round(input.minimumMatch))),daily_limit:Math.max(1,Math.min(10,Math.round(input.dailyLimit))),next_run_at:input.enabled?now:null,updated_at:now},{onConflict:"user_id"});if(error)throw error;
+  const now=new Date().toISOString();const{error}=await client.from("auto_apply_settings").upsert({user_id:user.id,enabled:input.enabled,roles:clean(input.roles),locations:clean(input.locations),work_modes:clean(input.workModes),industries:clean(input.industries),seniority_levels:clean(input.seniorityLevels),excluded_companies:clean(input.excludedCompanies),broaden_search:input.broadenSearch===true,minimum_match:Math.max(50,Math.min(100,Math.round(input.minimumMatch))),daily_limit:Math.max(1,Math.min(10,Math.round(input.dailyLimit))),next_run_at:input.enabled?now:null,updated_at:now},{onConflict:"user_id"});if(error)throw error;
   // Saving and running are separate outcomes. An invocation failure must not
   // pretend that the settings were rolled back after the successful upsert.
   if(input.enabled){

@@ -12124,3 +12124,33 @@ h1 em:after {
 .application-reply-note { margin-top: 4px !important; }
 .auth-code-count { display: block; text-align: center; margin: 4px 0 10px; color: var(--muted, #5c6b60); font-variant-numeric: tabular-nums; }
 .auth-card .social-button-primary { border-width: 2px; border-color: #357e59; font-weight: 800; }
+
+.stripe-popup { box-sizing: border-box; width: min(500px,calc(100% - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 0; border-radius: 24px; background: #fff; box-shadow: 0 24px 100px #10291d60; overflow-y: auto; }
+.stripe-popup::backdrop { background: #10291da8; backdrop-filter: blur(5px); }
+.stripe-popup-close { position: absolute; right: 12px; top: 12px; z-index: 2; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #eef0f2; color: #30313d; font-size: 22px; line-height: 1; cursor: pointer; }
+.stripe-popup-status { margin: 0; padding: 48px 28px; text-align: center; color: #52685b; font-size: 15px; }
+
+.auto-apply-live { display: grid; grid-template-columns: auto minmax(0,1fr) minmax(220px,.7fr); gap: 22px; align-items: center; margin: 0 30px 20px; padding: 22px 24px; border: 1px solid #a8cfb4; border-radius: 20px; background: linear-gradient(135deg,#f3faf4,#fff); box-shadow: 0 8px 20px rgba(23,59,46,.05); }
+.auto-apply-live h2 { margin: 6px 0 8px; font-size: clamp(1.15rem,2vw,1.5rem); letter-spacing: -.02em; }
+.auto-apply-live p { margin: 6px 0 0; color: var(--muted); font-size: .9375rem; line-height: 1.45; }
+.auto-apply-countdown { font-variant-numeric: tabular-nums; color: var(--green) !important; font-weight: 800; }
+.auto-apply-live-hint { padding: 10px 12px; border-radius: 12px; background: #eef4e9; font-size: .875rem !important; }
+.auto-apply-radar { position: relative; width: 84px; height: 84px; flex: 0 0 auto; }
+.auto-apply-radar i { position: absolute; inset: 0; border: 2px solid #36a365; border-radius: 50%; opacity: 0; animation: auto-apply-ping 3.2s ease-out infinite; }
+.auto-apply-radar i:nth-child(2) { animation-delay: 1.05s; } .auto-apply-radar i:nth-child(3) { animation-delay: 2.1s; }
+.auto-apply-radar b { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px; border-radius: 50%; background: #36a365; box-shadow: 0 0 0 6px rgba(54,163,101,.18); }
+.auto-apply-radar.busy i { animation-duration: 1.4s; } .auto-apply-radar.busy i:nth-child(2) { animation-delay: .45s; } .auto-apply-radar.busy i:nth-child(3) { animation-delay: .9s; }
+.auto-apply-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; font-size: .875rem; color: var(--muted); }
+.auto-apply-steps li::before { content: "○ "; } .auto-apply-steps li.done { color: var(--green); } .auto-apply-steps li.done::before { content: "✓ "; }
+.auto-apply-steps li.current { color: var(--green); font-weight: 800; } .auto-apply-steps li.current::before { content: "● "; animation: auto-apply-blink 1s ease-in-out infinite; }
+.auto-apply-feed { list-style: none; margin: 0; padding: 0 0 0 20px; border-left: 1px solid var(--line); display: grid; gap: 10px; font-size: .8125rem; }
+.auto-apply-feed li { display: grid; gap: 2px; } .auto-apply-feed time { color: var(--muted); font-size: .75rem; } .auto-apply-feed li.failed span { color: #b3412f; }
+@keyframes auto-apply-ping { 0% { transform: scale(.25); opacity: .7; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes auto-apply-blink { 50% { opacity: .25; } }
+@media (max-width: 900px) { .auto-apply-live { grid-template-columns: auto minmax(0,1fr); margin: 0 16px 16px; } .auto-apply-feed { grid-column: 1 / -1; padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--line); } }
+@media (prefers-reduced-motion: reduce) { .auto-apply-radar i, .auto-apply-steps li.current::before { animation: none; } .auto-apply-radar i { opacity: .35; } }
+
+.auto-apply-funnel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0 0 !important; font-size: .8125rem !important; }
+.auto-apply-funnel span { display: inline-flex; flex-direction: column; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--muted); line-height: 1.2; }
+.auto-apply-funnel strong { color: var(--green); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.auto-apply-live-missing { background: #fff4e0 !important; color: #7a4b00 !important; } .auto-apply-live-missing a { color: inherit; font-weight: 800; }
