@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect -- These effects hydrate authenticated Supabase state and subscribe to external auth/application updates. */
 
+import { jobLanguage } from "../lib/job-language";
 import Link from "./SafeLink";
 import JobsLoading from "./JobsLoading";
 import {
@@ -838,6 +839,7 @@ function JobsView({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [mode, setMode] = useState("all");
   const [workMode, setWorkMode] = useState("all");
+  const [language, setLanguage] = useState("all");
   const [market, setMarket] = useState("all");
   const [careerLevel, setCareerLevel] = useState<EarlyCareerFilter>("all");
   const [industry, setIndustry] = useState<IndustryFilter>("all");
@@ -899,13 +901,14 @@ function JobsView({
           includeWorldwide: true,
           search: debouncedQuery,
           careerLevel: careerLevel === "all" ? undefined : careerLevel,
+          language: language === "es" || language === "en" ? language : undefined,
         }, publish));
     } catch (error) {
       if(request === feedRequest.current){setFeedError(true);setNotice(error instanceof Error ? error.message : t.notices.loadError);}
     } finally {
       if(request === feedRequest.current){setLoading(false);setRefreshing(false);}
     }
-  }, [careerLevel, debouncedQuery, demo, showAutomaticArchive, t.notices.loadError]);
+  }, [careerLevel, debouncedQuery, demo, language, showAutomaticArchive, t.notices.loadError]);
   useEffect(() => {
     refresh();
     return () => { feedRequest.current += 1; };
@@ -921,6 +924,7 @@ function JobsView({
       (job) =>
         (mode === "all" || job.applyCapability === mode) &&
         (workMode === "all" || job.workMode === workMode) &&
+        (language === "all" || jobLanguage(job) === language) &&
         (market === "all" ||
           String(
             job.market || job.metadata?.market_country || "",
@@ -934,7 +938,7 @@ function JobsView({
     // the remote roles the feed already loaded instead of an empty screen.
     const remote = base.filter((job) => job.workMode === "remote");
     return { filtered: remote, searchFallback: remote.length > 0 };
-  }, [jobs, mode, workMode, market, careerLevel, industry, query]);
+  }, [jobs, mode, workMode, language, market, careerLevel, industry, query]);
   const markets = useMemo(
     () =>
       Array.from(
@@ -1203,7 +1207,7 @@ function JobsView({
             <button
               onClick={() => {
                 setMode("all");
-                setWorkMode("all");
+                setWorkMode("all");setLanguage("all");
                 setMarket("all");
                 setCareerLevel("all");
                 setIndustry("all");
@@ -1302,6 +1306,28 @@ function JobsView({
                   type="radio"
                   checked={workMode === value}
                   onChange={() => setWorkMode(value)}
+                />
+                <span>{label}</span>
+              </m.label>
+            ))}
+          </fieldset>
+          <fieldset className="work-mode-filter">
+            <legend>{t.jobs.language}</legend>
+            {[
+              ["all", t.jobs.all],
+              ["es", t.jobs.languageEs],
+              ["en", t.jobs.languageEn],
+            ].map(([value, label]) => (
+              <m.label
+                key={value}
+                className="radio-row"
+                whileHover={{ x: 2 }}
+                whileTap={{ scale: 0.985 }}
+              >
+                <input
+                  type="radio"
+                  checked={language === value}
+                  onChange={() => { setLanguage(value); setIndex(0); }}
                 />
                 <span>{label}</span>
               </m.label>
@@ -1554,7 +1580,7 @@ function JobsView({
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           setQuery("");
-                          setWorkMode("all");
+                          setWorkMode("all");setLanguage("all");
                           setMarket("all");
                           setIndex(0);
                           setShowAutomaticArchive(true);
@@ -1591,7 +1617,7 @@ function JobsView({
                       type="button"
                       onClick={() => {
                         setQuery("");
-                        setWorkMode("all");
+                        setWorkMode("all");setLanguage("all");
                         setMarket("all");
                         setCareerLevel("all");
                         setIndustry("all");

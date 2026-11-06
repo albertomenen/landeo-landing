@@ -66,9 +66,9 @@ const jobsCache=new Map<string,JobCacheEntry>();
 const hiddenFingerprintCache=new Map<string,string>();
 const applicationsCache=new Map<string,TimedPromise<LiveApplication[]>>();
 const savedJobsCache=new Map<string,TimedPromise<Job[]>>();
-type JobLoadOptions={includeDismissed?:boolean;includeWorldwide?:boolean;search?:string;careerLevel?:"internship"|"junior"};
+type JobLoadOptions={includeDismissed?:boolean;includeWorldwide?:boolean;search?:string;careerLevel?:"internship"|"junior";language?:"es"|"en"};
 function cacheKey(limit:number,options:JobLoadOptions){
-  return JSON.stringify({limit,includeDismissed:Boolean(options.includeDismissed),includeWorldwide:Boolean(options.includeWorldwide),search:options.search?.trim().toLowerCase()??"",careerLevel:options.careerLevel??"all"});
+  return JSON.stringify({limit,includeDismissed:Boolean(options.includeDismissed),includeWorldwide:Boolean(options.includeWorldwide),search:options.search?.trim().toLowerCase()??"",careerLevel:options.careerLevel??"all",language:options.language??"all"});
 }
 function clearDashboardCaches(){jobsCache.clear();applicationsCache.clear();savedJobsCache.clear()}
 const defaultUniversal=(user?:User|null):UniversalProfile=>({version:1,firstName:String(user?.user_metadata?.full_name??"").split(/\s+/)[0]??"",lastName:String(user?.user_metadata?.full_name??"").split(/\s+/).slice(1).join(" "),addressLine:"",city:"",country:"España",postalCode:"",githubUrl:"",websiteUrl:"",salaryCurrency:"EUR",availability:"",noticePeriod:"",workAuthorizationCountries:["España"],visaRequirement:"No necesito visado",willingToRelocate:false,languages:[],lastCompany:"",lastTitle:"",yearsExperience:0,generalMotivation:"",openToInternship:false,universityAgreement:"No aplica",privacyConsent:false,automaticApplicationConsent:false});
@@ -216,6 +216,12 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     // the normal first batch or hide otherwise available jobs.
     return Promise.resolve(query.order("salary_min",{ascending:false}).limit(8).abortSignal(AbortSignal.timeout(1800))).then(result=>result.error?{data:[],error:null}:result).catch(()=>({data:[],error:null}));
   });
+  // Spanish-language postings are a small share of the catalogue, so ask for them explicitly.
+  const spanishFilter=options.language==="es"?"title.ilike.%desarrollador%,title.ilike.%analista%,title.ilike.%ingenier%,title.ilike.%ventas%,title.ilike.%atención%,title.ilike.%atencion%,title.ilike.%gerente%,title.ilike.%asistente%,title.ilike.%coordinador%,title.ilike.%ejecutivo%,title.ilike.%responsable%,title.ilike.%técnico%,title.ilike.%especialista%,title.ilike.%administrativ%,title.ilike.%diseñador%,title.ilike.%contable%":"";
+  const spanishQueries=spanishFilter?[
+    activeJobs().or(spanishFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(60),
+    activeJobs().or(spanishFilter).order("published_at",{ascending:false}).limit(60),
+  ].map(query=>Promise.resolve(query.abortSignal(AbortSignal.timeout(4000))).then(result=>result.error?{data:[],error:null}:result).catch(()=>({data:[],error:null}))):[];
   const primaryQueries=careerFocused?[careerFocused.limit(36),...salaryQueries]:requestedFilter?[
     activeJobs().or(requestedFilter).order("published_at",{ascending:false}).limit(36),
     ...salaryQueries,
@@ -224,7 +230,7 @@ async function loadJobsFresh(limit=120,options:JobLoadOptions={},onInitialJobs?:
     activeJobs().or(roleFilter).or(remoteFilter).order("published_at",{ascending:false}).limit(24),
     ...salaryQueries,
   ]:[activeJobs().order("published_at",{ascending:false}).limit(24),activeJobs().or(remoteFilter).order("published_at",{ascending:false}).limit(24),...salaryQueries];
-  const primaryResults=await Promise.all(primaryQueries);
+  const primaryResults=await Promise.all([...primaryQueries,...spanishQueries]);
   const knownTargets=new Set<string>();const checkedTargets=new Set<string>();
   const prepareJobs=async(results:typeof primaryResults,allowRemoteFallback=false)=>{
   const failed=results.find(result=>result.error);
