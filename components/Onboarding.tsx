@@ -642,6 +642,7 @@ export default function Onboarding() {
     [resume, setResume] = useState<File | null>(null),
     [saving, setSaving] = useState(false),
     [uploadAttempt, setUploadAttempt] = useState(0),
+    [uploadFailed, setUploadFailed] = useState(false),
     [saveStage, setSaveStage] = useState<OnboardingStage>("session"),
     [saveAttempt, setSaveAttempt] = useState(1),
     [error, setError] = useState(""),
@@ -931,7 +932,7 @@ export default function Onboarding() {
         error_code:safeErrorCode(reason),
       });
       if(sessionError)setSessionMissing(true);
-      else setError(message);
+      else {setError(message);setUploadFailed(reason instanceof CvUploadError||(reason instanceof OnboardingOperationError&&reason.stage==="upload"));}
       setSaving(false);
       setUploadAttempt(0);
       finishing.current=false;
@@ -1547,6 +1548,22 @@ export default function Onboarding() {
                         ? "Explícanos qué ha pasado"
                         : "Tell us what happened"}
                     </button>
+                    {uploadFailed && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          trackProductEvent("onboarding_resume_reselect_after_failure", {});
+                          setResume(null);
+                          setError("");
+                          setUploadFailed(false);
+                          if (fileRef.current) fileRef.current.value = "";
+                          moveTo(steps.indexOf("resume"));
+                        }}
+                      >
+                        {locale === "es" ? "Subir otro archivo" : "Upload a different file"}
+                      </button>
+                    )}
                   </m.p>
                 )}
               </m.div>

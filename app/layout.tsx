@@ -7,6 +7,7 @@ import StripeCheckoutModal from "../components/StripeCheckoutModal";
 import RouteTransition from "../components/RouteTransition";
 import "./globals.css";
 import "./cover-letter.css";
+import "./seo-pages.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
 

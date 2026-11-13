@@ -8190,6 +8190,9 @@ h1 em:after {
   color: #a83e38 !important;
   font-size: 9px !important;
 }
+.onboarding-error button + button {
+  margin-left: 14px;
+}
 .onboarding-error a,
 .onboarding-error button {
   padding: 0;
